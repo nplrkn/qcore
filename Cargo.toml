@@ -1,0 +1,11 @@
+[workspace]
+resolver = "3"
+members = [
+    "5g-libs/asn1-per",
+    "5g-libs/f1ap",
+    "tests",
+    "qcore",
+    "5g-libs/rrc",
+    "5g-libs/xxap",
+    "5g-libs/security",
+]

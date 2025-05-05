@@ -1,0 +1,19 @@
+[package]
+name = "f1ap"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+doctest = false
+
+[dependencies]
+async-trait = "0.1.68"
+anyhow = "1.0.52"
+slog = "2.7.0"
+asn1-per = { path = "../asn1-per" }
+xxap = { path = "../xxap" }
+num_enum = "0.5.11"
+nonempty = "0.8.1"
+
+[dev-dependencies]
+hex = "0.4.3"

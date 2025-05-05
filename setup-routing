@@ -1,0 +1,8 @@
+#!/bin/sh
+UE_SUBNET="10.255.0.0/24"
+sudo ip tuntap add mode tun user $(whoami) name ue # Set up a tun device called 'ue' accessible by the current user
+sudo ip link set ue up                             # Set the link up 
+sudo ip route add $UE_SUBNET dev ue                # Make the UE subnet routable over the ue device.
+sudo sysctl -w net.ipv4.conf.ue.send_redirects=0   # In combination with the below, prevents sending ICMP redirects to the 'ue' tun device.
+sudo sysctl -w net.ipv4.conf.all.send_redirects=0  # In combination with the above, prevents sending ICMP redirects to the 'ue' tun device.
+sudo sysctl -w net.ipv4.ip_forward=1               # Enable IPv4 forwarding

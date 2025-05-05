@@ -1,0 +1,25 @@
+[package]
+name = "qcore-tests"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.97"
+async-std = { version = "1.13.1", features = ["attributes"] }
+async-trait = "0.1.88"
+slog = "2.7.0"
+qcore = { path = "../qcore" }
+oxirush-nas = { git = "https://github.com/nplrkn/oxirush-nas", branch = "fix-length-1-checks" }
+local-ip-address = "0.6.3"
+f1ap = { path = "../5g-libs/f1ap" }
+xxap = { path = "../5g-libs/xxap" }
+rrc = { path = "../5g-libs/rrc" }
+pdcp = { path = "../5g-libs/pdcp" }
+stop-token = "0.7.0"
+async-channel = "1.6.1"
+asn1-per = { path = "../5g-libs/asn1-per" }
+rand = "0.8.5"
+async-net = "1.6.1"
+pnet_packet = "0.35.0"
+slog-term = "2.8.0"
+slog-envlogger = "2.2.0"

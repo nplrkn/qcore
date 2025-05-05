@@ -1,0 +1,10 @@
+# This file contains a list of SIM credentials in the form
+# [imsi-<IMSI>]
+# ki = "<KI>"
+# opc = "<OPC>"
+#
+# The IMSI is a string of digits that identifies a mobile subscriber.
+# The KI + OPC are the secret credentials that are burnt into the SIM card, as a hex string.
+[imsi-2089900007487]
+ki = "fec86ba6eb707ed08905757b1bb44b8f"
+opc = "C42449363BBAD02B66D16BC975D77CC1"

@@ -1,0 +1,34 @@
+[package]
+name = "xxap"
+version = "0.1.0"
+edition = "2024"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait = "0.1.68"
+hex = "0.4.3"
+anyhow = "1.0.52"
+slog = "2.7.0"
+asn1-per = { path = "../asn1-per" }
+num_enum = "0.5.11"
+async-net = "1.6.1"
+bitvec = "1.0.1"
+os_socketaddr = "0.2.0"
+libc = "^0.2"
+async-io = "1.7.0"
+errno = "0.3.0"
+async-stream = "0.3.4"
+futures-core = "0.3.19"
+futures-lite = "1.13.0"
+async-std = { version = "1.10.0", features = ["attributes"] }
+async-channel = "1.6.1"
+futures = "0.3.19"
+log = "0.4.3"
+stop-token = "0.7.0"
+dashmap = "5.4.0"
+thiserror = "1.0.36"
+
+
+[lib]
+doctest = false

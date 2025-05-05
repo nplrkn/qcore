@@ -1,0 +1,14 @@
+[package]
+name = "rrc"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+doctest = false
+
+[dependencies]
+asn1-per = { path = "../asn1-per" }
+num_enum = "0.5.11"
+
+[dev-dependencies]
+hex = "0.4.3"

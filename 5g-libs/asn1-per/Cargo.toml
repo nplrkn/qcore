@@ -1,0 +1,13 @@
+[package]
+name = "asn1-per"
+version = "0.1.0"
+edition = "2024"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+#asn1-codecs = { git = "https://github.com/nplrkn/hampi" }
+asn1-codecs = "0.7.0"
+num_enum = "0.5.11"
+bitvec = "1.0.1"
+nonempty = "0.8.1"

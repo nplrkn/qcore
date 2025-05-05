@@ -1,0 +1,28 @@
+[package]
+name = "net"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+doctest = false
+
+[dependencies]
+sctp = { path = "../sctp" }
+common = { path = "../common" }
+asn1-per = { path = "../asn1-per" }
+async-std = { version = "1.10.0", features = ["attributes"] }
+async-trait = "0.1.68"
+slog = "2.7.0"
+anyhow = "1.0.52"
+async-channel = "1.6.1"
+async-io = "1.7.0"
+async-net = "1.6.1"
+futures = "0.3.19"
+futures-lite = "1.13.0"
+log = "0.4.3"
+errno = "0.3.0"
+stop-token = "0.7.0"
+async-stream = "0.3.4"
+futures-core = "0.3.19"
+bitvec = "1.0.1"
+dashmap = "5.4.0"
