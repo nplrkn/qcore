@@ -27,7 +27,7 @@ Using du.yml, ue.conf and sims.toml in the same directory as these instructions.
 
 ```sh
 cd
-sudo tcpdump -w oai_test.pcap -i any port 38472 or port 2152 or src 10.255.0.1 or dst 10.255.0.1
+sudo tcpdump -w srsran_test.pcap -i any port 38472 or port 2152 or src 10.255.0.1 or dst 10.255.0.1
 ```
 
 #### Terminal 2 - QCore
@@ -39,4 +39,15 @@ RUST_LOG=debug cargo run -- --mcc 001 --mnc 01 --local-ip 127.0.0.1
 
 #### Terminal 3 - DU
 
-...TBD...
+```sh
+cd ~/srsRAN_Project/build/apps/du
+sudo ./srsdu -c du.yml
+```
+
+#### Terminal 4 - UE
+
+```sh
+cd ~/srsRAN_4G/build/srsue/src/
+sudo ./srsue -c ue.conf
+```
+
