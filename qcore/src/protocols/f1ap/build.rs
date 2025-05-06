@@ -200,7 +200,7 @@ pub fn drb_to_be_setup_item(
                 bh_info: None,
             },
         ]),
-        rlc_mode: RlcMode::RlcUmBidirectional,
+        rlc_mode: RlcMode::RlcAm,
         ul_configuration: None,
         duplication_activation: None,
         dc_based_duplication_configured: None,
