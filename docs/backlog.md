@@ -1,8 +1,8 @@
 In progress - SRS RAN demo
 - Bugs
-  -  WARN UE message handler exiting: UeContextSetupResponse missed expected information
+  -  Do not require SDAP downlink header
   -  ERRO Unhandled message F1RemovalRequest(F1RemovalRequest { transaction_id: TransactionId(1) })
-
+  
 High priority function gaps
 - Deregistration accept
 - Userplane stats

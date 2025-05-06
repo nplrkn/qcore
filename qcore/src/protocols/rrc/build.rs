@@ -87,7 +87,8 @@ pub fn reconfiguration(
                     drb_to_add_mod_list: Some(DrbToAddModList(nonempty![DrbToAddMod {
                         cn_association: Some(CnAssociation::SdapConfig(SdapConfig {
                             pdu_session: PduSessionId(session_id),
-                            sdap_header_dl: SdapHeaderDl::Present,
+                            // SRS RAN UE does not support SdapHeaderDl::Present
+                            sdap_header_dl: SdapHeaderDl::Absent,
                             sdap_header_ul: SdapHeaderUl::Present,
                             default_drb: true,
                             mapped_qos_flows_to_add: Some(nonempty![Qfi(1)]),
