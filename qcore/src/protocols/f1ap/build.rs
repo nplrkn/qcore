@@ -205,8 +205,8 @@ pub fn drb_to_be_setup_item(
         duplication_activation: None,
         dc_based_duplication_configured: None,
         dc_based_duplication_activation: None,
-        dlpdcpsn_length: None,
-        ulpdcpsn_length: None,
+        dlpdcpsn_length: Some(PdcpsnLength::TwelveBits),
+        ulpdcpsn_length: Some(PdcpsnLength::TwelveBits),
         additional_pdcp_duplication_tnl_list: None,
         rlc_duplication_information: None,
     }
