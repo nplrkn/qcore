@@ -1,10 +1,7 @@
-In progress
-- Squash commit
-- check the history, license, readme all look good on github
-- Publish
-
-Next up
-- demo with SRS RAN DU and SRS UE
+In progress - SRS RAN demo
+- Bugs
+  -  WARN UE message handler exiting: UeContextSetupResponse missed expected information
+  -  ERRO Unhandled message F1RemovalRequest(F1RemovalRequest { transaction_id: TransactionId(1) })
 
 High priority function gaps
 - Deregistration accept
