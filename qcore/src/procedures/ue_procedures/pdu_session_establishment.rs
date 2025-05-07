@@ -18,11 +18,12 @@ impl<'a, A: HandlerApi> SessionEstablishmentProcedure<'a, A> {
     pub fn new(ue_procedure: UeProcedure<'a, A>) -> Self {
         SessionEstablishmentProcedure(ue_procedure)
     }
-    
+
     pub async fn run(
         &mut self,
         hdr: Nas5gsmHeader,
         _r: NasPduSessionEstablishmentRequest,
+        dnn: Option<Vec<u8>>,
     ) -> Result<()> {
         self.log_message(">> NasPduSessionEstablishmentRequest");
         // TODO: check request
@@ -31,6 +32,7 @@ impl<'a, A: HandlerApi> SessionEstablishmentProcedure<'a, A> {
             id: session_id,
             snssai: Snssai(self.config().sst, None),
             userplane_info: self.api.reserve_userplane_session(&self.logger).await?,
+            dnn: dnn.unwrap_or_default(),
         };
 
         let (cell_group_config, remote_tunnel_info) =

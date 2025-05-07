@@ -4,7 +4,7 @@ use anyhow::{Result, bail};
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gmmMessageType, Nas5gsMessage, Nas5gsmMessage, Nas5gsmMessageType, NasAbba,
     NasAdditionalFGSecurityInformation, NasAuthenticationParameterAutn,
-    NasAuthenticationParameterRand, NasFGsMobileIdentity, NasFGsRegistrationResult,
+    NasAuthenticationParameterRand, NasDnn, NasFGsMobileIdentity, NasFGsRegistrationResult,
     NasKeySetIdentifier, NasNssai, NasPayloadContainer, NasPayloadContainerType, NasPduAddress,
     NasPduSessionType, NasQosRules, NasSecurityAlgorithms, NasSessionAmbr, NasUeSecurityCapability,
     encode_nas_5gs_message,
@@ -129,6 +129,9 @@ pub fn pdu_session_establishment_accept(
         ue_ipv4.octets()[2],
         ue_ipv4.octets()[3],
     ]));
+
+    let dnn = Some(NasDnn::new(pdu_session.dnn.clone()));
+
     let inner_message = Nas5gsMessage::new_5gsm(
         Nas5gsmMessageType::PduSessionEstablishmentAccept,
         Nas5gsmMessage::PduSessionEstablishmentAccept(NasPduSessionEstablishmentAccept {
@@ -144,7 +147,7 @@ pub fn pdu_session_establishment_accept(
             eap_message: None,
             authorized_qos_flow_descriptions: None,
             extended_protocol_configuration_options: None,
-            dnn: None,
+            dnn,
             fgsm_network_feature_support: None,
             serving_plmn_rate_control: None,
             atsss_container: None,
