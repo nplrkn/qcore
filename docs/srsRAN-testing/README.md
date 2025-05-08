@@ -55,3 +55,10 @@ cd ~/srsRAN_4G/build/srsue/src/
 sudo ./srsue ue.conf
 ```
 
+#### Terminal 5 - ping
+```sh
+sudo ip netns exec ue1 bash
+ip route add default dev tun_srsue
+ping 8.8.8.8
+```
+

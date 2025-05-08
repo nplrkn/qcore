@@ -165,14 +165,14 @@ impl DownlinkPipeline {
         buf[17] = nr_seq_num[3];
 
         // Pad extension header to multiple of four bytes
-        buf[19] = 0;
+        buf[18] = 0;
 
         // Next extension header type = None
-        buf[20] = 0;
+        buf[19] = 0;
 
         // --- PDCP Data PDU for DRB with 12 bit PDCP SN ---
-        buf[21] = 0b1_0_0_0_0000 | (((pdcp_seq_num & 0x0f00) >> 8) as u8); // D/C, R,R,R, SN
-        buf[22] = (pdcp_seq_num & 0xff) as u8; // SN
+        buf[20] = 0b1_0_0_0_0000 | (((pdcp_seq_num & 0x0f00) >> 8) as u8); // D/C, R,R,R, SN
+        buf[21] = (pdcp_seq_num & 0xff) as u8; // SN
 
         assert!(DOWNLINK_INNER_PACKET_OFFSET == 22);
 
