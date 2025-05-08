@@ -32,6 +32,7 @@ where
 
 impl<T> Application for F1apCu<T> where
     T: RequestProvider<F1SetupProcedure>
+        + RequestProvider<F1RemovalProcedure>
         + RequestProvider<GnbDuConfigurationUpdateProcedure>
         + EventHandler
         + Clone
@@ -48,6 +49,7 @@ where
         + Sync
         + EventHandler
         + RequestProvider<F1SetupProcedure>
+        + RequestProvider<F1RemovalProcedure>
         + RequestProvider<GnbDuConfigurationUpdateProcedure>
         + IndicationHandler<InitialUlRrcMessageTransferProcedure>
         + IndicationHandler<UlRrcMessageTransferProcedure>
@@ -66,6 +68,9 @@ where
         match initiating_message {
             InitiatingMessage::F1SetupRequest(req) => {
                 F1SetupProcedure::call_provider(&self.0, req, logger).await
+            }
+            InitiatingMessage::F1RemovalRequest(req) => {
+                F1RemovalProcedure::call_provider(&self.0, req, logger).await
             }
             InitiatingMessage::InitialUlRrcMessageTransfer(req) => {
                 InitialUlRrcMessageTransferProcedure::call_provider(&self.0, req, logger).await;

@@ -1,14 +1,7 @@
-In progress - SRS RAN demo
-- Bugs
-  -  Do not require SDAP downlink header
-  -  OAI UE on receiving downlink packet 
-     - [PDCP]   /home/npl/openairinterface5g/openair2/LAYER2/nr_pdcp/nr_pdcp_entity.c:74:nr_pdcp_entity_recv_pdu: fatal
-     - [PDCP]   discard NR PDU rcvd_count=128, entity->rx_deliv 0,sdu_in_list 1
-  -  ERRO Unhandled message F1RemovalRequest(F1RemovalRequest { transaction_id: TransactionId(1) })
-  
 High priority function gaps
-- Deregistration accept
 - Userplane stats
+- Regression test for an uplink UP packet with delivery status extension header.
+- Deregistration accept
 - Idle / paging
 - SQN
 
