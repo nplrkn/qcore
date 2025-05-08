@@ -1,6 +1,6 @@
 #![allow(clippy::unusual_byte_groupings)]
-use super::{IPV4_HEADER_LEN, MAX_UES};
-use crate::userplane::{GTP_HEADER_LEN, INNER_PACKET_OFFSET, GTP_MESSAGE_TYPE_GPU};
+use super::{GTP_BASE_HEADER_LEN, IPV4_HEADER_LEN, MAX_UES, UPLINK_INNER_PACKET_OFFSET};
+use crate::userplane::GTP_MESSAGE_TYPE_GPU;
 use anyhow::Result;
 use async_std::{
     fs::File,
@@ -66,7 +66,7 @@ impl UplinkPipeline {
     async fn handle_next_uplink_packet(&mut self, buf: &mut [u8; 2000]) -> Result<()> {
         let (bytes_read, _peer) = self.f1u_socket.recv_from(buf).await?;
 
-        if bytes_read < INNER_PACKET_OFFSET + IPV4_HEADER_LEN {
+        if bytes_read < UPLINK_INNER_PACKET_OFFSET + IPV4_HEADER_LEN {
             // TODO - update stat 'too short packet'
             return Ok(());
         }
@@ -84,9 +84,9 @@ impl UplinkPipeline {
         // println!(
         //     "Packet in, length {bytes_read}, teid {:x?}, data {:x?}",
         //     gtp_teid,
-        //     &buf[0..(GTP_HEADER_LEN + IPV4_HEADER_LEN)]
+        //     &buf[0..(GTP_BASE_HEADER_LEN + IPV4_HEADER_LEN)]
         // );
-        let mut offset = GTP_HEADER_LEN;
+        let mut offset = GTP_BASE_HEADER_LEN;
 
         // Then a PDCP header, which starts with the D/C bit.  TS38.323, 6.2.1.
         if (buf[offset] & 0x80) == 0 {
