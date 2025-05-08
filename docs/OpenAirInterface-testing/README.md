@@ -35,7 +35,7 @@ cd ~/qcore
 
 # make a shortcut to the OAI config file from the home dir
 cd
-ln -s qcore/docs/openairinterface_testing/qcore-interop-gnb-du.sa.band78.106prb.rfsim.conf oai.conf
+ln -s qcore/docs/OpenAirInterface-testing/qcore-interop-gnb-du.sa.band78.106prb.rfsim.conf oai.conf
 
 # get and build OAI - from https://gitlab.eurecom.fr/oai/openairinterface5g/-/blob/develop/doc/BUILD.md
 git clone https://gitlab.eurecom.fr/oai/openairinterface5g.git
@@ -65,7 +65,7 @@ sudo tcpdump -w oai_test.pcap -i any port 38472 or port 2152 or src 10.255.0.1 o
 
 ```sh
 cd ~/qcore
-RUST_LOG=debug cargo run -- --mcc 208 --mnc 99 --local-ip 127.0.0.1
+RUST_LOG=debug cargo run -- --mcc 208 --mnc 99 --local-ip 127.0.0.1 --sim-cred-file docs/OpenAirInterface-testing/oai-sim.toml
 ```
 
 #### Terminal 3 - OAI DU
@@ -114,7 +114,7 @@ View the pcap in Wireshark.  (If using WSL, you can run `explorer.exe .` in term
 
 Overall, the OAI configuration is chosen to be as close as possible to its existing GNB DU rfsim config file in OAI `ci-scripts/conf_files/gnb-du.sa.band78.106prb.rfsim.conf`, the only differences being that F1 addresses are set to 127.* addresses, and the GTP-U port is set to 2152 rather than 2513.
 
-The example SIM in `sims.toml` in the QCore root directory matches the default OAI test SIM in OAI `ci-scripts/conf_files/nrue.uicc.conf`.
+The SIM creds in `oai-sim.toml` match the default OAI test SIM in OAI `ci-scripts/conf_files/nrue.uicc.conf`.
 
 The QCore MCC and MNC command line arguments are set to match the MCC/MNC in the above two OAI config files.
 
