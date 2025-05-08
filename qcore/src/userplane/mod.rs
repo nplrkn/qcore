@@ -18,10 +18,7 @@ const IPV4_HEADER_LEN: usize = 20;
 const DOWNLINK_INNER_PACKET_OFFSET: usize =
     GTP_EXTENDED_HEADER_LEN + GTP_EXT_HEADER_LEN_NRUP_DL_USER_DATA + PDCP_HEADER_LEN;
 
-// Uplink direction - inner packet starts at offset 11
-const UPLINK_INNER_PACKET_OFFSET: usize = GTP_BASE_HEADER_LEN + PDCP_HEADER_LEN + SDAP_HEADER_LEN;
-
-const GTP_MESSAGE_TYPE_GPU: u8 = 255; // TS29.281, table 6.1-1
+const GTP_MESSAGE_TYPE_GPDU: u8 = 255; // TS29.281, table 6.1-1
 const GTPU_PORT: u16 = 2152; // TS29.281
 
 const MAX_UES: usize = 254;

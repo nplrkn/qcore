@@ -4,7 +4,7 @@ use crate::userplane::{
     DOWNLINK_INNER_PACKET_OFFSET, GTP_BASE_HEADER_LEN, GTP_EXT_HEADER_LEN_NRUP_DL_USER_DATA,
 };
 
-use super::{GTP_MESSAGE_TYPE_GPU, GTPU_PORT, IPV4_HEADER_LEN, MAX_UES};
+use super::{GTP_MESSAGE_TYPE_GPDU, GTPU_PORT, IPV4_HEADER_LEN, MAX_UES};
 use anyhow::Result;
 use async_std::{
     io::ReadExt,
@@ -127,7 +127,7 @@ impl DownlinkPipeline {
 
         // ---- GTP header, TS29.281, 5.2.1 ----
         buf[0] = 0b001_1_0_1_0_0; // version=1, PT=1, R, E=1, S=0, PN=0
-        buf[1] = GTP_MESSAGE_TYPE_GPU;
+        buf[1] = GTP_MESSAGE_TYPE_GPDU;
         buf[2] = gtp_payload_length[0];
         buf[3] = gtp_payload_length[1];
 

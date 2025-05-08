@@ -1,6 +1,9 @@
 #![allow(clippy::unusual_byte_groupings)]
-use super::{GTP_BASE_HEADER_LEN, IPV4_HEADER_LEN, MAX_UES, UPLINK_INNER_PACKET_OFFSET};
-use crate::userplane::GTP_MESSAGE_TYPE_GPU;
+use super::{
+    GTP_BASE_HEADER_LEN, GTP_EXTENDED_HEADER_LEN, IPV4_HEADER_LEN, MAX_UES, PDCP_HEADER_LEN,
+    SDAP_HEADER_LEN,
+};
+use crate::userplane::GTP_MESSAGE_TYPE_GPDU;
 use anyhow::Result;
 use async_std::{
     fs::File,
@@ -66,17 +69,32 @@ impl UplinkPipeline {
     async fn handle_next_uplink_packet(&mut self, buf: &mut [u8; 2000]) -> Result<()> {
         let (bytes_read, _peer) = self.f1u_socket.recv_from(buf).await?;
 
-        if bytes_read < UPLINK_INNER_PACKET_OFFSET + IPV4_HEADER_LEN {
+        if bytes_read < GTP_BASE_HEADER_LEN + PDCP_HEADER_LEN + SDAP_HEADER_LEN + IPV4_HEADER_LEN {
             // TODO - update stat 'too short packet'
             return Ok(());
         }
 
-        // Check that the GTP flags are as expected - meaning that there are no additional headers
-        // that will invalidate the inner packet offsets we are about to use.
-        if buf[0] != 0x30 || buf[1] != GTP_MESSAGE_TYPE_GPU {
-            //println!("Unhandled GTP header values {:x}{:x}", buf[0], buf[1]);
-            // TODO - update stat 'unhandled GTP header values'
+        if buf[1] != GTP_MESSAGE_TYPE_GPDU {
+            //println!("Unhandled GTP message type {:x}", buf[1]);
+            // TODO - update stat 'unhandled GTP message type'
             return Ok(());
+        }
+
+        // Check if this is an extended GTP header and set offsets accordingly.
+        let mut offset;
+        if buf[0] == 0x30 {
+            offset = GTP_BASE_HEADER_LEN;
+        } else {
+            offset = GTP_EXTENDED_HEADER_LEN;
+            while buf[offset - 1] != 0 {
+                // There is an extension header.  Skip it.
+                offset += buf[offset] as usize * 4;
+
+                if bytes_read < offset + PDCP_HEADER_LEN + SDAP_HEADER_LEN + IPV4_HEADER_LEN {
+                    // TODO - update stat 'too short extended packet'
+                    return Ok(());
+                }
+            }
         }
 
         // Get the TEID.
@@ -86,7 +104,7 @@ impl UplinkPipeline {
         //     gtp_teid,
         //     &buf[0..(GTP_BASE_HEADER_LEN + IPV4_HEADER_LEN)]
         // );
-        let mut offset = GTP_BASE_HEADER_LEN;
+        //let mut offset = GTP_BASE_HEADER_LEN;
 
         // Then a PDCP header, which starts with the D/C bit.  TS38.323, 6.2.1.
         if (buf[offset] & 0x80) == 0 {
