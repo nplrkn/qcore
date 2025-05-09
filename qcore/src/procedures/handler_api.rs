@@ -16,6 +16,7 @@ pub trait HandlerApi: Send + Sync + Clone + 'static {
     fn spawn_ue_message_handler(&self) -> u32;
     async fn dispatch_ue_message(&self, ue_id: u32, message: F1apPdu) -> Result<()>;
     fn delete_ue_channel(&self, ue_id: u32);
+    fn delete_ue_channels(&self);
 
     async fn f1ap_request<P: Procedure>(
         &self,

@@ -1,0 +1,4 @@
+# This file configures QCore with the SIM creds of the srsRAN UE, matching those in ue_zmq.conf.
+[imsi-001010123456780]
+ki = "00112233445566778899aabbccddeeff"
+opc = "63BFA50EE6523365FF14C1F45F88737D"

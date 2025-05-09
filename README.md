@@ -32,11 +32,13 @@ To packet capture, run the following in parallel.
 sudo tcpdump -w qcore.pcap -i any port 38472 or port 2152 or src 10.255.0.1 or dst 10.255.0.1
 ```
 
-In Wireshark, select Edit--Preferences--Protocols--NAS-5GS--"Try to detect and decode 5G-EA0 ciphered messages".
+Once the test has finished, hit Ctrl-C to exit tcpdump, then open `qcore.pcap` in Wireshark.  In Wireshark, select Edit--Preferences--Protocols--NAS-5GS--"Try to detect and decode 5G-EA0 ciphered messages".
 
-## OpenAirInterface demo
+## OpenAirInterface and srsRAN demos
 
-QCore interoperates with the OpenAirInterface DU and UE simulator - step-by-step instructions [here](./docs/openairinterface_testing/README.md).
+QCore interoperates with OpenAirInterface and srsRAN.  Each of these two open source projects provides a gNB-DU and UE simulator.  
+
+See the [OpenAirInterface demo walkthrough](./docs/OpenAirInterface-testing/README.md) and the [srsRAN demo walkthrough](./docs/srsRAN-testing/README.md).
 
 ## Configuring and running QCore
 
@@ -46,18 +48,19 @@ Right now, QCore is very much incomplete, with plenty of hard-coded protocol fie
 
 The good news is that QCore is quick to enhance and I want to make it useful to you, with your help.  Please share the problems you run into as a Github issues, and make sure to get a packet capture.
 
-### sims.toml
-
-QCore reads SIM credentials from the file `sims.toml` in the current working directory.  Start with the sample file in the root of this project.  
-
 ### Command-line configuration
 
 Run with the `--help` argument to see the command-line configuration options.
 
+### sims.toml
+
+QCore reads SIM credentials from a file.  By default it uses `sims.toml` in the current working directory - see the sample file in the root of this project.  
+
+Pass `--sim-cred-file` to read from a different file location.
+
 ## About the routing setup
 
-The `setup-routing` script makes a few Linux routing changes with root permissions, most notably adding a route 
-to the 10.255.0.0/24 network and enabling Linux IP forwarding.  Please check that it is not going to interfere with your routing setup.
+The `setup-routing` script makes a few Linux routing changes with root permissions, most notably adding a route to the 10.255.0.0/24 network and enabling Linux IP forwarding.  Please check that it is not going to interfere with your routing setup.
 
 The purpose of these changes is to create a separate IP subnet for 5G UEs.  The UE subnet is reached via a tun interface.  
 

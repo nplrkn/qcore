@@ -107,6 +107,22 @@ impl MockDu {
         Ok(())
     }
 
+    pub async fn perform_f1_removal(&mut self) -> Result<()> {
+        let pdu = build_f1ap::f1_removal_request();
+        info!(self.logger, "F1RemovalRequest >>");
+        self.send(pdu, None).await;
+        self.receive_f1_removal_response().await
+    }
+
+    async fn receive_f1_removal_response(&self) -> Result<()> {
+        let pdu = self.receive_pdu().await?;
+        let F1apPdu::SuccessfulOutcome(SuccessfulOutcome::F1RemovalResponse(_)) = pdu else {
+            bail!("Unexpected F1ap message {:?}", pdu)
+        };
+        info!(self.logger, "F1RemovalResponse <<");
+        Ok(())
+    }
+
     pub async fn send_initial_ul_rrc(
         &self,
         ue: &UeContext,

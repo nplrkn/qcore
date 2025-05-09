@@ -1,10 +1,17 @@
 //! f1ap - F1AP entry points
-use super::f1_setup::F1SetupProcedure;
 use super::gnb_du_configuration_update::GnbDuConfigurationUpdateProcedure;
+use super::{f1_removal::F1RemovalProcedure, f1_setup::F1SetupProcedure};
 use crate::HandlerApi;
 use async_trait::async_trait;
 use derive_deref::Deref;
-use f1ap::*;
+use f1ap::{
+    self, F1RemovalFailure, F1RemovalRequest, F1RemovalResponse, F1SetupFailure, F1SetupRequest,
+    F1SetupResponse, F1apCu, F1apPdu, GnbDuConfigurationUpdate,
+    GnbDuConfigurationUpdateAcknowledge, GnbDuConfigurationUpdateFailure,
+    InitialUlRrcMessageTransfer, InitialUlRrcMessageTransferProcedure, InitiatingMessage,
+    UeContextReleaseRequest, UeContextReleaseRequestProcedure, UlRrcMessageTransfer,
+    UlRrcMessageTransferProcedure,
+};
 use slog::{Logger, info, warn};
 use xxap::{
     EventHandler, IndicationHandler, RequestError, RequestProvider, ResponseAction, TnlaEvent,
@@ -27,6 +34,17 @@ impl<A: HandlerApi> RequestProvider<f1ap::F1SetupProcedure> for F1apHandler<A> {
         logger: &Logger,
     ) -> Result<ResponseAction<F1SetupResponse>, RequestError<F1SetupFailure>> {
         F1SetupProcedure::new(&self.0, logger).run(r).await
+    }
+}
+
+#[async_trait]
+impl<A: HandlerApi> RequestProvider<f1ap::F1RemovalProcedure> for F1apHandler<A> {
+    async fn request(
+        &self,
+        r: F1RemovalRequest,
+        logger: &Logger,
+    ) -> Result<ResponseAction<F1RemovalResponse>, RequestError<F1RemovalFailure>> {
+        F1RemovalProcedure::new(&self.0, logger).run(r).await
     }
 }
 

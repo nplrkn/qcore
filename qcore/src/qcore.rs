@@ -128,6 +128,10 @@ impl HandlerApi for QCore {
         self.ue_tasks.remove(&ue_id);
     }
 
+    fn delete_ue_channels(&self) {
+        self.ue_tasks.clear();
+    }
+
     async fn f1ap_request<P: Procedure>(
         &self,
         r: P::Request,

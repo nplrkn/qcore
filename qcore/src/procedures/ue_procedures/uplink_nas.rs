@@ -25,17 +25,20 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
             Nas5gsMessage::Gmm(
                 _header,
                 Nas5gmmMessage::UlNasTransport(NasUlNasTransport {
-                    payload_container, ..
+                    payload_container,
+                    dnn,
+                    ..
                 }),
             ) => {
                 self.log_message(">> UlNasTransport");
+                let dnn_bytes = dnn.map(|nas_dnn| nas_dnn.value);
                 match decode_nas_5gs_message(&payload_container.value)? {
                     Nas5gsMessage::Gsm(
                         header,
                         Nas5gsmMessage::PduSessionEstablishmentRequest(r),
                     ) => {
                         SessionEstablishmentProcedure::new(self.0)
-                            .run(header, r)
+                            .run(header, r, dnn_bytes)
                             .await?;
                     }
                     m => {

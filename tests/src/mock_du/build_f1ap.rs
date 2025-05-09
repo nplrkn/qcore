@@ -22,6 +22,12 @@ pub fn f1_setup_request() -> F1apPdu {
     }))
 }
 
+pub fn f1_removal_request() -> F1apPdu {
+    F1apPdu::InitiatingMessage(InitiatingMessage::F1RemovalRequest(F1RemovalRequest {
+        transaction_id: TransactionId(0),
+    }))
+}
+
 pub fn initial_ul_rrc_message_transfer(gnb_du_ue_f1ap_id: u32, rrc_bytes: Vec<u8>) -> F1apPdu {
     F1apPdu::InitiatingMessage(InitiatingMessage::InitialUlRrcMessageTransfer(
         InitialUlRrcMessageTransfer {

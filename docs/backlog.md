@@ -1,16 +1,5 @@
-In progress
-- Squash commit
-- check the history, license, readme all look good on github
-- Publish
-
-Next up
-- demo with SRS RAN DU and SRS UE
-
-High priority function gaps
-- Deregistration accept
+Up next
 - Userplane stats
-- Idle / paging
-- SQN
 
 Performance
 - XDP userplane
@@ -21,7 +10,10 @@ Performance
 Persistence
 - Paging continuity
 
-Other function gaps
+Function gaps
+- Deregistration accept
+- Idle / paging
+- SQN
 - Session deletion
 - UE static IP
 - Registration timeout and refresh
@@ -38,6 +30,9 @@ Other function gaps
 - RRC Inactive
 - >1 PDU session per UE
 - >1 DU
+
+Regression testing gaps
+- Uplink UP packet with delivery status extension header.
 
 Tidying + refactoring
 - message logs in both test framework and QCORE debug should use consistent F1 / RRC / NAS prefix

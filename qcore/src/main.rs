@@ -40,6 +40,10 @@ struct Args {
     /// The final byte must be 0.  UEs are allocated host numbers 1-254.
     #[arg(long, default_value_t = Ipv4Addr::new(10,255,0,0))]
     ue_subnet: Ipv4Addr,
+
+    /// SIM credentials file to load.
+    #[arg(long, default_value = "./sims.toml")]
+    sim_cred_file: String,
 }
 
 #[async_std::main]
@@ -53,7 +57,7 @@ async fn main() -> Result<()> {
     check_local_ip(&args.local_ip)?;
     slog::info!(&logger, "Serving network name {}", serving_network_name);
 
-    let sims = Box::new(qcore::sims::load_sims_file("sims.toml", &logger)?);
+    let sims = Box::new(qcore::sims::load_sims_file(&args.sim_cred_file, &logger)?);
 
     let qc = QCore::start(
         Config {
