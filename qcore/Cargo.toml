@@ -36,3 +36,4 @@ hex = { version = "0.4.3", features = ["serde"] }
 serde = { version = "1.0.219", features = ["derive"] }
 toml = "0.8.22"
 local-ip-address = "0.6.3"
+atomic-counter = "1.0.1"

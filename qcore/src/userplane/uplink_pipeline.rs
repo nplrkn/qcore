@@ -12,6 +12,8 @@ use async_std::{
     sync::Mutex,
     task::{self, JoinHandle},
 };
+use atomic_counter::{AtomicCounter, RelaxedCounter};
+use derive_deref::Deref;
 use slog::{Logger, info};
 use std::{net::Ipv4Addr, sync::Arc};
 
@@ -40,19 +42,40 @@ impl UplinkForwardingTable {
 pub struct UplinkPipeline {
     f1u_socket: UdpSocket,
     n6_tun_device: File,
-    uplink_forwarding_table: UplinkForwardingTable,
+    forwarding_table: UplinkForwardingTable,
+    counters: Arc<UplinkCounters>,
 }
+
+pub mod uplink_counter_indices {
+    pub const UL_RX_PKTS: usize = 0;
+    pub const UL_RX_BYTES: usize = 1;
+    pub const UL_DROP_TOO_SHORT: usize = 2;
+    pub const UL_DROP_GTP_MESSAGE_TYPE: usize = 3;
+    pub const UL_DROP_TOO_SHORT_EXT: usize = 4;
+    pub const UL_DROP_PDCP_CONTROL: usize = 5;
+    pub const UL_DROP_SDAP_CONTROL: usize = 6;
+    pub const UL_DROP_NOT_IPV4: usize = 7;
+    pub const UL_DROP_UNKNOWN_TEID_1: usize = 8;
+    pub const UL_DROP_UNKNOWN_TEID_2: usize = 9;
+    pub const UL_NUM_COUNTERS: usize = 10;
+}
+use uplink_counter_indices::*;
+
+#[derive(Default, Deref)]
+pub struct UplinkCounters([RelaxedCounter; UL_NUM_COUNTERS]);
 
 impl UplinkPipeline {
     pub fn new(
         f1u_socket: UdpSocket,
         n6_tun_device: File,
-        uplink_forwarding_table: UplinkForwardingTable,
+        forwarding_table: UplinkForwardingTable,
+        counters: Arc<UplinkCounters>,
     ) -> Self {
         Self {
             f1u_socket,
             n6_tun_device,
-            uplink_forwarding_table,
+            forwarding_table,
+            counters,
         }
     }
     pub fn run(mut self, logger: Logger) -> JoinHandle<()> {
@@ -67,16 +90,19 @@ impl UplinkPipeline {
         })
     }
     async fn handle_next_uplink_packet(&mut self, buf: &mut [u8; 2000]) -> Result<()> {
+        let counters = &self.counters;
         let (bytes_read, _peer) = self.f1u_socket.recv_from(buf).await?;
+        counters[UL_RX_PKTS].inc();
+        counters[UL_RX_BYTES].add(bytes_read);
 
         if bytes_read < GTP_BASE_HEADER_LEN + PDCP_HEADER_LEN + SDAP_HEADER_LEN + IPV4_HEADER_LEN {
-            // TODO - update stat 'too short packet'
+            counters[UL_DROP_TOO_SHORT].inc();
             return Ok(());
         }
 
         if buf[1] != GTP_MESSAGE_TYPE_GPDU {
             //println!("Unhandled GTP message type {:x}", buf[1]);
-            // TODO - update stat 'unhandled GTP message type'
+            counters[UL_DROP_GTP_MESSAGE_TYPE].inc();
             return Ok(());
         }
 
@@ -91,7 +117,7 @@ impl UplinkPipeline {
                 offset += buf[offset] as usize * 4;
 
                 if bytes_read < offset + PDCP_HEADER_LEN + SDAP_HEADER_LEN + IPV4_HEADER_LEN {
-                    // TODO - update stat 'too short extended packet'
+                    counters[UL_DROP_TOO_SHORT_EXT].inc();
                     return Ok(());
                 }
             }
@@ -109,6 +135,7 @@ impl UplinkPipeline {
         // Then a PDCP header, which starts with the D/C bit.  TS38.323, 6.2.1.
         if (buf[offset] & 0x80) == 0 {
             // Control packet - not implemented
+            counters[UL_DROP_PDCP_CONTROL].inc();
             //println!("Unhandled UL PDCP control packet");
             return Ok(());
         }
@@ -121,6 +148,7 @@ impl UplinkPipeline {
         // | D/C |  R  |              QFI                 |
         if (buf[offset] & 0x80) == 0 {
             // Control packet - not implemented
+            counters[UL_DROP_SDAP_CONTROL].inc();
             //println!("Unhandled UL SDAP control packet");
             return Ok(());
         }
@@ -128,6 +156,7 @@ impl UplinkPipeline {
 
         // Next we are expecting an IPv4 header.
         if buf[offset] & 0xf0 != 0x40 {
+            counters[UL_DROP_NOT_IPV4].inc();
             //println!("Not IPv4 - first byte of IP header {:x}", buf[offset]);
             return Ok(());
         }
@@ -136,12 +165,14 @@ impl UplinkPipeline {
         let idx = uplink_table_index_from_gtp_teid(gtp_teid);
 
         // -- critical section --
-        let Some(ref entry) = self.uplink_forwarding_table.0.lock().await[idx] else {
+        let Some(ref entry) = self.forwarding_table.0.lock().await[idx] else {
+            counters[UL_DROP_UNKNOWN_TEID_1].inc();
             // TODO - update stat 'no forwarding action'
             return Ok(());
         };
         if gtp_teid != entry.local_teid {
             // TODO - update stat unknown TEID
+            counters[UL_DROP_UNKNOWN_TEID_2].inc();
             return Ok(());
         }
         // TODO check source IP

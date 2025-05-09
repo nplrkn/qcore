@@ -13,6 +13,8 @@ use async_std::{
     task::{self, JoinHandle},
 };
 use async_tun::Tun;
+use atomic_counter::{AtomicCounter, RelaxedCounter};
+use derive_deref::Deref;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use xxap::GtpTunnel;
@@ -56,19 +58,35 @@ impl DownlinkForwardingTable {
 pub struct DownlinkPipeline {
     f1u_socket: UdpSocket,
     n6_tun_device: Tun,
-    downlink_forwarding_table: DownlinkForwardingTable,
+    forwarding_table: DownlinkForwardingTable,
+    counters: Arc<DownlinkCounters>,
 }
+
+pub mod downlink_counter_indices {
+    pub const DL_RX_PKTS: usize = 0;
+    pub const DL_RX_BYTES: usize = 1;
+    pub const DL_DROP_TOO_SHORT: usize = 2;
+    pub const DL_DROP_UNKNOWN_IP_1: usize = 3;
+    pub const DL_DROP_UNKNOWN_IP_2: usize = 4;
+    pub const DL_NUM_COUNTERS: usize = 5;
+}
+use downlink_counter_indices::*;
+
+#[derive(Default, Deref)]
+pub struct DownlinkCounters([RelaxedCounter; DL_NUM_COUNTERS]);
 
 impl DownlinkPipeline {
     pub fn new(
         f1u_socket: UdpSocket,
         n6_tun_device: Tun,
-        downlink_forwarding_table: DownlinkForwardingTable,
+        forwarding_table: DownlinkForwardingTable,
+        counters: Arc<DownlinkCounters>,
     ) -> Self {
         Self {
             f1u_socket,
             n6_tun_device,
-            downlink_forwarding_table,
+            forwarding_table,
+            counters,
         }
     }
 
@@ -80,14 +98,18 @@ impl DownlinkPipeline {
     }
 
     async fn handle_next_downlink_packet(&self, buf: &mut [u8; 2000]) -> Result<()> {
+        let counters = &self.counters;
         let bytes_read = self
             .n6_tun_device
             .reader()
             .read(&mut buf[DOWNLINK_INNER_PACKET_OFFSET..2000])
             .await?;
 
+        counters[DL_RX_PKTS].inc();
+        counters[DL_RX_BYTES].add(bytes_read);
+
         if bytes_read < IPV4_HEADER_LEN {
-            // TODO - update stat 'too short packet'
+            counters[DL_DROP_TOO_SHORT].inc();
             return Ok(());
         }
         let ip_header =
@@ -99,14 +121,12 @@ impl DownlinkPipeline {
         //println!("Incoming packet on UE tun if with dst IP {:x?}", ue_ip_addr);
 
         // -- critical section --
-        let Some(ref mut entry) = self.downlink_forwarding_table.0.lock().await[idx] else {
-            // TODO - update stat 'no forwarding action'
-            //println!("No forwarding table entry for this IP (missing index)");
+        let Some(ref mut entry) = self.forwarding_table.0.lock().await[idx] else {
+            counters[DL_DROP_UNKNOWN_IP_1].inc();
             return Ok(());
         };
         if ue_ip_addr != entry.ue_ip_addr {
-            // TODO - update stat 'IP mismatch'
-            //println!("No forwarding table entry for this IP (addr mismatch)");
+            counters[DL_DROP_UNKNOWN_IP_2].inc();
             return Ok(());
         }
         let du_ip = entry.remote_tunnel_info.transport_layer_address.clone();
