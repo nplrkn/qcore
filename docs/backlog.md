@@ -1,9 +1,5 @@
-High priority function gaps
+Up next
 - Userplane stats
-- Regression test for an uplink UP packet with delivery status extension header.
-- Deregistration accept
-- Idle / paging
-- SQN
 
 Performance
 - XDP userplane
@@ -14,7 +10,10 @@ Performance
 Persistence
 - Paging continuity
 
-Other function gaps
+Function gaps
+- Deregistration accept
+- Idle / paging
+- SQN
 - Session deletion
 - UE static IP
 - Registration timeout and refresh
@@ -31,6 +30,9 @@ Other function gaps
 - RRC Inactive
 - >1 PDU session per UE
 - >1 DU
+
+Regression testing gaps
+- Uplink UP packet with delivery status extension header.
 
 Tidying + refactoring
 - message logs in both test framework and QCORE debug should use consistent F1 / RRC / NAS prefix

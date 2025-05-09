@@ -2,9 +2,9 @@
 
 In this demo, we are going to ping a public IPv4 address from a simulated UE, running through the OAI DU, and QCore.  Below is a complete walkthrough.
 
-QCore has been tested against [OpenAirInterface](https://openairinterface.org/oai-5g-ran-project/) on a fresh install of Ubuntu 22.04, running under WSL (Windows Subsystem for Linux).  The specific commit of OAI used was acb982d0bd96b01dee84aea730f01dfff73875d0.
-
 Thank you to the team at the OpenAirInterface 5G RAN project group for their project!
+
+QCore has been tested against [OpenAirInterface](https://openairinterface.org/oai-5g-ran-project/) on a fresh install of Ubuntu 22.04, running under WSL (Windows Subsystem for Linux).  The specific commit of OAI used was acb982d0bd96b01dee84aea730f01dfff73875d0.
 
 ## About the routing setup
 
@@ -24,14 +24,10 @@ sudo apt update # prepare for package installation
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh 
 . "$HOME/.cargo/env" 
 
-# get and build QCore
+# Clone and build QCore
 git clone https://github.com/nplrkn/qcore.git  
 cd qcore
 cargo build
-
-# setup QCore routing
-cd ~/qcore
-./setup-routing
 
 # make a shortcut to the OAI config file from the home dir
 cd
@@ -45,9 +41,10 @@ cd openairinterface5g/cmake_targets
 
 ```
 
-### Set up iptables NAT and the UE1 network namespace
+### Set up routing
 
 ```sh
+~/qcore/setup-routing
 sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 sudo ip netns add ue1
 ```
