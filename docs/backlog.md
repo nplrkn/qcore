@@ -17,6 +17,9 @@ Function gaps
 - Session deletion
 - UE static IP
 - Registration timeout and refresh
+- PDCP Rx reordering
+- Obey DL DATA DELIVERY STATUS backpressure (desired buffer size)
+- PDCP retransmission for RLC Am
 - Time out during procedures
 - UE AMBR
 - Transport key for SIM creds
