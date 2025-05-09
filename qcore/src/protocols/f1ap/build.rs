@@ -146,7 +146,7 @@ pub fn drb_to_be_setup_item(
         qos_information: QosInformation::DrbInformation(DrbInformation {
             drb_qos: QosFlowLevelQosParameters {
                 qos_characteristics: QosCharacteristics::NonDynamic5qi(NonDynamic5qiDescriptor {
-                    five_qi: 9,
+                    five_qi: 82,
                     qos_priority_level: None,
                     averaging_window: None,
                     max_data_burst_volume: None,
@@ -171,7 +171,7 @@ pub fn drb_to_be_setup_item(
                 qos_flow_level_qos_parameters: QosFlowLevelQosParameters {
                     qos_characteristics: QosCharacteristics::NonDynamic5qi(
                         NonDynamic5qiDescriptor {
-                            five_qi: 9,
+                            five_qi: 82,
                             qos_priority_level: None,
                             averaging_window: None,
                             max_data_burst_volume: None,
@@ -200,7 +200,7 @@ pub fn drb_to_be_setup_item(
                 bh_info: None,
             },
         ]),
-        rlc_mode: RlcMode::RlcAm,
+        rlc_mode: RlcMode::RlcUmBidirectional,
         ul_configuration: None,
         duplication_activation: None,
         dc_based_duplication_configured: None,
