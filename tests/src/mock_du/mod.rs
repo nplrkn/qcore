@@ -69,8 +69,8 @@ impl MockDu {
         })
     }
 
-    pub async fn terminate(self) {
-        self.mock.terminate().await
+    pub async fn disconnect(&mut self) {
+        self.mock.disconnect().await
     }
 
     pub async fn new_ue_context(&self, ue_id: u32, worker_ip: &IpAddr) -> Result<UeContext> {

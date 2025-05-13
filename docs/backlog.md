@@ -1,10 +1,9 @@
-Up next
-- Userplane stats
+In progress
 
+ 
 Performance
-- XDP userplane
+- iperf framework
 - Release build perf profiling + tuning
-- Check scaling to multiple threads
 - Reduce memcpy
 
 Persistence
@@ -34,10 +33,14 @@ Function gaps
 - >1 PDU session per UE
 - >1 DU
 
-Regression testing gaps
-- Uplink UP packet with delivery status extension header.
-
 Tidying + refactoring
 - message logs in both test framework and QCORE debug should use consistent F1 / RRC / NAS prefix
 - merge nas_context.rs and security_context.rs
 - simplify xxap 
+
+Regression tests
+- downlink packet checking of fields e.g. GTP payload length
+- dl delivery status packet with / without payload
+- tcp out through NAT masquerade
+- stats (add new QCore pub method)
+

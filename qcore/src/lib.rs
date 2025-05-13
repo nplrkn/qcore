@@ -9,6 +9,6 @@ use procedures::{HandlerApi, Procedure};
 use protocols::*;
 
 pub use data::Config;
-pub use qcore::QCore;
-pub use sims::{SimCreds, SimTable};
 pub use data::sims;
+pub use qcore::{ProgramHandle, QCore};
+pub use sims::{SimCreds, SimTable};

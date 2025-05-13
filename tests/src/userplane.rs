@@ -95,8 +95,10 @@ impl MockUserplane {
     pub async fn recv_data_packet(&self, _gtp_teid: &GtpTeid) -> Result<Vec<u8>> {
         let mut buf = vec![0u8; 2000];
         let future_result = self.gtpu_socket.recv_from(&mut buf);
+
+        // The benefit of waiting 10 seconds is that it gives a chance for the stats output loop to kick in.
         let (bytes_received, _source_address) =
-            future::timeout(Duration::from_secs(1), future_result).await??;
+            future::timeout(Duration::from_secs(10), future_result).await??;
         info!(self.logger, "Received GTP-U packet for UE");
 
         // TODO - check the TEID is as expected (at [4..8])

@@ -1,0 +1,16 @@
+[package]
+name = "ebpf-common"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+user = ["aya", "strum"]
+
+[dependencies]
+aya = { version = "0.13.1",  default-features = false, optional = true}
+strum = { version = "0.27.1", features = ["strum_macros"], optional = true}
+strum_macros = "0.27.1"
+
+[lib]
+path = "src/lib.rs"

@@ -6,11 +6,14 @@ use crate::{SimCreds, SimTable};
 use anyhow::{Result, bail};
 use async_channel::Sender;
 use async_std::sync::Mutex;
+use async_std::task::block_on;
 use async_trait::async_trait;
+use aya::Ebpf;
 use dashmap::DashMap;
 use f1ap::F1apPdu;
 use slog::{Logger, info, o};
 use std::net::IpAddr;
+use std::ops::Deref;
 use std::sync::Arc;
 use xxap::{
     GtpTunnel, Indication, IndicationHandler, Procedure, RequestError, RequestProvider,
@@ -28,26 +31,51 @@ pub struct QCore {
     sim_auth_data: &'static SimTable,
 }
 
+pub struct ProgramHandle {
+    _ebpf: Ebpf,
+    qc: QCore,
+}
+impl Deref for ProgramHandle {
+    type Target = QCore;
+
+    fn deref(&self) -> &Self::Target {
+        &self.qc
+    }
+}
+impl Drop for ProgramHandle {
+    fn drop(&mut self) {
+        block_on(self.qc.graceful_shutdown());
+    }
+}
+
 impl QCore {
     pub async fn start(
         config: Config,
         logger: Logger,
         sim_auth_data: &'static SimTable,
-    ) -> Result<Self> {
-        let mut qc = Self::new(config, logger, sim_auth_data).await?;
+    ) -> Result<ProgramHandle> {
+        let local_ip = config.ip_addr;
+        let mut ebpf = PacketProcessor::install_ebpf(
+            local_ip,
+            &config.f1u_interface_name,
+            &config.n6_interface_name,
+            &config.tun_interface_name,
+            &logger,
+        )?;
+        let packet_processor =
+            PacketProcessor::new(config.ue_subnet.clone(), &mut ebpf, &logger).await?;
+
+        let mut qc = Self::new(config, packet_processor, logger, sim_auth_data).await?;
         qc.run().await.expect("Startup failure");
-        Ok(qc)
+        Ok(ProgramHandle { qc, _ebpf: ebpf })
     }
 
-    async fn new(config: Config, logger: Logger, sim_auth_data: &'static SimTable) -> Result<Self> {
-        let local_ip = config.ip_addr;
-        let packet_processor = PacketProcessor::new(
-            local_ip,
-            &config.n6_tun_name,
-            config.ue_subnet.clone(),
-            &logger,
-        )
-        .await?;
+    async fn new(
+        config: Config,
+        packet_processor: PacketProcessor,
+        logger: Logger,
+        sim_auth_data: &'static SimTable,
+    ) -> Result<Self> {
         Ok(Self {
             config,
             f1ap: Stack::new(SctpTransportProvider::new()),
@@ -80,9 +108,9 @@ impl QCore {
         Ok(())
     }
 
-    pub async fn graceful_shutdown(self) {
+    pub async fn graceful_shutdown(&mut self) {
         info!(&self.logger, "Shutting down");
-        self.f1ap.graceful_shutdown().await;
+        self.f1ap.reset().await;
         if let Some(h) = self.server_handle.lock().await.take() {
             h.graceful_shutdown().await;
         }

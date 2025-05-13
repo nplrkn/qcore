@@ -1,8 +1,44 @@
 #!/bin/sh
 UE_SUBNET="10.255.0.0/24"
-sudo ip tuntap add mode tun user $(whoami) name ue # Set up a tun device called 'ue' accessible by the current user
-sudo ip link set ue up                             # Set the link up 
-sudo ip route add $UE_SUBNET dev ue                # Make the UE subnet routable over the ue device.
-sudo sysctl -w net.ipv4.conf.ue.send_redirects=0   # In combination with the below, prevents sending ICMP redirects to the 'ue' tun device.
-sudo sysctl -w net.ipv4.conf.all.send_redirects=0  # In combination with the above, prevents sending ICMP redirects to the 'ue' tun device.
-sudo sysctl -w net.ipv4.ip_forward=1               # Enable IPv4 forwarding
+QCORE_TUN=qcoretun
+
+# Enable IPv4 forwarding
+sudo sysctl -w net.ipv4.ip_forward=1               
+
+# Create the veth pair veth0-veth1, and make the UE subnet routable over it.
+# This will be used by QCore to receive downlink packets addressed to UEs. 
+sudo ip link add veth0 type veth peer veth1
+sudo ip link set up veth0
+sudo ip link set up veth1
+sudo ip link set arp off dev veth0
+sudo ethtool -K veth0 rx off tx off # Disable checksum offload - otherwise TCP will break
+sudo ip route add $UE_SUBNET dev veth0
+
+# Create a tun device to inject both UE and GTP packets into Linux routing.
+sudo ip tuntap add mode tun user $(whoami) name $QCORE_TUN 
+sudo ip link set $QCORE_TUN up 
+sudo iptables -A FORWARD -i $QCORE_TUN -j ACCEPT           
+
+# The following gives full flexibility in packet injection. 
+# - Disable reverse path filtering on tun interface so that QCore can inject UE or GTP packets.
+# - Allow QCore to have a loopback GTP address.
+# - Allow the DU to have a loopback GTP address.
+sudo sysctl -w net.ipv4.conf.$QCORE_TUN.rp_filter=0   
+sudo sysctl -w net.ipv4.conf.all.rp_filter=0
+sudo sysctl -w net.ipv4.conf.$QCORE_TUN.accept_local=1     
+sudo sysctl -w net.ipv4.conf.$QCORE_TUN.route_localnet=1
+
+# Allow UE packets to flow over eth0 to the outside world.
+# Enable NAT on the way out and accept them on the way back in
+sudo iptables -t nat -A POSTROUTING -o eth0 -s $UE_SUBNET -j MASQUERADE
+sudo iptables -A FORWARD -i eth0 -j ACCEPT -d $UE_SUBNET
+
+# UE-to-UE routing
+# Prevents sending ICMP redirects to the 'ue' tun device.
+# This occurs since QCore might emit a packet 10.255.0.1->10.255.0.2 on the ue device.  
+# Linux sees that it needs to hairpin that packet back over the ue device and would 
+# normally generate ICCMP redirect.
+#sudo sysctl -w net.ipv4.conf.ue.send_redirects=0   
+#sudo sysctl -w net.ipv4.conf.all.send_redirects=0
+
+

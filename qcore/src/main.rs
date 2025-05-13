@@ -32,9 +32,18 @@ struct Args {
     #[arg(long)]
     mnc: String,
 
+    /// Name of the Linux Ethernet device used for userplane communication with the DU.  If
+    /// you are running the DU locally, this should be set to "lo".
+    #[arg(long, default_value = "eth0")]
+    f1u_interface_name: String,
+
+    /// Name of the Linux Ethernet device on which downlink packets to UEs will arrive.  
+    #[arg(long, default_value = "veth1")]
+    n6_interface_name: String,
+
     /// Name of the Linux tun device to open for routing userplane packet to/from UEs on the N6 reference point.
-    #[arg(long, default_value = "ue")]
-    n6_tun_name: String,
+    #[arg(long, default_value = "qcoretun")]
+    tun_interface_name: String,
 
     /// UE subnet.  This is the network address of a /24 IPv4 subnet in dotted demical notation.  
     /// The final byte must be 0.  UEs are allocated host numbers 1-254.
@@ -59,7 +68,7 @@ async fn main() -> Result<()> {
 
     let sims = Box::new(qcore::sims::load_sims_file(&args.sim_cred_file, &logger)?);
 
-    let qc = QCore::start(
+    let _qc = QCore::start(
         Config {
             ip_addr: args.local_ip,
             plmn,
@@ -68,7 +77,9 @@ async fn main() -> Result<()> {
             serving_network_name,
             skip_ue_authentication_check: false,
             sst: 1,
-            n6_tun_name: args.n6_tun_name,
+            f1u_interface_name: args.f1u_interface_name,
+            n6_interface_name: args.n6_interface_name,
+            tun_interface_name: args.tun_interface_name,
             ue_subnet: args.ue_subnet,
         },
         logger,
@@ -77,7 +88,6 @@ async fn main() -> Result<()> {
     .await?;
 
     wait_for_signal().await?;
-    qc.graceful_shutdown().await;
 
     Ok(())
 }

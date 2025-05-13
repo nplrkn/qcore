@@ -24,8 +24,8 @@ impl SctpTransportProvider {
             tnla_pool: SctpTnlaPool::new(),
         }
     }
-    pub async fn graceful_shutdown(self) {
-        self.tnla_pool.graceful_shutdown().await
+    pub async fn reset(&mut self) {
+        self.tnla_pool.reset().await
     }
 }
 
@@ -116,7 +116,7 @@ impl TransportProvider for SctpTransportProvider {
     }
 
     async fn serve<H>(
-        self,
+        mut self,
         listen_addr: String,
         ppid: u32,
         handler: H,
@@ -159,7 +159,7 @@ impl TransportProvider for SctpTransportProvider {
                 );
             }
             listener.close();
-            self.tnla_pool.graceful_shutdown().await;
+            self.tnla_pool.reset().await;
         });
         Ok(ShutdownHandle::new(join_handle, stop_source))
     }

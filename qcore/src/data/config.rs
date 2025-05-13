@@ -23,8 +23,14 @@ pub struct Config {
     // AMF IDs (AMF region / AMF set / AMF pointer)
     pub amf_ids: [u8; 3],
 
-    // Name of the N6 tun device
-    pub n6_tun_name: String,
+    // Name of the F1U ethernet device
+    pub f1u_interface_name: String,
+
+    // Name of the N6 ethernet device
+    pub n6_interface_name: String,
+
+    // Name of the qcore tun device
+    pub tun_interface_name: String,
 
     // /24 UE subnet.
     pub ue_subnet: Ipv4Addr,

@@ -79,8 +79,8 @@ impl Stack {
         self.transport_provider.remote_tnla_addresses().await
     }
 
-    pub async fn graceful_shutdown(self) {
-        self.transport_provider.graceful_shutdown().await
+    pub async fn reset(&mut self) {
+        self.transport_provider.reset().await
     }
 }
 

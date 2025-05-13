@@ -27,7 +27,7 @@ impl SctpTnlaPool {
         }
     }
 
-    pub async fn graceful_shutdown(self) {
+    pub async fn reset(&mut self) {
         for task in self.tasks.lock().await.drain(..) {
             task.graceful_shutdown().await;
         }

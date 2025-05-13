@@ -1,0 +1,17 @@
+[package]
+name = "ebpf-userplane"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+aya-ebpf = { version = "0.1.1", default-features = false }
+#aya-log-ebpf = { version = "0.1.1", default-features = false }
+network-types = "0.0.8"
+ebpf-common = { path = "../ebpf-common"}
+
+[build-dependencies]
+which = { version = "6.0.0", default-features = false }
+
+[[bin]]
+name = "ebpf-userplane-program"
+path = "src/main.rs"

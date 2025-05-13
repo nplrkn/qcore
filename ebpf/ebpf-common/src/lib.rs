@@ -1,0 +1,71 @@
+#![no_std]
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct UlForwardingEntry {
+    pub teid_top_bytes: [u8; 3],
+}
+#[cfg(feature = "user")]
+unsafe impl aya::Pod for UlForwardingEntry {}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct DlForwardingEntry {
+    pub next_pdcp_seq_num: u64,
+    pub next_nr_seq_num: u64,
+
+    // TEID in HOST byte order
+    pub teid: u32,
+
+    // Remote IP in HOST byte order
+    pub remote_gtp_addr: u32,
+}
+#[cfg(feature = "user")]
+unsafe impl aya::Pod for DlForwardingEntry {}
+
+#[cfg(feature = "user")]
+use strum_macros::EnumString;
+
+// The Strum derives create a str array constant called CounterIndex::VARIANTS
+#[cfg_attr(
+    feature = "user",
+    derive(Debug, EnumString, strum_macros::VariantNames)
+)]
+pub enum CounterIndex {
+    // Counters from which rates are computed
+    UlPayloadBytes, // IP bytes passed through from UE to N6
+    DlPayloadBytes, // IP bytes passed through from N6 to UE
+
+    // Normal counters
+    UlRxPkts,           // All packets matching GTP-U address/port.
+    DlRxPkts,           // All packets received on ue tun device
+    UlRxHeaderBytes,    // Header (overhead) bytes from valid uplink packets.
+    UlRxStatusOnlyPkts, // DL DELIVERY STATUS with no payload.
+
+    // Problem counters
+    UlDropTooShort,
+    UlDropGtpMessageType,
+    UlDropTooShortExt,
+    UlDropExtLength,
+    UlDropPdcpControl,
+    UlDropSdapControl,
+    UlDropNotIpv4,
+    UlDropUnknownTeid1,
+    UlDropUnknownTeid2,
+    UlDropUnsupportedExtension,
+    UlInternalError,
+
+    DlDropIpv4Header,
+    DlDropUnknownUe,
+    DlInternalError,
+    DlSeqNumContention,
+
+    NumCounters,
+}
+
+pub const MAX_GTP_EXTENSION_HEADERS: usize = 2;
+pub const PDCP_HEADER_LEN: usize = 2;
+pub const SDAP_HEADER_LEN: usize = 1;
+pub const GTP_MESSAGE_TYPE_GPDU: u8 = 255; // TS29.281, table 6.1-1
+pub const GTPU_PORT: u16 = 2152; // TS29.281
+pub const FORWARDING_TABLE_SIZE: u32 = 256;

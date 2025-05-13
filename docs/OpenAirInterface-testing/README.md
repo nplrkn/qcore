@@ -6,14 +6,6 @@ Thank you to the team at the OpenAirInterface 5G RAN project group for their pro
 
 QCore has been tested against [OpenAirInterface](https://openairinterface.org/oai-5g-ran-project/) on a fresh install of Ubuntu 22.04, running under WSL (Windows Subsystem for Linux).  The specific commit of OAI used was acb982d0bd96b01dee84aea730f01dfff73875d0.
 
-## About the routing setup
-
-We use two techniques to get the end-to-end ping flow working, in addition to the base QCore routing setup.
-
-1. NAT.  The UE is going to talk to the outside world, so we need to enable NAT.  The UE has a private IPv4 address 10.255.0.1, which is only routable inside QCore's host system.  We need to NAT this address to the eth0 IP address to enable the UE to communicate with the outside world.  We use `iptables` NAT 'masquerade' for this.
-
-2. netns.  The simulated OAI UE creates a tun interface that can be used to transmit simulated userplane radio packets to the DU - which is exactly what we need.  However, it leads to a strange situation where the QCore N6 tunnel interface ('ue') and the OAI UE tunnel interface ('oaitun_ue1') both co-exist, with similar IP configuration.  We isolate the simulated UE IP namespace by moving the oaitun_ue1 device into a separate network namespace (netns 'ue1'), and then ping from that namespace.  We can only do this after the OAI UE is up and has created its PDU session.  
-
 ## Install, build, test with OAI
 ### Install / Build
 ```sh
@@ -23,6 +15,7 @@ sudo apt update # prepare for package installation
 # install Rust (https://www.rust-lang.org/tools/install)
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh 
 . "$HOME/.cargo/env" 
+rustup default nightly
 
 # Clone and build QCore
 git clone https://github.com/nplrkn/qcore.git  
@@ -45,7 +38,6 @@ cd openairinterface5g/cmake_targets
 
 ```sh
 ~/qcore/setup-routing
-sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 sudo ip netns add ue1
 ```
 
@@ -62,7 +54,7 @@ sudo tcpdump -w oai_test.pcap -i any port 38472 or port 2152 or src 10.255.0.1 o
 
 ```sh
 cd ~/qcore
-RUST_LOG=debug cargo run -- --mcc 208 --mnc 99 --local-ip 127.0.0.1 --sim-cred-file docs/OpenAirInterface-testing/oai-sim.toml
+RUST_LOG=debug cargo run -- --mcc 208 --mnc 99 --local-ip 127.0.0.1 --f1u-interface-name lo --sim-cred-file docs/OpenAirInterface-testing/oai-sim.toml
 ```
 
 #### Terminal 3 - OAI DU
@@ -84,7 +76,7 @@ Note that the arguments to nr-uesoftmodem obey the startup log from nr-softmodem
 
 After not too long, the UE will establish a PDU session, which you can spot from the QCore INFO log in terminal 2.
 
-#### Terminal 5 - ping
+#### Terminal 5 - check connectivity from UE
 
 ```sh
 sudo ip link set oaitun_ue1 netns ue1  # move OAI's UE tunnel interface into the ue1 network namespace
@@ -95,11 +87,12 @@ sudo ip netns exec ue1 bash            # get an interactive shell session in the
 ip link set lo up                      # enable loopback interface
 ip link set oaitun_ue1 up              # enable tunnel interface
 ip addr add 10.255.0.1 dev oaitun_ue1  # configure the UE's IP address
-ip route add default dev oaitun_ue1    # give it a route to the outside world
-ping 8.8.8.8                           # ping a Google DNS server
+ip route add default dev oaitun_ue1    # give it a route out
+ping 8.8.8.8                           # ping outside world
+curl parrot.live                       # test TCP + HTTP access to outside world
 ```
 
-If you get a ping response, congratulations.  On the one hand, this must be one of the most convoluted ways imaginable to access the internet from your machine :-), but on the other, you have just proven out the mainline end-to-end 5G service flow!
+If you get a ping / curl response, congratulations.  On the one hand, this must be one of the most convoluted ways imaginable to access the internet from your machine :-), but on the other, you have just proven out the mainline end-to-end 5G service flow!
 
 ### Looking at the packet capture
 

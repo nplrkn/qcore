@@ -7,5 +7,21 @@ members = [
     "qcore",
     "5g-libs/rrc",
     "5g-libs/xxap",
-    "5g-libs/security",
+    "5g-libs/security", 
+    "ebpf/ebpf-userplane",
+    "ebpf/ebpf-common",
 ]
+default-members = [
+    "5g-libs/asn1-per",
+    "5g-libs/f1ap",
+    "tests",
+    "qcore",
+    "5g-libs/rrc",
+    "5g-libs/xxap",
+    "5g-libs/security", 
+    "ebpf/ebpf-common",
+]
+
+[profile.release.package.ebpf-userplane]
+debug = 2
+codegen-units = 1

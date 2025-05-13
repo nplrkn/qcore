@@ -1,14 +1,14 @@
 //! mock - 'base class' for the mocks
 
 use anyhow::{Result, bail};
+use asn1_per::SerDes;
 use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
 use slog::{Logger, debug, info};
 use std::fmt::Debug;
 use xxap::{
-    Binding, SctpTransportProvider, TransportProvider, ShutdownHandle, TnlaEvent, TnlaEventHandler,
+    Binding, SctpTransportProvider, ShutdownHandle, TnlaEvent, TnlaEventHandler, TransportProvider,
 };
-use asn1_per::SerDes;
 
 pub trait Pdu: SerDes + 'static + Send + Sync + Clone + Debug {}
 
@@ -98,12 +98,12 @@ impl<P: Pdu> Mock<P> {
         self.expect_connection_established().await;
     }
 
-    pub async fn terminate(mut self) {
+    pub async fn disconnect(&mut self) {
         for t in self.transport_tasks.drain(..) {
             t.graceful_shutdown().await;
         }
-        self.transport.graceful_shutdown().await;
-        info!(self.logger, "Termination complete");
+        self.transport.reset().await;
+        info!(self.logger, "Disconnection complete");
     }
 
     /// Wait for connection to be established or terminated.

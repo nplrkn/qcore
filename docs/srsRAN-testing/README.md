@@ -45,7 +45,6 @@ make
 
 ```sh
 ~/qcore/setup-routing
-sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 sudo ip netns add ue1
 ``` 
 
@@ -69,7 +68,7 @@ sudo tcpdump -w srsran_test.pcap -i any port 38472 or port 2152 or src 10.255.0.
 
 ```sh
 cd ~/qcore
-RUST_LOG=debug cargo run -- --mcc 001 --mnc 01 --local-ip 127.0.0.1 --sim-cred-file docs/srsRAN-testing/srs-sim.toml
+RUST_LOG=debug cargo run -- --mcc 001 --mnc 01 --local-ip 127.0.0.1  --f1u-interface-name lo --sim-cred-file docs/srsRAN-testing/srs-sim.toml
 ```
 
 #### Terminal 3 - DU
@@ -86,13 +85,14 @@ cd ~/srsRAN_4G/build/srsue/src/
 sudo ./srsue ue.conf
 ```
 
-#### Terminal 5 - ping
+#### Terminal 5 - check connectivity from UE
 
 ```sh
 sudo ip netns exec ue1 bash
 # We are now running as root in netns ue1
 ip route add default dev tun_srsue
 ping 8.8.8.8
+curl parrot.live
 ```
 
 ### Looking at the packet capture

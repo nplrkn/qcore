@@ -1,87 +1,104 @@
 #![allow(clippy::unusual_byte_groupings)]
-use super::downlink_pipeline::DownlinkCounters;
-use super::uplink_pipeline::UplinkCounters;
-use super::{
-    DownlinkForwardingTable, DownlinkPipeline, GTPU_PORT, MAX_UES, UplinkForwardingTable,
-    UplinkPipeline,
-};
+use super::stats::dump_stats;
+//use super::aya_log::EbpfLogger;
+use super::MAX_UES;
 use crate::UserplaneSession;
-use anyhow::{Context, Result, bail, ensure};
-use async_std::{fs::File, net::IpAddr, sync::Mutex};
-use async_tun::{Tun, TunBuilder};
-use atomic_counter::AtomicCounter;
+use anyhow::{Result, bail, ensure};
+use async_std::{net::IpAddr, sync::Mutex};
+use aya::maps::{Array, MapData, PerCpuArray};
+use aya::programs::{SchedClassifier, TcAttachType, tc};
+use aya::{Ebpf, EbpfLoader};
+use ebpf_common::*;
 use index_pool::IndexPool;
+use libc::if_nametoindex;
 use rand::RngCore;
 use slog::{Logger, info, warn};
-use socket2::{Domain, Protocol, Socket, Type};
-use std::net::{Ipv4Addr, SocketAddr};
-use std::os::fd::{AsRawFd, FromRawFd};
+use std::ffi::CString;
+use std::net::Ipv4Addr;
 use std::sync::Arc;
 use xxap::{GtpTeid, GtpTunnel};
 
 #[derive(Clone)]
 pub struct PacketProcessor {
     index_pool: Arc<Mutex<IndexPool>>,
-    downlink_forwarding_table: DownlinkForwardingTable,
-    uplink_forwarding_table: UplinkForwardingTable,
     ue_subnet: Ipv4Addr,
+    uplink_forwarding_table: Arc<Mutex<UplinkForwardingTable>>,
+    downlink_forwarding_table: Arc<Mutex<DownlinkForwardingTable>>,
 }
 
+type UplinkForwardingTable = Array<MapData, UlForwardingEntry>;
+type DownlinkForwardingTable = Array<MapData, DlForwardingEntry>;
+
 impl PacketProcessor {
-    pub async fn new(
-        local_ip: IpAddr,
-        n6_tun_dev_name: &str,
-        ue_subnet: Ipv4Addr,
-        logger: &Logger,
-    ) -> Result<Self> {
-        // Create the packet source/sinks.
-        let f1u_socket = create_f1u_socket(local_ip, logger)?;
-        let f1u_socket_clone = f1u_socket.try_clone()?;
-        let n6_tun = open_n6_tun_device(n6_tun_dev_name, logger).await?;
-        let n6_tun_clone = unsafe { File::from_raw_fd(n6_tun.as_raw_fd()) };
-
-        // Initialize the forwarding tables.
-        let downlink_forwarding_table = DownlinkForwardingTable::new();
-        let uplink_forwarding_table = UplinkForwardingTable::new();
-
-        // Start the downlink pipeline (N6 -> F1U).
-        let downlink_counters = Arc::new(DownlinkCounters::default());
-        let downlink_pipeline = DownlinkPipeline::new(
-            f1u_socket.into(),
-            n6_tun,
-            downlink_forwarding_table.clone(),
-            downlink_counters.clone(),
-        );
-        let _downlink_task = downlink_pipeline.run();
-
-        // Start the uplink pipeline (F1U -> N6).
-        let uplink_counters = Arc::new(UplinkCounters::default());
-        let uplink_pipeline = UplinkPipeline::new(
-            f1u_socket_clone.into(),
-            n6_tun_clone,
-            uplink_forwarding_table.clone(),
-            uplink_counters.clone(),
-        );
-        let _uplink_task = uplink_pipeline.run(logger.clone());
-
+    pub async fn new(ue_subnet: Ipv4Addr, ebpf: &mut Ebpf, logger: &Logger) -> Result<Self> {
         let mut index_pool = IndexPool::new();
         // Take the 0 slot, so that the first UE gets an IP address ending in .1.
         let _ = index_pool.request_id(0);
         let index_pool = Arc::new(Mutex::new(index_pool));
 
+        let counters = PerCpuArray::try_from(ebpf.take_map("COUNTERS").unwrap())?;
+        let ul_forwarding_table = Array::try_from(ebpf.take_map("UL_FORWARDING_TABLE").unwrap())?;
+        let dl_forwarding_table = Array::try_from(ebpf.take_map("DL_FORWARDING_TABLE").unwrap())?;
+
         // Spawn the stats task
-        let _stats_task = async_std::task::spawn(dump_stats(
-            logger.clone(),
-            downlink_counters,
-            uplink_counters,
-        ));
+        let _stats_task = async_std::task::spawn(dump_stats(logger.clone(), counters));
 
         Ok(PacketProcessor {
             index_pool,
-            downlink_forwarding_table,
-            uplink_forwarding_table,
             ue_subnet,
+            uplink_forwarding_table: Arc::new(Mutex::new(ul_forwarding_table)),
+            downlink_forwarding_table: Arc::new(Mutex::new(dl_forwarding_table)),
         })
+    }
+
+    pub fn install_ebpf(
+        local_ip: IpAddr,
+        f1u_if_name: &str,
+        n6_if_name: &str,
+        tun_if_name: &str,
+        _logger: &Logger,
+    ) -> Result<Ebpf> {
+        let gtpu_local_ipv4 = match local_ip {
+            IpAddr::V4(addr) => addr.octets(),
+            _ => bail!("Ipv6 not supported"),
+        };
+
+        // Bump the memlock rlimit. This is needed for older kernels that don't use the
+        // new memcg based accounting, see https://lwn.net/Articles/837122/
+        // let rlim = libc::rlimit {
+        //     rlim_cur: libc::RLIM_INFINITY,
+        //     rlim_max: libc::RLIM_INFINITY,
+        // };
+        // let ret = unsafe { libc::setrlimit(libc::RLIMIT_MEMLOCK, &rlim) };
+        // if ret != 0 {
+        //     warn!(
+        //         &logger,
+        //         "remove limit on locked memory failed, ret is: {ret}"
+        //     );
+        // }
+
+        let tun_if_index = get_if_index(tun_if_name)?;
+        let data = aya::include_bytes_aligned!(concat!(env!("OUT_DIR"), "/ebpf-userplane-program"));
+        let mut ebpf = EbpfLoader::new()
+            .set_global("GTPU_LOCAL_IPV4", &gtpu_local_ipv4, true)
+            .set_global("TUN_IF_INDEX", &tun_if_index, true)
+            .load(data)?;
+
+        // if let Err(e) = EbpfLogger::init_with_logger(&mut ebpf, logger.clone()) {
+        //     warn!(logger, "failed to initialize eBPF logger: {e}");
+        // }
+
+        let _ = tc::qdisc_add_clsact(f1u_if_name);
+        let program: &mut SchedClassifier = ebpf.program_mut("tc_uplink").unwrap().try_into()?;
+        program.load()?;
+        program.attach(f1u_if_name, TcAttachType::Ingress)?;
+
+        let _ = tc::qdisc_add_clsact(n6_if_name);
+        let program: &mut SchedClassifier = ebpf.program_mut("tc_downlink").unwrap().try_into()?;
+        program.load()?;
+        program.attach(n6_if_name, TcAttachType::Ingress)?;
+
+        Ok(ebpf)
     }
 
     pub async fn reserve_userplane_session(&self, _logger: &Logger) -> Result<UserplaneSession> {
@@ -99,12 +116,12 @@ impl PacketProcessor {
         let mut ue_addr_octets = self.ue_subnet.octets().clone();
         ue_addr_octets[3] = idx;
         let ue_ipv4_addr = Ipv4Addr::from(ue_addr_octets);
-        //info!(self.logger, "Allocated UE IP address {:?}", ue_ipv4_addr);
 
-        // Create the uplink forwarding rule.
-        self.uplink_forwarding_table
-            .add_rule(ue_ipv4_addr, teid)
-            .await;
+        let v = UlForwardingEntry {
+            teid_top_bytes: teid[0..3].try_into().unwrap(),
+        };
+        let mut array = self.uplink_forwarding_table.lock().await;
+        array.set(idx as u32, v, 0)?;
 
         Ok(UserplaneSession {
             uplink_gtp_teid: GtpTeid(teid),
@@ -119,12 +136,6 @@ impl PacketProcessor {
         remote_tunnel_info: GtpTunnel,
         logger: &Logger,
     ) -> Result<()> {
-        // TODO: Once we implement downlink buffering, could split this into a command that starts buffering downlink packets, and
-        // then a second one that flushes the buffer (after the RRC Reconfiguration Complete).  Otherwise, the UE could
-        // receive a packet before it has confirmed setup of the new DRB.
-        let IpAddr::V4(ue_ipv4) = session.ue_ip_addr else {
-            bail!("IPv6 not implemented");
-        };
         info!(
             logger,
             "Set up userplane session {}, remote {}-{}",
@@ -133,132 +144,74 @@ impl PacketProcessor {
             remote_tunnel_info.gtp_teid,
         );
 
-        self.downlink_forwarding_table
-            .add_rule(remote_tunnel_info, ue_ipv4)
-            .await;
+        // TODO: Once we implement downlink buffering, could split this into a command that starts buffering downlink packets, and
+        // then a second one that flushes the buffer (after the RRC Reconfiguration Complete).  Otherwise, the UE could
+        // receive a packet before it has confirmed setup of the new DRB.
+
+        let IpAddr::V4(ue_ipv4) = session.ue_ip_addr else {
+            bail!("IPv6 not implemented for UE");
+        };
+        let gtp_remote_ip: IpAddr = remote_tunnel_info.transport_layer_address.try_into()?;
+        let IpAddr::V4(gtp_remote_ipv4) = gtp_remote_ip else {
+            bail!("IPv6 not implemented for GTP");
+        };
+
+        // We use the least significant byte of the UE address as the index.
+        let idx = ue_ipv4.octets()[3];
+
+        let v = DlForwardingEntry {
+            next_pdcp_seq_num: 0,
+            next_nr_seq_num: 0,
+            teid: u32::from_be_bytes(remote_tunnel_info.gtp_teid.0),
+            remote_gtp_addr: u32::from_be_bytes(gtp_remote_ipv4.octets()),
+        };
+        let mut array = self.downlink_forwarding_table.lock().await;
+        if let Err(e) = array.set(idx as u32, v, 0) {
+            warn!(
+                logger,
+                "Error storing downlink forwarding entry {} - {}", idx, e
+            )
+        }
 
         Ok(())
     }
 
     pub async fn delete_userplane_session(&self, session: &UserplaneSession, logger: &Logger) {
-        if let IpAddr::V4(ue_ipv4) = session.ue_ip_addr {
-            self.downlink_forwarding_table.remove_rule(ue_ipv4).await;
-        };
-        self.uplink_forwarding_table
-            .remove_rule(session.uplink_gtp_teid.0)
-            .await;
+        let idx = session.uplink_gtp_teid.0[3] as u32;
+
+        if let Err(e) = self.index_pool.lock().await.return_id(idx as usize) {
+            warn!(logger, "Error returning UE index {} - {}", idx, e)
+        }
+
+        let mut array = self.downlink_forwarding_table.lock().await;
+        if let Err(e) = array.set(idx, DlForwardingEntry::default(), 0) {
+            warn!(
+                logger,
+                "Error clearing downlink forwarding entry {} - {}", idx, e
+            )
+        }
+
+        let mut array = self.uplink_forwarding_table.lock().await;
+        if let Err(e) = array.set(idx, UlForwardingEntry::default(), 0) {
+            warn!(
+                logger,
+                "Error clearing uplink forwarding entry {} - {}", idx, e
+            )
+        }
 
         info!(logger, "Deleted userplane session {}", session);
     }
 }
 
-fn create_f1u_socket(local_ip: IpAddr, logger: &Logger) -> Result<std::net::UdpSocket> {
-    let transport_address = SocketAddr::new(local_ip, GTPU_PORT);
-    let domain = match local_ip {
-        IpAddr::V4(_) => Domain::IPV4,
-        IpAddr::V6(_) => Domain::IPV6,
-    };
-    ensure!(matches!(local_ip, IpAddr::V4(_)));
-
-    // On the RAN side (F1-U reference point), we open a GTP UDP socket.
-    let gtpu_socket = Socket::new(domain, Type::DGRAM, Some(Protocol::UDP))?;
-    gtpu_socket.set_reuse_port(true)?;
-    gtpu_socket
-        .bind(&transport_address.into())
-        .context(format!("Failed to bind {}", transport_address))?;
-    info!(logger, "Serving GTP-U on {transport_address}");
-    Ok(gtpu_socket.into())
-}
-
-// TODO: we probably don't need TunBuilder and can just open this synchronously
-async fn open_n6_tun_device(tun_device_name: &str, logger: &Logger) -> Result<Tun> {
-    match TunBuilder::new()
-        .name(tun_device_name)
-        .tap(false)
-        .packet_info(false)
-        .try_build()
-        .await
-    {
-        Ok(tun) => {
-            info!(logger, "Opened tun device '{tun_device_name}' for N6");
-            Ok(tun)
-        }
-        Err(e) => bail!(
-            "Failed to open TUN device '{tun_device_name}' - have you followed the instructions in the QCore readme?  
-Device open eError code: {e}
- EPERM: may indicate that the device doesn't exist or is not owned by the current user
- EINVAL: may indicate that the device is actually a tap device rather than a tun device
- EBUSY: another process, e.g. another qcore instance, has the device open"
-        ),
+fn get_if_index(interface_name: &str) -> Result<u32> {
+    let c_str_if_name = CString::new(interface_name)?;
+    let c_if_name = c_str_if_name.as_ptr();
+    let if_index = unsafe { if_nametoindex(c_if_name) };
+    if if_index == 0 {
+        bail!(
+            "Interface {} does not exist - did you run the setup-routing script?",
+            interface_name
+        )
     }
-}
-
-use super::downlink_pipeline::downlink_counter_indices::*;
-use super::uplink_pipeline::uplink_counter_indices::*;
-
-async fn dump_stats(logger: Logger, dl: Arc<DownlinkCounters>, ul: Arc<UplinkCounters>) {
-    let mut last_dl = [0usize; DL_NUM_COUNTERS];
-    let mut last_ul = [0usize; UL_NUM_COUNTERS];
-    const FIRST_DL_WARN_IDX: usize = DL_DROP_TOO_SHORT;
-    const FIRST_UL_WARN_IDX: usize = UL_DROP_TOO_SHORT;
-
-    loop {
-        async_std::task::sleep(std::time::Duration::new(5, 0)).await;
-
-        if dl[DL_RX_PKTS].get() != last_dl[DL_RX_PKTS]
-            || ul[UL_RX_PKTS].get() != last_ul[UL_RX_PKTS]
-        {
-            last_dl[DL_RX_PKTS] = dl[DL_RX_PKTS].get();
-            last_dl[DL_RX_BYTES] = dl[DL_RX_BYTES].get();
-            last_ul[UL_RX_PKTS] = ul[UL_RX_PKTS].get();
-            last_ul[UL_RX_BYTES] = ul[UL_RX_BYTES].get();
-
-            info!(
-                &logger,
-                "DL pkts={} bytes={} UL pkts={} bytes={} ",
-                last_dl[DL_RX_PKTS],
-                last_dl[DL_RX_BYTES],
-                last_ul[UL_RX_PKTS],
-                last_ul[UL_RX_BYTES]
-            );
-        }
-
-        let mut dl_warn_needed = false;
-        for idx in FIRST_DL_WARN_IDX..DL_NUM_COUNTERS {
-            if last_dl[idx] != dl[idx].get() {
-                dl_warn_needed = true;
-            }
-            last_dl[idx] = dl[idx].get();
-        }
-        let mut ul_warn_needed = false;
-        for idx in FIRST_UL_WARN_IDX..UL_NUM_COUNTERS {
-            if last_ul[idx] != ul[idx].get() {
-                ul_warn_needed = true;
-            }
-            last_ul[idx] = ul[idx].get();
-        }
-
-        if dl_warn_needed {
-            warn!(
-                &logger,
-                "DL DROPS too_short={} bad_ip={}",
-                last_dl[DL_DROP_TOO_SHORT],
-                last_dl[DL_DROP_UNKNOWN_IP_1] + last_dl[DL_DROP_UNKNOWN_IP_2]
-            );
-        }
-
-        if ul_warn_needed {
-            warn!(
-                &logger,
-                "UL DROPS too_short={} gtp_type={} too_short_ext={} pdcp_ctrl={} sdap_ctrl={} ip_type={} bad_teid={}",
-                last_ul[UL_DROP_TOO_SHORT],
-                last_ul[UL_DROP_GTP_MESSAGE_TYPE],
-                last_ul[UL_DROP_TOO_SHORT_EXT],
-                last_ul[UL_DROP_PDCP_CONTROL],
-                last_ul[UL_DROP_SDAP_CONTROL],
-                last_ul[UL_DROP_NOT_IPV4],
-                last_ul[UL_DROP_UNKNOWN_TEID_1] + last_ul[UL_DROP_UNKNOWN_TEID_2]
-            );
-        }
-    }
+    Ok(if_index)
 }

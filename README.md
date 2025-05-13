@@ -19,13 +19,26 @@ The three external interfaces of QCore are:
 
 The motivation for the monolithic approach is to minimize control plane and userplane processing cost.  QCore avoids a lot of the usual network hops, context switches, database accesses and (de)serialization.  As well as performance, its minimalist design also has side benefits in the areas of ease of orchestration, security, and simplicity / speed of development. 
 
-QCore is written in Rust.
+QCore is written in Rust, and has an eBPF userplane. 
 
 ## Quickstart
 
 The quickest way to see QCore in action is to run its mainline test.
+
+### Set up environment
 ```sh
-sudo ./setup-routing  # one-off - please read section below first
+cargo install bpf-linker
+rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
+```
+
+### Configure routing + network interfaces
+For safety please read the [section below](#about-the-routing-setup) first.
+```sh
+sudo ./setup-routing
+```
+
+### Run attach test
+```sh
 RUST_LOG=info cargo test attach -- --nocapture
 ```
 
@@ -62,11 +75,11 @@ Pass `--sim-cred-file` to read from a different file location.
 
 ## About the routing setup
 
-The `setup-routing` script makes a few Linux routing changes with root permissions, most notably adding a route to the 10.255.0.0/24 network and enabling Linux IP forwarding.  Please check that it is not going to interfere with your routing setup.
+The `setup-routing` script makes several Linux routing changes with root permissions.  Please check that it is not going to interfere with your routing setup.
 
-The purpose of these changes is to create a separate IP subnet for 5G UEs.  The UE subnet is reached via a tun interface.  
-
-iptables and the rest of the Linux routing toolkit are at your disposal for associating routing policies to this tun device, and adding NAT.  
+The purpose of these changes are to 
+-  Create a separate private IP subnet for 5G UEs.  The script enables forwarding to/from this subnet over the 'ue' tun interface, including NAT for packets leaving out of eth0.
+-  Enable the QCore eBPF code to flexibly inject packets into Linux routing.  
 
 ### UE-to-UE routing
 
@@ -74,13 +87,18 @@ QCore hairpins UE-to-UE packets through the Linux kernel IP stack, which means y
 
 By default, Linux routing generates ICMP Redirect in the case of UE-to-UE packet hairpinning - correctly so, but not what we want in our case.  The script therefore disables transmission of ICMP Redirect over our tun device. 
 
-Hairpinned packets appear twice in tcpdump.  You can see this by running `RUST_LOG=info cargo test two_ues -- --nocapture` in parallel with the above tcpdump invocation.
+### veth pair
+
+By default, QCore receives downlink packets towards UE over a veth pair.  This is to ensure that the full Linux packet forwarding process
+(including NAT and policy) completes before the packet gets intercepted by the QCore eBPF code.   
 
 ## Licence
 
-This project is licensed under the APGL open source licence.  
+The majority of code in this project is copyright (C) 2025 Nic Larkin and licensed under the APGL open source licence.  
 
 AGPL is a copyleft licence.  If it doesn't suit your needs, please connect with me on LinkedIn and we can look into getting you a licence agreement which does not place you under copyleft obligations.
+
+The eBPF program code is licensed under the GPL.  
 
 ## Contributions
 

@@ -1,10 +1,16 @@
 use super::{DataNetwork, MockDu, MockUe};
 use anyhow::{Result, bail};
-use qcore::{Config, QCore, SimTable};
+use qcore::{Config, ProgramHandle, QCore, SimTable};
 use slog::{Drain, Logger, o};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
-pub async fn init() -> Result<(MockDu, QCore, DataNetwork, &'static SimTable, Logger)> {
+pub async fn init() -> Result<(
+    MockDu,
+    ProgramHandle,
+    DataNetwork,
+    &'static SimTable,
+    Logger,
+)> {
     exit_on_panic();
     let qc_ip = "127.0.0.1";
     let du_ip = "127.0.0.2";
@@ -32,7 +38,11 @@ fn init_logging() -> Logger {
     slog::Logger::root(drain, o!())
 }
 
-async fn start_qcore(addr: &str, sims: &'static SimTable, logger: &Logger) -> Result<QCore> {
+async fn start_qcore(
+    addr: &str,
+    sims: &'static SimTable,
+    logger: &Logger,
+) -> Result<ProgramHandle> {
     QCore::start(
         Config {
             ip_addr: addr.parse()?,
@@ -42,7 +52,9 @@ async fn start_qcore(addr: &str, sims: &'static SimTable, logger: &Logger) -> Re
             serving_network_name: "5G:mnc093.mcc208.3gppnetwork.org".to_string(),
             skip_ue_authentication_check: true, // saves us having to implement milenage etc in test framework
             sst: 1,
-            n6_tun_name: "ue".to_string(),
+            f1u_interface_name: "lo".to_string(),
+            n6_interface_name: "veth1".to_string(),
+            tun_interface_name: "qcoretun".to_string(),
             ue_subnet: Ipv4Addr::new(10, 255, 0, 0),
         },
         logger.new(o!("qcore"=> 1)),
