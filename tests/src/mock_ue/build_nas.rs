@@ -1,14 +1,14 @@
 use anyhow::Result;
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gmmMessageType, Nas5gsMessage, Nas5gsmMessage, Nas5gsmMessageType,
-    NasAuthenticationResponseParameter, NasDeRegistrationType, NasFGsMobileIdentity,
-    NasFGsRegistrationType, NasFGsmCapability, NasIntegrityProtectionMaximumDataRate,
-    NasPayloadContainer, NasPayloadContainerType, NasPduSessionType, NasSscMode,
-    NasUeSecurityCapability, encode_nas_5gs_message,
+    NasAuthenticationFailureParameter, NasAuthenticationResponseParameter, NasDeRegistrationType,
+    NasFGmmCause, NasFGsMobileIdentity, NasFGsRegistrationType, NasFGsmCapability,
+    NasIntegrityProtectionMaximumDataRate, NasPayloadContainer, NasPayloadContainerType,
+    NasPduSessionType, NasSscMode, NasUeSecurityCapability, encode_nas_5gs_message,
     messages::{
-        Nas5gmmHeader, Nas5gsmHeader, NasAuthenticationResponse, NasDeregistrationRequestFromUe,
-        NasPduSessionEstablishmentRequest, NasRegistrationComplete, NasRegistrationRequest,
-        NasSecurityModeComplete, NasUlNasTransport,
+        Nas5gmmHeader, Nas5gsmHeader, NasAuthenticationFailure, NasAuthenticationResponse,
+        NasDeregistrationRequestFromUe, NasPduSessionEstablishmentRequest, NasRegistrationComplete,
+        NasRegistrationRequest, NasSecurityModeComplete, NasUlNasTransport,
     },
 };
 
@@ -142,6 +142,29 @@ pub fn authentication_response() -> Result<Vec<u8>> {
             extended_protocol_discriminator: ExtendedProtocolDiscriminator::FIVEGMM,
             security_header_type: SecurityHeaderType::PLAIN_5GS_NAS_MESSAGE_NOT_SECURITY_PROTECTED,
             message_type: Nas5gmmMessageType::AuthenticationResponse {},
+        },
+        message,
+    );
+    Ok(encode_nas_5gs_message(&message)?)
+}
+
+pub fn authentication_failure() -> Result<Vec<u8>> {
+    const SYNCH_FAILURE: u8 = 0b00010101; // TS24.501, Table 9.11.3.2.1
+    let authentication_failure_parameter_ie = vec![
+        85, 107, 146, 161, 234, 64, 160, 75, 103, 130, 213, 245, 143, 62,
+    ];
+    let message = Nas5gmmMessage::AuthenticationFailure(NasAuthenticationFailure {
+        fgmm_cause: NasFGmmCause::new(SYNCH_FAILURE),
+        authentication_failure_parameter: Some(NasAuthenticationFailureParameter::new(
+            authentication_failure_parameter_ie,
+        )),
+    });
+
+    let message = Nas5gsMessage::Gmm(
+        Nas5gmmHeader {
+            extended_protocol_discriminator: ExtendedProtocolDiscriminator::FIVEGMM,
+            security_header_type: SecurityHeaderType::PLAIN_5GS_NAS_MESSAGE_NOT_SECURITY_PROTECTED,
+            message_type: Nas5gmmMessageType::AuthenticationFailure {},
         },
         message,
     );

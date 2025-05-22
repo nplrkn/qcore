@@ -10,6 +10,7 @@ pub struct Challenge {
     pub autn: [u8; 16],
     pub xres_star: [u8; 16],
     pub kseaf: [u8; 32],
+    pub ak: [u8; 6],
 }
 type HmacSha256 = Hmac<Sha256>;
 
@@ -17,14 +18,9 @@ pub fn generate_challenge(
     k: &[u8; 16],
     opc: &[u8; 16],
     serving_network_name: &[u8],
-    sqn: &mut [u8; 6],
+    sqn: &[u8; 6],
 ) -> Challenge {
     // TS33.501, section 6.1.3.2.0
-    // Generate an AV with AMF set to 1 as defined in 33.102.
-    // Generating a fresh sequence number SQN and an unpredictable challenge RAND
-
-    // TODO: Resynchronization
-    // TODO: Increment SQN.
 
     // RAND
     let mut rand = [0u8; 16];
@@ -89,6 +85,7 @@ pub fn generate_challenge(
         autn,
         xres_star,
         kseaf,
+        ak,
     }
 }
 
