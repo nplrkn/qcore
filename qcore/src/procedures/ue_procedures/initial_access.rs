@@ -61,25 +61,47 @@ impl<'a, A: HandlerApi> InitialAccessProcedure<'a, A> {
             bail!("Unknown IMSI {} tried to register", imsi)
         };
 
-        for _ in 0..2 {
+        // TODO temp debug code does 2 retries rather than one
+        for i in 0..3 {
             if let Some(kseaf) = self.perform_nas_auth(&sim).await? {
                 let kamf = security::derive_kamf(&kseaf, imsi.as_bytes());
+
+                // Generate a fresh sequence number after each authentication.
+                // TODO - move into perform_nas_auth.
+                self.ue.inc_sqn();
+                // TODO: delete this log after testing resync
+                info!(self.logger, "SQN is now {:02x?}", self.ue.sqn);
+
                 return Ok(kamf);
             }
-            // We just resynchronized SQN.  Retry once.
+
+            info!(self.logger, "SQN following resync {:02x?}", self.ue.sqn);
+            if i == 0 {
+                println!("First resync retry - not incrementing SQN after resync");
+            } else {
+                println!("Second resync retry - incrementing SQN after resync");
+                self.ue.inc_sqn();
+                info!(self.logger, "SQN is now {:02x?}", self.ue.sqn);
+            }
         }
-        bail!("Second successive synch failure during NAS authentication")
+        bail!("Successive synch failure during NAS authentication")
     }
 
     // Returns Ok(kseaf) on success, Ok(None) on synch failure, and Err for anything else.
     async fn perform_nas_auth(&mut self, sim: &'static SimCreds) -> Result<Option<[u8; 32]>> {
-        // Generate a fresh sequence number
-        self.ue.inc_sqn();
-
-        // TODO: delete this log after testing resync
-        info!(self.logger, "SQN is now {:?}", self.ue.sqn);
-
         let challenge = self.generate_challenge(sim, &self.ue.sqn);
+
+        // TODO: temp code to dump crypto params
+        println!("Challenge generated:");
+        println!("SQN:      {:02x?}", self.ue.sqn);
+        println!("K:        {:02x?}", sim.ki);
+        println!("OPC:      {:02x?}", sim.opc);
+        println!("rand:     {:02x?}", challenge.rand);
+        println!("autn:     {:02x?}", challenge.autn);
+        println!("xresstar: {:02x?}", challenge.xres_star);
+        println!("kseaf:    {:02x?}", challenge.kseaf);
+        println!("ak:       {:02x?}", challenge.ak);
+
         let r = crate::nas::build::authentication_request(&challenge.rand, &challenge.autn);
         self.log_message("<< NasAuthenticationRequest");
 
@@ -113,9 +135,15 @@ impl<'a, A: HandlerApi> InitialAccessProcedure<'a, A> {
                         "Bad authentication failure parameter length on NAS authentication synch failure",
                     );
                 };
+                println!("AUTS calculation inputs:");
+                println!("auts:     {:x?}", auts);
+                println!("ak:       {:x?}", challenge.ak);
+
                 match resync_sqn(&auts, &challenge.ak) {
                     Ok(new_sqn) => {
                         info!(self.logger, "Resynchronized SQN");
+                        println!("sqn-ms:    {:x?}", new_sqn);
+
                         self.ue.sqn = new_sqn;
                     }
                     Err(_) => bail!("Invalid AUTS signature on NAS authentication synch failure"),
