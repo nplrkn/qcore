@@ -139,14 +139,23 @@ impl<'a, A: HandlerApi> InitialAccessProcedure<'a, A> {
                 println!("auts:     {:x?}", auts);
                 println!("ak:       {:x?}", challenge.ak);
 
-                match resync_sqn(&auts, &challenge.ak) {
+                match resync_sqn(&auts, &sim.ki, &sim.opc, &challenge.rand) {
                     Ok(new_sqn) => {
                         info!(self.logger, "Resynchronized SQN");
                         println!("sqn-ms:    {:x?}", new_sqn);
 
                         self.ue.sqn = new_sqn;
                     }
-                    Err(_) => bail!("Invalid AUTS signature on NAS authentication synch failure"),
+                    Err(_) => {
+                        if self.config().skip_ue_authentication_check {
+                            warn!(
+                                self.logger,
+                                "Ignoring AUTS MAC-S signature failure for testability reasons"
+                            )
+                        } else {
+                            bail!("Invalid AUTS signature on NAS authentication synch failure")
+                        }
+                    }
                 }
                 Ok(None)
             }
