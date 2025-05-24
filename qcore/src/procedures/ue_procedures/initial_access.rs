@@ -61,28 +61,11 @@ impl<'a, A: HandlerApi> InitialAccessProcedure<'a, A> {
             bail!("Unknown IMSI {} tried to register", imsi)
         };
 
-        // TODO temp debug code does 2 retries rather than one
-        for i in 0..3 {
+        for _ in 0..2 {
             if let Some(kseaf) = self.perform_nas_auth(&sim).await? {
-                let kamf = security::derive_kamf(&kseaf, imsi.as_bytes());
-
-                // Generate a fresh sequence number after each authentication.
-                // TODO - move into perform_nas_auth.
-                self.ue.inc_sqn();
-                // TODO: delete this log after testing resync
-                info!(self.logger, "SQN is now {:02x?}", self.ue.sqn);
-
-                return Ok(kamf);
+                return Ok(security::derive_kamf(&kseaf, imsi.as_bytes()));
             }
-
-            info!(self.logger, "SQN following resync {:02x?}", self.ue.sqn);
-            if i == 0 {
-                println!("First resync retry - not incrementing SQN after resync");
-            } else {
-                println!("Second resync retry - incrementing SQN after resync");
-                self.ue.inc_sqn();
-                info!(self.logger, "SQN is now {:02x?}", self.ue.sqn);
-            }
+            // Getting here means we have resynchronized the SQN
         }
         bail!("Successive synch failure during NAS authentication")
     }
@@ -90,17 +73,17 @@ impl<'a, A: HandlerApi> InitialAccessProcedure<'a, A> {
     // Returns Ok(kseaf) on success, Ok(None) on synch failure, and Err for anything else.
     async fn perform_nas_auth(&mut self, sim: &'static SimCreds) -> Result<Option<[u8; 32]>> {
         let challenge = self.generate_challenge(sim, &self.ue.sqn);
+        self.ue.inc_sqn();
 
-        // TODO: temp code to dump crypto params
-        println!("Challenge generated:");
-        println!("SQN:      {:02x?}", self.ue.sqn);
-        println!("K:        {:02x?}", sim.ki);
-        println!("OPC:      {:02x?}", sim.opc);
-        println!("rand:     {:02x?}", challenge.rand);
-        println!("autn:     {:02x?}", challenge.autn);
-        println!("xresstar: {:02x?}", challenge.xres_star);
-        println!("kseaf:    {:02x?}", challenge.kseaf);
-        println!("ak:       {:02x?}", challenge.ak);
+        // println!("Challenge generated:");
+        // println!("SQN:      {:02x?}", self.ue.sqn);
+        // println!("K:        {:02x?}", sim.ki);
+        // println!("OPC:      {:02x?}", sim.opc);
+        // println!("rand:     {:02x?}", challenge.rand);
+        // println!("autn:     {:02x?}", challenge.autn);
+        // println!("xresstar: {:02x?}", challenge.xres_star);
+        // println!("kseaf:    {:02x?}", challenge.kseaf);
+        // println!("ak:       {:02x?}", challenge.ak);
 
         let r = crate::nas::build::authentication_request(&challenge.rand, &challenge.autn);
         self.log_message("<< NasAuthenticationRequest");
@@ -112,51 +95,9 @@ impl<'a, A: HandlerApi> InitialAccessProcedure<'a, A> {
                 self.check_authentication_response(response, &challenge)?;
                 Ok(Some(challenge.kseaf))
             }
-            Nas5gsMessage::Gmm(
-                _header,
-                Nas5gmmMessage::AuthenticationFailure(NasAuthenticationFailure {
-                    fgmm_cause,
-                    authentication_failure_parameter,
-                }),
-            ) => {
-                // TODO move to separate function
-                self.log_message(">> NasAuthenticationFailure");
-                // TODO magic number
-                if fgmm_cause.value != 21 {
-                    bail!("UE failed authentication with cause {:?}", fgmm_cause);
-                }
-                let Some(auts) = authentication_failure_parameter else {
-                    bail!(
-                        "Missing authentication failure parameter on NAS authentication synch failure"
-                    );
-                };
-                let Ok(auts) = auts.value.try_into() else {
-                    bail!(
-                        "Bad authentication failure parameter length on NAS authentication synch failure",
-                    );
-                };
-                println!("AUTS calculation inputs:");
-                println!("auts:     {:x?}", auts);
-                println!("ak:       {:x?}", challenge.ak);
-
-                match resync_sqn(&auts, &sim.ki, &sim.opc, &challenge.rand) {
-                    Ok(new_sqn) => {
-                        info!(self.logger, "Resynchronized SQN");
-                        println!("sqn-ms:    {:x?}", new_sqn);
-
-                        self.ue.sqn = new_sqn;
-                    }
-                    Err(_) => {
-                        if self.config().skip_ue_authentication_check {
-                            warn!(
-                                self.logger,
-                                "Ignoring AUTS MAC-S signature failure for testability reasons"
-                            )
-                        } else {
-                            bail!("Invalid AUTS signature on NAS authentication synch failure")
-                        }
-                    }
-                }
+            Nas5gsMessage::Gmm(_header, Nas5gmmMessage::AuthenticationFailure(m)) => {
+                self.process_nas_authentication_failure(m, sim, &challenge.rand)?;
+                // None indicates to the caller that we resync'd the SQN.
                 Ok(None)
             }
             m => bail!(
@@ -164,6 +105,52 @@ impl<'a, A: HandlerApi> InitialAccessProcedure<'a, A> {
                 m
             ),
         }
+    }
+
+    fn process_nas_authentication_failure(
+        &mut self,
+        m: NasAuthenticationFailure,
+        sim: &SimCreds,
+        rand: &[u8; 16],
+    ) -> Result<()> {
+        let NasAuthenticationFailure {
+            fgmm_cause,
+            authentication_failure_parameter,
+        } = m;
+        self.log_message(">> NasAuthenticationFailure");
+        // TODO magic number
+        if fgmm_cause.value != 21 {
+            bail!("UE failed authentication with cause {:?}", fgmm_cause);
+        }
+        let Some(auts) = authentication_failure_parameter else {
+            bail!("Missing authentication failure parameter on NAS authentication synch failure");
+        };
+        let Ok(auts) = auts.value.try_into() else {
+            bail!(
+                "Bad authentication failure parameter length on NAS authentication synch failure",
+            );
+        };
+        // println!("AUTS calculation inputs:");
+        // println!("auts:     {:x?}", auts);
+
+        match resync_sqn(&auts, &sim.ki, &sim.opc, rand) {
+            Ok(new_sqn) => {
+                info!(self.logger, "Resynchronized SQN");
+                // println!("sqn-ms:    {:x?}", new_sqn);
+                self.ue.sqn = new_sqn;
+            }
+            Err(_) => {
+                if self.config().skip_ue_authentication_check {
+                    warn!(
+                        self.logger,
+                        "Ignoring AUTS MAC-S signature failure for testability reasons"
+                    )
+                } else {
+                    bail!("Invalid AUTS signature on NAS authentication synch failure")
+                }
+            }
+        }
+        Ok(())
     }
 
     async fn activate_nas_security(

@@ -27,7 +27,7 @@ pub fn resync_sqn(
 
     // "The HE/AuC verifies AUTS (cf. subsection 6.3.3).""
     let expected_mac_s = m.f1star(rand, &sqn_ms, &[0, 0]);
-    println!("Expected {:?}", expected_mac_s);
+    //println!("Expected {:?}", expected_mac_s);
     if expected_mac_s == &auts[6..] {
         Ok(sqn_ms)
     } else {
