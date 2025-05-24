@@ -1,25 +1,24 @@
 //! initial_access - procedure in which UE makes first contact with the 5G core
 
 use super::{HandlerApi, UeProcedure};
-use crate::data::SubscriberAuthParams;
+use crate::SubscriberAuthParams;
 use crate::expect_nas;
 use crate::nas::parse::MobileIdentity;
+use crate::protocols::nas::FGMM_CAUSE_SYNCH_FAILURE;
 use anyhow::{Result, anyhow, bail};
 use asn1_per::SerDes;
 use derive_deref::{Deref, DerefMut};
 use f1ap::{DuToCuRrcContainer, InitialUlRrcMessageTransfer, SrbId};
-use oxirush_nas::messages::NasAuthenticationFailure;
 use oxirush_nas::messages::{
-    NasAuthenticationResponse, NasRegistrationRequest, NasSecurityModeComplete,
+    NasAuthenticationFailure, NasAuthenticationResponse, NasRegistrationRequest,
+    NasSecurityModeComplete,
 };
 use oxirush_nas::{Nas5gmmMessage, Nas5gsMessage, NasUeSecurityCapability};
-use rrc::UlDcchMessage;
 use rrc::{
     C1_4, C1_6, CriticalExtensions22, RrcSetupComplete, RrcSetupRequest, UlCcchMessage,
-    UlCcchMessageType, UlDcchMessageType,
+    UlCcchMessageType, UlDcchMessage, UlDcchMessageType,
 };
-use security::Challenge;
-use security::resync::resync_sqn;
+use security::{Challenge, resync_sqn};
 use slog::{info, warn};
 
 #[derive(Deref, DerefMut)]
@@ -127,8 +126,8 @@ impl<'a, A: HandlerApi> InitialAccessProcedure<'a, A> {
             authentication_failure_parameter,
         } = m;
         self.log_message(">> NasAuthenticationFailure");
-        // TODO magic number
-        if fgmm_cause.value != 21 {
+
+        if fgmm_cause.value != FGMM_CAUSE_SYNCH_FAILURE {
             bail!("UE failed authentication with cause {:?}", fgmm_cause);
         }
         let Some(auts) = authentication_failure_parameter else {

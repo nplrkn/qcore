@@ -1,5 +1,6 @@
 use milenage::Milenage;
 
+// See TS33.102, 6.3.5
 // Returns the new SQN.
 pub fn resync_sqn(
     auts: &[u8; 14],
@@ -48,6 +49,7 @@ fn test_resync_sqn() {
     let ak = m.f5star(&rand);
     assert_eq!(ak, hex!("451e8beca43b"));
 
+    // Regression test a couple of runs of the AUTS algorithm.
     let k = hex!("5122250214c33e723a5dd523fc145fc0");
     let opc = hex!("981d464c7c52eb6e5036234984ad0bcf");
 

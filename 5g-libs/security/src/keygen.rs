@@ -10,7 +10,6 @@ pub struct Challenge {
     pub autn: [u8; 16],
     pub xres_star: [u8; 16],
     pub kseaf: [u8; 32],
-    pub ak: [u8; 6],
 }
 type HmacSha256 = Hmac<Sha256>;
 
@@ -85,7 +84,6 @@ pub fn generate_challenge(
         autn,
         xres_star,
         kseaf,
-        ak,
     }
 }
 
