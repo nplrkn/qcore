@@ -8,7 +8,7 @@ async fn two_ues() -> anyhow::Result<()> {
     du.perform_f1_setup(qc.ip_addr()).await?;
 
     // UE 1 registers
-    let mut ue_1 = MockUe::new(nth_imsi(0, sims), 1, &du, qc.ip_addr(), &logger).await?;
+    let mut ue_1 = MockUe::new(nth_imsi(0, &sims), 1, &du, qc.ip_addr(), &logger).await?;
     ue_1.perform_rrc_setup().await?;
     ue_1.handle_nas_authentication().await?;
     ue_1.handle_nas_security_mode().await?;
@@ -23,7 +23,7 @@ async fn two_ues() -> anyhow::Result<()> {
         .await?;
 
     // UE 2 registers
-    let mut ue_2 = MockUe::new(nth_imsi(1, sims), 2, &du, qc.ip_addr(), &logger).await?;
+    let mut ue_2 = MockUe::new(nth_imsi(1, &sims), 2, &du, qc.ip_addr(), &logger).await?;
     ue_2.perform_rrc_setup().await?;
     ue_2.handle_nas_authentication().await?;
     ue_2.handle_nas_security_mode().await?;

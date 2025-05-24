@@ -6,7 +6,7 @@ async fn f1_removal() -> anyhow::Result<()> {
 
     // Given an established PDU session
     du.perform_f1_setup(qc.ip_addr()).await?;
-    let mut ue = MockUe::new(nth_imsi(0, sims), 1, &du, qc.ip_addr(), &logger).await?;
+    let mut ue = MockUe::new(nth_imsi(0, &sims), 1, &du, qc.ip_addr(), &logger).await?;
     ue.perform_rrc_setup().await?;
     ue.handle_nas_authentication().await?;
     ue.handle_nas_security_mode().await?;
@@ -24,7 +24,7 @@ async fn f1_removal() -> anyhow::Result<()> {
 
     // Now do it again and confirm that QCore recycles the UE IP address.
     du.perform_f1_setup(qc.ip_addr()).await?;
-    let mut ue = MockUe::new(nth_imsi(0, sims), 1, &du, qc.ip_addr(), &logger).await?;
+    let mut ue = MockUe::new(nth_imsi(0, &sims), 1, &du, qc.ip_addr(), &logger).await?;
     ue.perform_rrc_setup().await?;
     ue.handle_nas_authentication().await?;
     ue.handle_nas_security_mode().await?;

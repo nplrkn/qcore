@@ -10,7 +10,7 @@ async fn synchronization_failure_recovery() -> anyhow::Result<()> {
 
     // Given a UE that is trying to register
     du.perform_f1_setup(qc.ip_addr()).await?;
-    let mut ue = MockUe::new(nth_imsi(0, sims), 1, &du, qc.ip_addr(), &logger).await?;
+    let mut ue = MockUe::new(nth_imsi(0, &sims), 1, &du, qc.ip_addr(), &logger).await?;
     ue.perform_rrc_setup().await?;
 
     // When UE rejects authentication with a 'Synch failure' cause and an AUTS value.

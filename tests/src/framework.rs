@@ -1,25 +1,19 @@
 use super::{DataNetwork, MockDu, MockUe};
 use anyhow::{Result, bail};
-use qcore::{Config, ProgramHandle, QCore, SimTable};
+use qcore::{Config, ProgramHandle, QCore, SubscriberDb};
 use slog::{Drain, Logger, o};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
-pub async fn init() -> Result<(
-    MockDu,
-    ProgramHandle,
-    DataNetwork,
-    &'static SimTable,
-    Logger,
-)> {
+pub async fn init() -> Result<(MockDu, ProgramHandle, DataNetwork, SubscriberDb, Logger)> {
     exit_on_panic();
     let qc_ip = "127.0.0.1";
     let du_ip = "127.0.0.2";
     let logger = init_logging();
     let du = MockDu::new(du_ip, &logger).await?;
     let dn = DataNetwork::new(&logger).await;
-    let sims = qcore::sims::load_sims_file("test_sims.toml", &logger)?;
-    let qc = start_qcore(&qc_ip, &sims, &logger).await?;
-    Ok((du, qc, dn, sims, logger))
+    let subs = SubscriberDb::new_from_sim_file("test_sims.toml", &logger)?;
+    let qc = start_qcore(&qc_ip, subs.clone(), &logger).await?;
+    Ok((du, qc, dn, subs, logger))
 }
 
 fn exit_on_panic() {
@@ -38,11 +32,7 @@ fn init_logging() -> Logger {
     slog::Logger::root(drain, o!())
 }
 
-async fn start_qcore(
-    addr: &str,
-    sims: &'static SimTable,
-    logger: &Logger,
-) -> Result<ProgramHandle> {
+async fn start_qcore(addr: &str, sub_db: SubscriberDb, logger: &Logger) -> Result<ProgramHandle> {
     QCore::start(
         Config {
             ip_addr: addr.parse()?,
@@ -58,7 +48,7 @@ async fn start_qcore(
             ue_subnet: Ipv4Addr::new(10, 255, 0, 0),
         },
         logger.new(o!("qcore"=> 1)),
-        sims,
+        sub_db,
     )
     .await
 }
@@ -94,6 +84,6 @@ pub async fn pass_through_ue_to_ue_ipv4<'a>(
     Ok(())
 }
 
-pub fn nth_imsi(n: usize, sims: &SimTable) -> String {
-    sims.keys().nth(n).unwrap().clone()
+pub fn nth_imsi(n: usize, sub_db: &SubscriberDb) -> String {
+    sub_db.keys().nth(n).unwrap().clone()
 }

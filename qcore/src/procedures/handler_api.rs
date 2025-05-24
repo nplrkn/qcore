@@ -1,4 +1,4 @@
-use crate::SimCreds;
+use crate::SubscriberAuthParams;
 use crate::{Config, UserplaneSession};
 use anyhow::Result;
 use async_trait::async_trait;
@@ -11,7 +11,9 @@ use xxap::{GtpTunnel, Indication, Procedure, RequestError};
 pub trait HandlerApi: Send + Sync + Clone + 'static {
     fn config(&self) -> &Config;
 
-    fn lookup_sim(&self, imsi: &str) -> Option<&'static SimCreds>;
+    async fn lookup_subscriber_auth_params(&self, imsi: &str) -> Option<SubscriberAuthParams>;
+    async fn inc_subscriber_sqn(&self, imsi: &str) -> Result<()>;
+    async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
 
     fn spawn_ue_message_handler(&self) -> u32;
     async fn dispatch_ue_message(&self, ue_id: u32, message: F1apPdu) -> Result<()>;

@@ -7,7 +7,7 @@ use async_std::channel::Sender;
 use async_std::prelude::*;
 use clap::Parser;
 use local_ip_address;
-use qcore::{Config, QCore};
+use qcore::{Config, QCore, SubscriberDb};
 use signal_hook::consts::signal::*;
 use signal_hook_async_std::Signals;
 use slog::{Drain, Logger, o};
@@ -66,7 +66,7 @@ async fn main() -> Result<()> {
     check_local_ip(&args.local_ip)?;
     slog::info!(&logger, "Serving network name {}", serving_network_name);
 
-    let sims = Box::new(qcore::sims::load_sims_file(&args.sim_cred_file, &logger)?);
+    let sub_db = SubscriberDb::new_from_sim_file(&args.sim_cred_file, &logger)?;
 
     let _qc = QCore::start(
         Config {
@@ -83,7 +83,7 @@ async fn main() -> Result<()> {
             ue_subnet: args.ue_subnet,
         },
         logger,
-        Box::leak(sims),
+        sub_db,
     )
     .await?;
 

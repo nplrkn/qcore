@@ -1,7 +1,7 @@
 //! initial_access - procedure in which UE makes first contact with the 5G core
 
 use super::{HandlerApi, UeProcedure};
-use crate::SimCreds;
+use crate::data::SubscriberAuthParams;
 use crate::expect_nas;
 use crate::nas::parse::MobileIdentity;
 use anyhow::{Result, anyhow, bail};
@@ -57,13 +57,19 @@ impl<'a, A: HandlerApi> InitialAccessProcedure<'a, A> {
     }
 
     async fn authenticate_ue(&mut self, imsi: &String) -> Result<[u8; 32]> {
-        let Some(sim) = self.lookup_sim(&imsi) else {
+        let Some(auth_params) = self.lookup_subscriber_auth_params(&imsi).await else {
             bail!("Unknown IMSI {} tried to register", imsi)
         };
 
         for _ in 0..2 {
-            if let Some(kseaf) = self.perform_nas_auth(&sim).await? {
-                return Ok(security::derive_kamf(&kseaf, imsi.as_bytes()));
+            match self.perform_nas_auth(&auth_params).await? {
+                NasAuthOutcome::Kseaf(kseaf) => {
+                    self.inc_subscriber_sqn(&imsi).await?;
+                    return Ok(security::derive_kamf(&kseaf, imsi.as_bytes()));
+                }
+                NasAuthOutcome::ResyncSqn(sqn) => {
+                    self.resync_subscriber_sqn(&imsi, sqn).await?;
+                }
             }
             // Getting here means we have resynchronized the SQN
         }
@@ -71,9 +77,11 @@ impl<'a, A: HandlerApi> InitialAccessProcedure<'a, A> {
     }
 
     // Returns Ok(kseaf) on success, Ok(None) on synch failure, and Err for anything else.
-    async fn perform_nas_auth(&mut self, sim: &'static SimCreds) -> Result<Option<[u8; 32]>> {
-        let challenge = self.generate_challenge(sim, &self.ue.sqn);
-        self.ue.inc_sqn();
+    async fn perform_nas_auth(
+        &mut self,
+        auth_params: &SubscriberAuthParams,
+    ) -> Result<NasAuthOutcome> {
+        let challenge = self.generate_challenge(auth_params);
 
         // println!("Challenge generated:");
         // println!("SQN:      {:02x?}", self.ue.sqn);
@@ -93,12 +101,13 @@ impl<'a, A: HandlerApi> InitialAccessProcedure<'a, A> {
             Nas5gsMessage::Gmm(_header, Nas5gmmMessage::AuthenticationResponse(response)) => {
                 self.log_message(">> NasAuthenticationResponse");
                 self.check_authentication_response(response, &challenge)?;
-                Ok(Some(challenge.kseaf))
+                Ok(NasAuthOutcome::Kseaf(challenge.kseaf))
             }
             Nas5gsMessage::Gmm(_header, Nas5gmmMessage::AuthenticationFailure(m)) => {
-                self.process_nas_authentication_failure(m, sim, &challenge.rand)?;
+                let sqn =
+                    self.process_nas_authentication_failure(m, auth_params, &challenge.rand)?;
                 // None indicates to the caller that we resync'd the SQN.
-                Ok(None)
+                Ok(NasAuthOutcome::ResyncSqn(sqn))
             }
             m => bail!(
                 "Expected NasAuthenticationResponse/NasAuthenticationFailure but got {:?}",
@@ -110,9 +119,9 @@ impl<'a, A: HandlerApi> InitialAccessProcedure<'a, A> {
     fn process_nas_authentication_failure(
         &mut self,
         m: NasAuthenticationFailure,
-        sim: &SimCreds,
+        auth_params: &SubscriberAuthParams,
         rand: &[u8; 16],
-    ) -> Result<()> {
+    ) -> Result<[u8; 6]> {
         let NasAuthenticationFailure {
             fgmm_cause,
             authentication_failure_parameter,
@@ -133,24 +142,29 @@ impl<'a, A: HandlerApi> InitialAccessProcedure<'a, A> {
         // println!("AUTS calculation inputs:");
         // println!("auts:     {:x?}", auts);
 
-        match resync_sqn(&auts, &sim.ki, &sim.opc, rand) {
+        match resync_sqn(
+            &auts,
+            &auth_params.sim_creds.ki,
+            &auth_params.sim_creds.opc,
+            rand,
+        ) {
             Ok(new_sqn) => {
                 info!(self.logger, "Resynchronized SQN");
                 // println!("sqn-ms:    {:x?}", new_sqn);
-                self.ue.sqn = new_sqn;
+                Ok(new_sqn)
             }
             Err(_) => {
                 if self.config().skip_ue_authentication_check {
                     warn!(
                         self.logger,
                         "Ignoring AUTS MAC-S signature failure for testability reasons"
-                    )
+                    );
+                    Ok(auth_params.sqn)
                 } else {
                     bail!("Invalid AUTS signature on NAS authentication synch failure")
                 }
             }
         }
-        Ok(())
     }
 
     async fn activate_nas_security(
@@ -243,12 +257,12 @@ impl<'a, A: HandlerApi> InitialAccessProcedure<'a, A> {
         Ok((imsi, ue_security_capability))
     }
 
-    fn generate_challenge(&self, sim: &SimCreds, sqn: &[u8; 6]) -> Challenge {
+    fn generate_challenge(&self, auth_params: &SubscriberAuthParams) -> Challenge {
         let challenge = security::generate_challenge(
-            &sim.ki,
-            &sim.opc,
+            &auth_params.sim_creds.ki,
+            &auth_params.sim_creds.opc,
             self.config().serving_network_name.as_bytes(),
-            &sqn,
+            &auth_params.sqn,
         );
         challenge
     }
@@ -329,4 +343,9 @@ impl<'a, A: HandlerApi> InitialAccessProcedure<'a, A> {
         // Tell the PDCP layer to add NIA2 integrity protection henceforth.
         self.ue.pdcp_tx.enable_security(krrcint);
     }
+}
+
+enum NasAuthOutcome {
+    Kseaf([u8; 32]),
+    ResyncSqn([u8; 6]),
 }

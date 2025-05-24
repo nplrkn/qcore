@@ -1,9 +1,8 @@
 use crate::f1ap::{F1AP_BIND_PORT, F1AP_SCTP_PPID};
 use crate::procedures::{F1apHandler, UeMessageHandler};
 use crate::userplane::PacketProcessor;
-use crate::{Config, HandlerApi, UserplaneSession};
-use crate::{SimCreds, SimTable};
-use anyhow::{Result, bail};
+use crate::{Config, HandlerApi, SubscriberAuthParams, SubscriberDb, UserplaneSession};
+use anyhow::{Result, anyhow, bail};
 use async_channel::Sender;
 use async_std::sync::Mutex;
 use async_std::task::block_on;
@@ -28,7 +27,7 @@ pub struct QCore {
     server_handle: Arc<Mutex<Option<ShutdownHandle>>>,
     packet_processor: PacketProcessor,
     ue_tasks: Arc<DashMap<u32, Sender<F1apPdu>>>,
-    sim_auth_data: &'static SimTable,
+    sub_db: Arc<Mutex<SubscriberDb>>,
 }
 
 pub struct ProgramHandle {
@@ -52,7 +51,7 @@ impl QCore {
     pub async fn start(
         config: Config,
         logger: Logger,
-        sim_auth_data: &'static SimTable,
+        sub_db: SubscriberDb,
     ) -> Result<ProgramHandle> {
         let local_ip = config.ip_addr;
         let mut ebpf = PacketProcessor::install_ebpf(
@@ -65,7 +64,7 @@ impl QCore {
         let packet_processor =
             PacketProcessor::new(config.ue_subnet.clone(), &mut ebpf, &logger).await?;
 
-        let mut qc = Self::new(config, packet_processor, logger, sim_auth_data).await?;
+        let mut qc = Self::new(config, packet_processor, logger, sub_db).await?;
         qc.run().await.expect("Startup failure");
         Ok(ProgramHandle { qc, _ebpf: ebpf })
     }
@@ -74,7 +73,7 @@ impl QCore {
         config: Config,
         packet_processor: PacketProcessor,
         logger: Logger,
-        sim_auth_data: &'static SimTable,
+        sub_db: SubscriberDb,
     ) -> Result<Self> {
         Ok(Self {
             config,
@@ -83,7 +82,7 @@ impl QCore {
             server_handle: Arc::new(Mutex::new(None)),
             ue_tasks: Arc::new(DashMap::new()),
             packet_processor,
-            sim_auth_data,
+            sub_db: Arc::new(Mutex::new(sub_db)),
         })
     }
 
@@ -126,9 +125,26 @@ impl HandlerApi for QCore {
     fn config(&self) -> &Config {
         &self.config
     }
+    async fn lookup_subscriber_auth_params(&self, imsi: &str) -> Option<SubscriberAuthParams> {
+        self.sub_db.lock().await.get(imsi).map(|x| x.clone())
+    }
 
-    fn lookup_sim(&self, imsi: &str) -> Option<&'static SimCreds> {
-        self.sim_auth_data.get(imsi)
+    async fn inc_subscriber_sqn(&self, imsi: &str) -> Result<()> {
+        self.sub_db
+            .lock()
+            .await
+            .get_mut(imsi)
+            .ok_or(anyhow!("IMSI not found"))
+            .map(|entry| entry.inc_sqn())
+    }
+
+    async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()> {
+        self.sub_db
+            .lock()
+            .await
+            .get_mut(imsi)
+            .ok_or(anyhow!("IMSI not found"))
+            .map(|entry| entry.sqn = sqn)
     }
 
     fn spawn_ue_message_handler(&self) -> u32 {
