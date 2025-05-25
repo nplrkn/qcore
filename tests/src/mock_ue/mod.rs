@@ -13,6 +13,7 @@ use crate::{DuUeContext, MockDu};
 
 pub struct MockUe<'a> {
     imsi: String,
+    guti: Option<[u8; 10]>,
     du: &'a MockDu,
     pub du_ue_context: DuUeContext,
     pub ipv4_addr: Ipv4Addr,
@@ -29,11 +30,16 @@ impl<'a> MockUe<'a> {
     ) -> Result<Self> {
         Ok(MockUe {
             imsi,
+            guti: None,
             du,
             du_ue_context: du.new_ue_context(ue_id, cu_ip_addr).await?,
             ipv4_addr: Ipv4Addr::UNSPECIFIED,
             logger: logger.new(o!("ue" => ue_id)),
         })
+    }
+
+    pub fn use_guti(&mut self, guti: [u8; 10]) {
+        self.guti = Some(guti);
     }
 
     pub async fn perform_rrc_setup(&mut self) -> Result<()> {
@@ -46,7 +52,12 @@ impl<'a> MockUe<'a> {
             bail!("Unexpected RRC message {:?}", message)
         };
         info!(&self.logger, "DlRrcMessageTransfer(RrcSetup) <<");
-        let registration_request = build_nas::registration_request(&self.imsi)?;
+
+        let registration_request = if let Some(guti) = self.guti {
+            build_nas::registration_request(build_nas::mobile_identity_guti(&guti))?
+        } else {
+            build_nas::registration_request(build_nas::mobile_identity_supi(&self.imsi))?
+        };
         let rrc_setup_complete =
             build_rrc::setup_complete(rrc_setup.rrc_transaction_identifier, registration_request);
         info!(
@@ -244,5 +255,12 @@ impl<'a> MockUe<'a> {
             "NAS Authentication failure (synch failure) >>"
         );
         self.send_nas(nas_authentication_failure).await
+    }
+
+    pub async fn receive_nas_registration_reject(&self) -> Result<()> {
+        match decode_nas_5gs_message(&self.receive_nas().await?)? {
+            Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationReject(_)) => Ok(()),
+            m => bail!("Expected reject, got {:?}", m),
+        }
     }
 }

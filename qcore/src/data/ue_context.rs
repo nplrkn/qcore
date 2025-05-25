@@ -8,6 +8,7 @@ pub struct UeContext {
     pub key: u32,
     pub gnb_du_ue_f1ap_id: GnbDuUeF1apId,
     pub tmsi: [u8; 4],
+    pub kamf: [u8; 32],
     pub pdu_sessions: Vec<PduSession>,
     pub pdcp_tx: PdcpTx,
     pub nr_cgi: NrCgi,
@@ -20,6 +21,7 @@ impl UeContext {
             key: ue_id,
             gnb_du_ue_f1ap_id,
             tmsi: rand::random(), // TODO: 0xffffffff is not a valid TMSI (TS23.003, 2.4)
+            kamf: [0u8; 32],
             pdu_sessions: vec![],
             pdcp_tx: PdcpTx::default(),
             nr_cgi,

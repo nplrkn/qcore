@@ -1,5 +1,12 @@
 In progress
-
+-  GUTI registration
+   -  test GUTI registration reject with real UE
+   -  choose sensible cause codes (not 0) for all registration reject arms
+   -  when mapping errors to cause codes, log the error text
+   -  test script for GUTI registration
+   -  test script for registration reject
+   -  test successful GUTI registration with real UE
+   -  use new newtypes like AmfIds and TMSI everywhere instead of .0
  
 Performance
 - iperf framework

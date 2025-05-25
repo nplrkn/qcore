@@ -64,6 +64,20 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         srb_id: SrbId,
         rrc: T,
     ) -> Result<UlDcchMessage> {
+        self.rrc_indication(srb_id, rrc).await?;
+
+        let pdu = self.receiver.recv().await?;
+        let F1apPdu::InitiatingMessage(InitiatingMessage::UlRrcMessageTransfer(
+            ul_rrc_message_transfer,
+        )) = pdu
+        else {
+            bail!("Expected UlRrcMessageTransfer, got {pdu:?}");
+        };
+        self.log_message(">> F1ap UlRrcMessageTransfer");
+        self.extract_ul_dcch_message(ul_rrc_message_transfer)
+    }
+
+    async fn rrc_indication<T: Send + SerDes>(&mut self, srb_id: SrbId, rrc: T) -> Result<()> {
         let rrc_bytes = rrc.into_bytes()?;
         let rrc_container = maybe_pdcp_encapsulate(rrc_bytes, srb_id.0, &mut self.ue.pdcp_tx);
         let dl_message = crate::f1ap::build::dl_rrc_message_transfer(
@@ -76,15 +90,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         self.api
             .f1ap_indication::<DlRrcMessageTransferProcedure>(dl_message, self.logger)
             .await;
-        let pdu = self.receiver.recv().await?;
-        let F1apPdu::InitiatingMessage(InitiatingMessage::UlRrcMessageTransfer(
-            ul_rrc_message_transfer,
-        )) = pdu
-        else {
-            bail!("Expected UlRrcMessageTransfer, got {pdu:?}");
-        };
-        self.log_message(">> F1ap UlRrcMessageTransfer");
-        self.extract_ul_dcch_message(ul_rrc_message_transfer)
+        Ok(())
     }
 
     fn extract_ul_dcch_message(
@@ -120,6 +126,16 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
                     "Expected RrcUlInformationTransfer with DedicatedNasMessage"
                 )),
             })
+    }
+
+    async fn nas_indication(&mut self, nas: Nas5gsMessage) -> Result<()> {
+        let nas_bytes = self.ue.nas.encode(nas)?;
+        let rrc = crate::rrc::build::dl_information_transfer(
+            1, // TODO transaction ID
+            DedicatedNasMessage(nas_bytes),
+        );
+
+        self.rrc_indication(SrbId(1), rrc).await
     }
 }
 

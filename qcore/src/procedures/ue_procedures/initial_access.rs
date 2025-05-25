@@ -3,8 +3,10 @@
 use super::{HandlerApi, UeProcedure};
 use crate::SubscriberAuthParams;
 use crate::expect_nas;
-use crate::nas::parse::MobileIdentity;
-use crate::protocols::nas::FGMM_CAUSE_SYNCH_FAILURE;
+use crate::nas::{
+    FGMM_CAUSE_ILLEGAL_UE, FGMM_CAUSE_IMPLICITLY_DEREGISTERED, FGMM_CAUSE_PLMN_NOT_ALLOWED,
+    FGMM_CAUSE_SYNCH_FAILURE, FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED, Imsi, MobileIdentity, Tmsi,
+};
 use anyhow::{Result, anyhow, bail};
 use asn1_per::SerDes;
 use derive_deref::{Deref, DerefMut};
@@ -21,6 +23,11 @@ use rrc::{
 use security::{Challenge, resync_sqn};
 use slog::{info, warn};
 
+enum RegistrationType {
+    Supi(Imsi, NasUeSecurityCapability),
+    Guti(Tmsi),
+}
+
 #[derive(Deref, DerefMut)]
 pub struct InitialAccessProcedure<'a, A: HandlerApi>(UeProcedure<'a, A>);
 
@@ -31,14 +38,64 @@ impl<'a, A: HandlerApi> InitialAccessProcedure<'a, A> {
 
     pub async fn run(mut self, r: InitialUlRrcMessageTransfer) -> Result<()> {
         let registration_request = self.handle_rrc_setup(r).await?;
-        let (imsi, ue_security_capability) =
-            self.check_registration_request(registration_request)?;
-        let kamf = self.authenticate_ue(&imsi).await?;
-        self.activate_nas_security(ue_security_capability, &kamf)
-            .await?;
-        self.activate_rrc_security(&kamf).await?;
-        info!(self.logger, "Registered imsi-{imsi}");
-        self.complete_nas_registration().await
+        match self.handle_registration(registration_request).await {
+            Ok(_) => self.accept_registration().await,
+            Err(cause) => {
+                self.reject_registration(cause).await?;
+                bail!("Registration failure")
+            }
+        }
+    }
+
+    async fn handle_registration(
+        &mut self,
+        registration_request: NasRegistrationRequest,
+    ) -> Result<(), u8> {
+        match self.check_registration_request(registration_request)? {
+            RegistrationType::Supi(Imsi(imsi), ue_security_capability) => {
+                let Some(auth_params) = self.lookup_subscriber_auth_params(&imsi).await else {
+                    warn!(self.logger, "Unknown IMSI {} tried to register", imsi);
+                    return Err(FGMM_CAUSE_PLMN_NOT_ALLOWED);
+                };
+                info!(self.logger, "Register imsi-{imsi}");
+                self.authenticate_ue(&imsi, &auth_params)
+                    .await
+                    .map_err(|_e| FGMM_CAUSE_ILLEGAL_UE)?;
+                self.activate_nas_security(ue_security_capability)
+                    .await
+                    .map_err(|_e| 0)?;
+            }
+
+            RegistrationType::Guti(tmsi) => {
+                if self
+                    .restore_existing_nas_security_context(&tmsi)
+                    .await
+                    .map_err(|_e| 0)?
+                {
+                    info!(self.logger, "Register TMSI {:02x?}", tmsi.0);
+                } else {
+                    warn!(
+                        self.logger,
+                        "Unknown TMSI {:02x?} tried to register", tmsi.0
+                    );
+                    return Err(FGMM_CAUSE_IMPLICITLY_DEREGISTERED);
+                }
+            }
+        };
+        let uplink_nas_count = 0; // TODO - put in UE context
+        self.activate_rrc_security(uplink_nas_count)
+            .await
+            .map_err(|_| 0)
+    }
+
+    async fn reject_registration(&mut self, cause: u8) -> Result<()> {
+        let reject = crate::nas::build::registration_reject(cause);
+        self.nas_indication(reject).await
+    }
+
+    async fn restore_existing_nas_security_context(&mut self, _tmsi: &Tmsi) -> Result<bool> {
+        // TODO
+        Ok(false)
     }
 
     async fn handle_rrc_setup(
@@ -55,16 +112,17 @@ impl<'a, A: HandlerApi> InitialAccessProcedure<'a, A> {
         expect_nas!(RegistrationRequest, self.ue.nas.decode(&nas_bytes)?)
     }
 
-    async fn authenticate_ue(&mut self, imsi: &String) -> Result<[u8; 32]> {
-        let Some(auth_params) = self.lookup_subscriber_auth_params(&imsi).await else {
-            bail!("Unknown IMSI {} tried to register", imsi)
-        };
-
+    async fn authenticate_ue(
+        &mut self,
+        imsi: &String,
+        auth_params: &SubscriberAuthParams,
+    ) -> Result<()> {
         for _ in 0..2 {
-            match self.perform_nas_auth(&auth_params).await? {
+            match self.perform_nas_auth(auth_params).await? {
                 NasAuthOutcome::Kseaf(kseaf) => {
                     self.inc_subscriber_sqn(&imsi).await?;
-                    return Ok(security::derive_kamf(&kseaf, imsi.as_bytes()));
+                    self.ue.kamf = security::derive_kamf(&kseaf, imsi.as_bytes());
+                    return Ok(());
                 }
                 NasAuthOutcome::ResyncSqn(sqn) => {
                     self.resync_subscriber_sqn(&imsi, sqn).await?;
@@ -169,9 +227,8 @@ impl<'a, A: HandlerApi> InitialAccessProcedure<'a, A> {
     async fn activate_nas_security(
         &mut self,
         ue_security_capabilities: NasUeSecurityCapability,
-        kamf: &[u8; 32],
     ) -> Result<()> {
-        self.configure_nas_security(kamf, &ue_security_capabilities);
+        self.configure_nas_security(&ue_security_capabilities);
         let r = crate::nas::build::security_mode_command(ue_security_capabilities);
         self.log_message("<< NasSecurityModeCommand");
         let rsp = expect_nas!(SecurityModeComplete, self.nas_request(r).await?)?;
@@ -179,8 +236,8 @@ impl<'a, A: HandlerApi> InitialAccessProcedure<'a, A> {
         self.check_nas_security_mode_complete(rsp)
     }
 
-    async fn activate_rrc_security(&mut self, kamf: &[u8; 32]) -> Result<()> {
-        self.configure_rrc_security(kamf);
+    async fn activate_rrc_security(&mut self, uplink_nas_count: u32) -> Result<()> {
+        self.configure_rrc_security(uplink_nas_count);
         let r = crate::rrc::build::security_mode_command(1);
         self.log_message("<< RrcSecurityModeCommand");
         let _rrc_security_mode_complete = self.rrc_request(SrbId(1), r).await;
@@ -188,7 +245,7 @@ impl<'a, A: HandlerApi> InitialAccessProcedure<'a, A> {
         Ok(())
     }
 
-    async fn complete_nas_registration(&mut self) -> Result<()> {
+    async fn accept_registration(&mut self) -> Result<()> {
         let r = crate::nas::build::registration_accept(
             self.config().sst,
             &self.config().plmn,
@@ -233,27 +290,54 @@ impl<'a, A: HandlerApi> InitialAccessProcedure<'a, A> {
     fn check_registration_request(
         &self,
         registration_request: NasRegistrationRequest,
-    ) -> Result<(String, NasUeSecurityCapability)> {
+    ) -> Result<RegistrationType, u8> {
         self.log_message(">> NAS Registration Request");
 
-        let Some(ue_security_capability) = registration_request.ue_security_capability else {
-            bail!("UE security capability missing from Registration Request");
-        };
-        let ue_security_capability = ue_security_capability.to_owned();
-        let MobileIdentity { imsi, plmn } =
-            crate::nas::parse::fgs_mobile_identity(&registration_request.fgs_mobile_identity)?;
+        let (plmn, registration_type) =
+            match crate::nas::parse::fgs_mobile_identity(&registration_request.fgs_mobile_identity)
+                .map_err(|e| {
+                    warn!(self.logger, "{e}");
+                    0
+                })? {
+                MobileIdentity::Guti(plmn, amf_ids, tmsi) => {
+                    if amf_ids.0 != self.config().amf_ids {
+                        warn!(
+                            self.logger,
+                            "Wrong AMF IDs in GUTI - theirs {:02x?} ours {:02x?}",
+                            amf_ids.0,
+                            self.config().amf_ids
+                        );
+                        return Err(FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED);
+                    }
+                    (plmn.0, RegistrationType::Guti(tmsi))
+                }
+                MobileIdentity::Supi(plmn, imsi) => {
+                    let Some(ue_security_capability) = registration_request.ue_security_capability
+                    else {
+                        warn!(
+                            self.logger,
+                            "UE security capability missing from Registration Request"
+                        );
+                        return Err(0);
+                    };
+                    let ue_security_capability = ue_security_capability.to_owned();
+                    (plmn.0, RegistrationType::Supi(imsi, ue_security_capability))
+                }
+            };
 
         if plmn != self.config().plmn {
             // This will cause authentication to fail, because the UE will form its
             // serving network name using its MCC/MNC, and we form ours using our MCC/MNC.
-            bail!(
+            warn!(
+                self.logger,
                 "UE PLMN {:?} doesn't match ours {:?}",
                 &plmn,
                 self.config().plmn
-            )
+            );
+            return Err(0);
         }
 
-        Ok((imsi, ue_security_capability))
+        Ok(registration_type)
     }
 
     fn generate_challenge(&self, auth_params: &SubscriberAuthParams) -> Challenge {
@@ -317,26 +401,25 @@ impl<'a, A: HandlerApi> InitialAccessProcedure<'a, A> {
         Ok(())
     }
 
-    fn configure_nas_security(
-        &mut self,
-        kamf: &[u8; 32],
-        _ue_security_capabilities: &NasUeSecurityCapability,
-    ) {
-        let knasint = security::derive_knasint(kamf);
+    fn configure_nas_security(&mut self, _ue_security_capabilities: &NasUeSecurityCapability) {
+        let knasint = security::derive_knasint(&self.ue.kamf);
         // TODO - check UE security capabilities
         // TS33.501, 6.7.2: AMF starts integrity protection before transmitting SecurityModeCommand.
         self.ue.nas.enable_security(knasint);
     }
 
-    fn configure_rrc_security(&mut self, kamf: &[u8; 32]) {
+    fn configure_rrc_security(&mut self, uplink_nas_count: u32) {
         // Derive Kgnb, and from that kRRCInt.
 
         /* TS33.501, 6.8.1.1.2.3: "The NAS (uplink and downlink) COUNTs are set to start
         values, and the start value of the uplink NAS COUNT shall be used as freshness parameter in the KgNB derivation from
         the fresh KAMF (after primary authentication) when UE receives AS SMC the KgNB is derived from the current 5G NAS
         security context, i.e., the fresh KAMF is used to derive the KgNB." */
-        let uplink_nas_count = 0;
-        let kgnb = security::derive_kgnb(kamf, uplink_nas_count);
+
+        /* 6.8.1.1.2.2: When the UE receives the AS SMC without having received a NAS Security Mode Command after the Registration Request
+        with "PDU session(s) to be re-activated", it shall use the uplink NAS COUNT of the Registration Request message that
+        triggered the AS SMC to be sent as freshness parameter in the derivation of the initial KgNB/KeNB.           */
+        let kgnb = security::derive_kgnb(&self.ue.kamf, uplink_nas_count);
         let krrcint = security::derive_krrcint(&kgnb);
 
         // Tell the PDCP layer to add NIA2 integrity protection henceforth.

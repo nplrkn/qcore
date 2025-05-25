@@ -48,7 +48,7 @@ impl SecurityHeaderType {
     pub const INTEGRITY_PROTECTED_AND_CIPHERED_WITH_NEW_5G_NAS_SECURITY_CONTEXT: u8 = 0b0100;
 }
 
-pub fn registration_request(imsi: &String) -> Result<Vec<u8>> {
+pub fn mobile_identity_supi(imsi: &String) -> NasFGsMobileIdentity {
     // Get the MSIN out of the IMSI.
     let msin: Vec<u8> = imsi[5..imsi.len()]
         .chars()
@@ -56,26 +56,36 @@ pub fn registration_request(imsi: &String) -> Result<Vec<u8>> {
         .collect();
     assert!(msin.len() == 10);
 
+    NasFGsMobileIdentity::new(vec![
+        // Figure 9.11.3.4.3 and 9.11.3.4.3a of TS 24.501.
+        0x01, // SUPI
+        0x02,
+        0xf8,
+        0x39, // MCC and MNC = 208, 93
+        0xf0,
+        0xff, // Routing indicator digits = 0
+        0x00, // Protection scheme: 0000 null scheme
+        0x00, // Home network public key identifier
+        msin[0] | msin[1] << 4,
+        msin[2] | msin[3] << 4,
+        msin[4] | msin[5] << 4,
+        msin[6] | msin[7] << 4,
+        msin[8] | msin[9] << 4,
+    ])
+}
+
+pub fn mobile_identity_guti(guti: &[u8; 10]) -> NasFGsMobileIdentity {
+    let mut v = vec![0b1111_0010]; // GUTI
+    v.extend_from_slice(guti);
+    NasFGsMobileIdentity::new(v)
+}
+
+pub fn registration_request(fgs_mobile_identity: NasFGsMobileIdentity) -> Result<Vec<u8>> {
     let message = Nas5gmmMessage::RegistrationRequest(NasRegistrationRequest {
         fgs_registration_type: NasFGsRegistrationType::new(
             (FollowOnRequest::PENDING << 3) | FivegsRegistrationType::INITIAL_REGISTRATION,
         ),
-        fgs_mobile_identity: NasFGsMobileIdentity::new(vec![
-            // Figure 9.11.3.4.3 and 9.11.3.4.3a of TS 24.501.
-            0x01, // SUPI
-            0x02,
-            0xf8,
-            0x39, // MCC and MNC = 208, 93
-            0xf0,
-            0xff, // Routing indicator digits = 0
-            0x00, // Protection scheme: 0000 null scheme
-            0x00, // Home network public key identifier
-            msin[0] | msin[1] << 4,
-            msin[2] | msin[3] << 4,
-            msin[4] | msin[5] << 4,
-            msin[6] | msin[7] << 4,
-            msin[8] | msin[9] << 4,
-        ]),
+        fgs_mobile_identity,
         non_current_native_nas_key_set_identifier: None,
         fgmm_capability: None,
         ue_security_capability: Some(NasUeSecurityCapability::new(vec![

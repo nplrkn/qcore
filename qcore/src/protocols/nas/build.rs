@@ -4,13 +4,13 @@ use anyhow::{Result, bail};
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gmmMessageType, Nas5gsMessage, Nas5gsmMessage, Nas5gsmMessageType, NasAbba,
     NasAdditionalFGSecurityInformation, NasAuthenticationParameterAutn,
-    NasAuthenticationParameterRand, NasDnn, NasFGsMobileIdentity, NasFGsRegistrationResult,
-    NasKeySetIdentifier, NasNssai, NasPayloadContainer, NasPayloadContainerType, NasPduAddress,
-    NasPduSessionType, NasQosRules, NasSecurityAlgorithms, NasSessionAmbr, NasUeSecurityCapability,
-    encode_nas_5gs_message,
+    NasAuthenticationParameterRand, NasDnn, NasFGmmCause, NasFGsMobileIdentity,
+    NasFGsRegistrationResult, NasKeySetIdentifier, NasNssai, NasPayloadContainer,
+    NasPayloadContainerType, NasPduAddress, NasPduSessionType, NasQosRules, NasSecurityAlgorithms,
+    NasSessionAmbr, NasUeSecurityCapability, encode_nas_5gs_message,
     messages::{
         NasAuthenticationRequest, NasDlNasTransport, NasPduSessionEstablishmentAccept,
-        NasRegistrationAccept, NasSecurityModeCommand,
+        NasRegistrationAccept, NasRegistrationReject, NasSecurityModeCommand,
     },
 };
 use security::NAS_ABBA;
@@ -85,6 +85,13 @@ pub fn registration_accept(
                 vec![0b00_0_0_0_001], // no emergency, no slice-specific auth, no SMS, 3GPP access
             ))
         }),
+    )
+}
+
+pub fn registration_reject(cause: u8) -> Nas5gsMessage {
+    Nas5gsMessage::new_5gmm(
+        Nas5gmmMessageType::RegistrationReject,
+        Nas5gmmMessage::RegistrationReject(NasRegistrationReject::new(NasFGmmCause::new(cause))),
     )
 }
 
