@@ -11,14 +11,16 @@ async fn registration_failure_unknown_guti() -> anyhow::Result<()> {
     ue.perform_rrc_setup().await?;
     ue.receive_nas_registration_reject().await?;
 
+    // On the subsequent attempts the UE uses its existing RRC channel.
+
     // Unknown GUTI - AMF IDs ok but bad PLMN
     ue.use_guti([0, 0, 0, 1, 1, 0, 0, 0, 0, 0]);
-    ue.perform_rrc_setup().await?;
+    ue.reregister().await?;
     ue.receive_nas_registration_reject().await?;
 
     // Unknown GUTI - AMF IDs + PLMN ok, but bad TMSI
     ue.use_guti([2, 248, 57, 1, 1, 0, 0, 0, 0, 0]);
-    ue.perform_rrc_setup().await?;
+    ue.reregister().await?;
     ue.receive_nas_registration_reject().await?;
 
     Ok(())

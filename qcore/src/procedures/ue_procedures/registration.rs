@@ -1,6 +1,5 @@
-//! initial_access - procedure in which UE makes first contact with the 5G core
-
-use super::{HandlerApi, UeProcedure};
+use super::UeProcedure;
+use crate::HandlerApi;
 use crate::SubscriberAuthParams;
 use crate::expect_nas;
 use crate::nas::{
@@ -8,18 +7,13 @@ use crate::nas::{
     FGMM_CAUSE_SYNCH_FAILURE, FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED, Imsi, MobileIdentity, Tmsi,
 };
 use anyhow::{Result, anyhow, bail};
-use asn1_per::SerDes;
 use derive_deref::{Deref, DerefMut};
-use f1ap::{DuToCuRrcContainer, InitialUlRrcMessageTransfer, SrbId};
+use f1ap::SrbId;
 use oxirush_nas::messages::{
     NasAuthenticationFailure, NasAuthenticationResponse, NasRegistrationRequest,
     NasSecurityModeComplete,
 };
 use oxirush_nas::{Nas5gmmMessage, Nas5gsMessage, NasUeSecurityCapability};
-use rrc::{
-    C1_4, C1_6, CriticalExtensions22, RrcSetupComplete, RrcSetupRequest, UlCcchMessage,
-    UlCcchMessageType, UlDcchMessage, UlDcchMessageType,
-};
 use security::{Challenge, resync_sqn};
 use slog::{info, warn};
 
@@ -28,25 +22,26 @@ enum RegistrationType {
     Guti(Tmsi),
 }
 
-#[derive(Deref, DerefMut)]
-pub struct InitialAccessProcedure<'a, A: HandlerApi>(UeProcedure<'a, A>);
+enum NasAuthOutcome {
+    Kseaf([u8; 32]),
+    ResyncSqn([u8; 6]),
+}
 
-impl<'a, A: HandlerApi> InitialAccessProcedure<'a, A> {
+#[derive(Deref, DerefMut)]
+pub struct RegistrationProcedure<'a, A: HandlerApi>(UeProcedure<'a, A>);
+
+impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     pub fn new(inner: UeProcedure<'a, A>) -> Self {
-        InitialAccessProcedure(inner)
+        RegistrationProcedure(inner)
     }
 
-    pub async fn run(mut self, r: InitialUlRrcMessageTransfer) -> Result<()> {
-        let registration_request = self.handle_rrc_setup(r).await?;
-        match self.handle_registration(registration_request).await {
+    pub async fn run(mut self, r: NasRegistrationRequest) -> Result<()> {
+        self.log_message(">> RegistrationRequest");
+        match self.handle_registration(r).await {
             Ok(_) => self.accept_registration().await,
-            Err(cause) => {
-                self.reject_registration(cause).await?;
-                bail!("Registration failure")
-            }
+            Err(cause) => self.reject_registration(cause).await,
         }
     }
-
     async fn handle_registration(
         &mut self,
         registration_request: NasRegistrationRequest,
@@ -96,20 +91,6 @@ impl<'a, A: HandlerApi> InitialAccessProcedure<'a, A> {
     async fn restore_existing_nas_security_context(&mut self, _tmsi: &Tmsi) -> Result<bool> {
         // TODO
         Ok(false)
-    }
-
-    async fn handle_rrc_setup(
-        &mut self,
-        r: InitialUlRrcMessageTransfer,
-    ) -> Result<NasRegistrationRequest> {
-        let cell_group_config = self.check_initial_transfer(r)?;
-        self.log_message(">> RrcSetupRequest");
-        let rrc_setup = crate::rrc::build::setup(0, cell_group_config);
-        self.log_message("<< RrcSetup");
-        let response = self.rrc_request(SrbId(0), rrc_setup).await?;
-        let nas_bytes = self.check_rrc_setup_complete(response)?;
-        self.log_message(">> RrcSetupComplete");
-        expect_nas!(RegistrationRequest, self.ue.nas.decode(&nas_bytes)?)
     }
 
     async fn authenticate_ue(
@@ -259,35 +240,6 @@ impl<'a, A: HandlerApi> InitialAccessProcedure<'a, A> {
         Ok(())
     }
 
-    fn check_initial_transfer(&self, r: InitialUlRrcMessageTransfer) -> Result<Vec<u8>> {
-        let Some(DuToCuRrcContainer(cell_group_config)) = r.du_to_cu_rrc_container else {
-            bail!("Missing DuToCuRrcContainer on initial UL RRC message")
-        };
-
-        let _rrc_setup_request = self.check_rrc_setup_request(&r.rrc_container.0)?;
-        Ok(cell_group_config)
-    }
-
-    fn check_rrc_setup_request(&self, message: &[u8]) -> Result<RrcSetupRequest> {
-        match UlCcchMessage::from_bytes(message)? {
-            UlCcchMessage {
-                message: UlCcchMessageType::C1(C1_4::RrcSetupRequest(x)),
-            } => Ok(x),
-            m => Err(anyhow!(format!("Not yet implemented Rrc message {:?}", m))),
-        }
-    }
-
-    fn check_rrc_setup_complete(&self, m: UlDcchMessage) -> Result<Vec<u8>> {
-        let UlDcchMessageType::C1(C1_6::RrcSetupComplete(RrcSetupComplete {
-            critical_extensions: CriticalExtensions22::RrcSetupComplete(rrc_setup_complete_ies),
-            ..
-        })) = m.message
-        else {
-            bail!("Expected Rrc Setup complete, got {:?}", m)
-        };
-        Ok(rrc_setup_complete_ies.dedicated_nas_message.0)
-    }
-
     fn check_registration_request(
         &self,
         registration_request: NasRegistrationRequest,
@@ -426,9 +378,4 @@ impl<'a, A: HandlerApi> InitialAccessProcedure<'a, A> {
         // Tell the PDCP layer to add NIA2 integrity protection henceforth.
         self.ue.pdcp_tx.enable_security(krrcint);
     }
-}
-
-enum NasAuthOutcome {
-    Kseaf([u8; 32]),
-    ResyncSqn([u8; 6]),
 }

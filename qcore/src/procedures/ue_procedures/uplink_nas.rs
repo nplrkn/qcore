@@ -1,6 +1,9 @@
 //! uplink_nas - transfer of a Nas message from UE to AMF
 
-use super::{DeregistrationProcedure, SessionEstablishmentProcedure, UeProcedure};
+use super::{
+    DeregistrationProcedure, SessionEstablishmentProcedure, UeProcedure,
+    registration::RegistrationProcedure,
+};
 use crate::HandlerApi;
 use anyhow::Result;
 use derive_deref::{Deref, DerefMut};
@@ -21,15 +24,18 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
     pub async fn run(mut self, mut nas_bytes: Vec<u8>) -> Result<()> {
         patch_nas_for_oai_deregistration_security_header(&mut nas_bytes, self.logger);
 
-        match self.ue.nas.decode(&nas_bytes)? {
-            Nas5gsMessage::Gmm(
-                _header,
-                Nas5gmmMessage::UlNasTransport(NasUlNasTransport {
-                    payload_container,
-                    dnn,
-                    ..
-                }),
-            ) => {
+        let message = self.ue.nas.decode(&nas_bytes)?;
+        let Nas5gsMessage::Gmm(_, mm_message) = message else {
+            warn!(self.logger, "Unhandled NAS UL message {:?}", message);
+            return Ok(());
+        };
+
+        match mm_message {
+            Nas5gmmMessage::UlNasTransport(NasUlNasTransport {
+                payload_container,
+                dnn,
+                ..
+            }) => {
                 self.log_message(">> UlNasTransport");
                 let dnn_bytes = dnn.map(|nas_dnn| nas_dnn.value);
                 match decode_nas_5gs_message(&payload_container.value)? {
@@ -51,8 +57,10 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
                 // TODO: PduSessionModificationRequest(NasPduSessionModificationRequest)
                 // TODO: PduSessionReleaseRequest(NasPduSessionReleaseRequest)
             }
-            Nas5gsMessage::Gmm(_header, Nas5gmmMessage::DeregistrationRequestFromUe(r)) => {
-                self.log_message(">> DeregistrationRequestFromUe");
+            Nas5gmmMessage::RegistrationRequest(r) => {
+                RegistrationProcedure::new(self.0).run(r).await?;
+            }
+            Nas5gmmMessage::DeregistrationRequestFromUe(r) => {
                 DeregistrationProcedure::new(self.0).run(r).await?;
             }
 

@@ -53,11 +53,8 @@ impl<'a> MockUe<'a> {
         };
         info!(&self.logger, "DlRrcMessageTransfer(RrcSetup) <<");
 
-        let registration_request = if let Some(guti) = self.guti {
-            build_nas::registration_request(build_nas::mobile_identity_guti(&guti))?
-        } else {
-            build_nas::registration_request(build_nas::mobile_identity_supi(&self.imsi))?
-        };
+        // This currently assumes that the UE wants to register.
+        let registration_request = self.build_register_request()?;
         let rrc_setup_complete =
             build_rrc::setup_complete(rrc_setup.rrc_transaction_identifier, registration_request);
         info!(
@@ -67,6 +64,19 @@ impl<'a> MockUe<'a> {
         self.du
             .send_ul_rrc(&mut self.du_ue_context, rrc_setup_complete)
             .await
+    }
+
+    fn build_register_request(&self) -> Result<Vec<u8>> {
+        if let Some(guti) = self.guti {
+            build_nas::registration_request(build_nas::mobile_identity_guti(&guti))
+        } else {
+            build_nas::registration_request(build_nas::mobile_identity_supi(&self.imsi))
+        }
+    }
+
+    // Register outside of an RRC Setup Complete on an existing RRC channel
+    pub async fn reregister(&mut self) -> Result<()> {
+        self.send_nas(self.build_register_request()?).await
     }
 
     pub async fn handle_nas_authentication(&mut self) -> Result<()> {

@@ -1,14 +1,15 @@
 mod deregistration;
-mod initial_access;
 mod pdu_session_establishment;
+mod registration;
+mod rrc_setup;
 mod ue_context_release;
 mod ue_message_handler;
 mod ul_information_transfer;
 mod uplink_nas;
 
 pub use deregistration::DeregistrationProcedure;
-pub use initial_access::InitialAccessProcedure;
 pub use pdu_session_establishment::SessionEstablishmentProcedure;
+pub use rrc_setup::RrcSetupProcedure;
 pub use ue_context_release::UeContextReleaseProcedure;
 pub use ue_message_handler::UeMessageHandler;
 pub use ul_information_transfer::UlInformationTransferProcedure;

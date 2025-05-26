@@ -1,5 +1,5 @@
 use super::{
-    InitialAccessProcedure, UeContextReleaseProcedure, UeProcedure, UlInformationTransferProcedure,
+    RrcSetupProcedure, UeContextReleaseProcedure, UeProcedure, UlInformationTransferProcedure,
 };
 use crate::{HandlerApi, UeContext};
 use anyhow::{Result, bail};
@@ -49,7 +49,7 @@ impl<A: HandlerApi> UeMessageHandler<A> {
         r: InitialUlRrcMessageTransfer,
     ) -> Result<()> {
         // Run the initial access procedure.
-        InitialAccessProcedure::new(UeProcedure::new(
+        RrcSetupProcedure::new(UeProcedure::new(
             &self.api,
             ue_context,
             &self.logger,
