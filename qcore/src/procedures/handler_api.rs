@@ -11,9 +11,13 @@ use xxap::{GtpTunnel, Indication, Procedure, RequestError};
 pub trait HandlerApi: Send + Sync + Clone + 'static {
     fn config(&self) -> &Config;
 
-    async fn lookup_subscriber_auth_params(&self, imsi: &str) -> Option<SubscriberAuthParams>;
-    async fn inc_subscriber_sqn(&self, imsi: &str) -> Result<()>;
+    async fn lookup_subscriber_creds_and_inc_sqn(&self, imsi: &str)
+    -> Option<SubscriberAuthParams>;
+    //async fn inc_subscriber_sqn(&self, imsi: &str) -> Result<()>;
     async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
+
+    // async fn lookup_nas_context(&self, tmsi: &str) -> Result<()>;
+    // async fn store_nas_context(&self, tmsi: &str, v: ());
 
     fn spawn_ue_message_handler(&self) -> u32;
     async fn dispatch_ue_message(&self, ue_id: u32, message: F1apPdu) -> Result<()>;

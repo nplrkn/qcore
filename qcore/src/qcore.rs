@@ -125,18 +125,25 @@ impl HandlerApi for QCore {
     fn config(&self) -> &Config {
         &self.config
     }
-    async fn lookup_subscriber_auth_params(&self, imsi: &str) -> Option<SubscriberAuthParams> {
-        self.sub_db.lock().await.get(imsi).map(|x| x.clone())
+
+    async fn lookup_subscriber_creds_and_inc_sqn(
+        &self,
+        imsi: &str,
+    ) -> Option<SubscriberAuthParams> {
+        self.sub_db.lock().await.get_mut(imsi).map(|entry| {
+            entry.inc_sqn();
+            entry.clone()
+        })
     }
 
-    async fn inc_subscriber_sqn(&self, imsi: &str) -> Result<()> {
-        self.sub_db
-            .lock()
-            .await
-            .get_mut(imsi)
-            .ok_or(anyhow!("IMSI not found"))
-            .map(|entry| entry.inc_sqn())
-    }
+    // async fn inc_subscriber_sqn(&self, imsi: &str) -> Result<()> {
+    //     self.sub_db
+    //         .lock()
+    //         .await
+    //         .get_mut(imsi)
+    //         .ok_or(anyhow!("IMSI not found"))
+    //         .map(|entry| entry.inc_sqn())
+    // }
 
     async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()> {
         self.sub_db
@@ -146,6 +153,13 @@ impl HandlerApi for QCore {
             .ok_or(anyhow!("IMSI not found"))
             .map(|entry| entry.sqn = sqn)
     }
+
+    // async fn lookup_nas_context(&self, tmsi: &str) -> Result<()> {
+    //     todo!()
+    // }
+    // async fn store_nas_context(&self, tmsi: &str, v: ()) {
+    //     todo!()
+    // }
 
     fn spawn_ue_message_handler(&self) -> u32 {
         let mut ue_id = rand::random::<u32>();

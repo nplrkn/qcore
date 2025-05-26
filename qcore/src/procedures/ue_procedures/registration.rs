@@ -1,10 +1,11 @@
 use super::UeProcedure;
 use crate::HandlerApi;
+use crate::SimCreds;
 use crate::SubscriberAuthParams;
 use crate::expect_nas;
 use crate::nas::{
-    FGMM_CAUSE_ILLEGAL_UE, FGMM_CAUSE_IMPLICITLY_DEREGISTERED, FGMM_CAUSE_PLMN_NOT_ALLOWED,
-    FGMM_CAUSE_SYNCH_FAILURE, FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED, Imsi, MobileIdentity, Tmsi,
+    FGMM_CAUSE_ILLEGAL_UE, FGMM_CAUSE_IMPLICITLY_DEREGISTERED, FGMM_CAUSE_SYNCH_FAILURE,
+    FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED, Imsi, MobileIdentity, Tmsi,
 };
 use anyhow::{Result, anyhow, bail};
 use derive_deref::{Deref, DerefMut};
@@ -15,6 +16,7 @@ use oxirush_nas::messages::{
 };
 use oxirush_nas::{Nas5gmmMessage, Nas5gsMessage, NasUeSecurityCapability};
 use security::{Challenge, resync_sqn};
+use slog::debug;
 use slog::{info, warn};
 
 enum RegistrationType {
@@ -42,18 +44,33 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
             Err(cause) => self.reject_registration(cause).await,
         }
     }
+
+    async fn accept_registration(&mut self) -> Result<()> {
+        let r = crate::nas::build::registration_accept(
+            self.config().sst,
+            &self.config().plmn,
+            &self.config().amf_ids,
+            &self.ue.tmsi,
+        );
+        self.log_message("<< NasRegistrationAccept");
+        let _rsp = expect_nas!(RegistrationComplete, self.nas_request(r).await?)?;
+        self.log_message(">> NasRegistrationComplete");
+        Ok(())
+    }
+
+    async fn reject_registration(&mut self, cause: u8) -> Result<()> {
+        let reject = crate::nas::build::registration_reject(cause);
+        self.nas_indication(reject).await
+    }
+
     async fn handle_registration(
         &mut self,
         registration_request: NasRegistrationRequest,
     ) -> Result<(), u8> {
         match self.check_registration_request(registration_request)? {
             RegistrationType::Supi(Imsi(imsi), ue_security_capability) => {
-                let Some(auth_params) = self.lookup_subscriber_auth_params(&imsi).await else {
-                    warn!(self.logger, "Unknown IMSI {} tried to register", imsi);
-                    return Err(FGMM_CAUSE_PLMN_NOT_ALLOWED);
-                };
                 info!(self.logger, "Register imsi-{imsi}");
-                self.authenticate_ue(&imsi, &auth_params)
+                self.authenticate_ue(&imsi)
                     .await
                     .map_err(|_e| FGMM_CAUSE_ILLEGAL_UE)?;
                 self.activate_nas_security(ue_security_capability)
@@ -83,28 +100,15 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
             .map_err(|_| 0)
     }
 
-    async fn reject_registration(&mut self, cause: u8) -> Result<()> {
-        let reject = crate::nas::build::registration_reject(cause);
-        self.nas_indication(reject).await
-    }
-
-    async fn restore_existing_nas_security_context(&mut self, _tmsi: &Tmsi) -> Result<bool> {
-        // TODO
-        Ok(false)
-    }
-
-    async fn authenticate_ue(
-        &mut self,
-        imsi: &String,
-        auth_params: &SubscriberAuthParams,
-    ) -> Result<()> {
+    async fn authenticate_ue(&mut self, imsi: &String) -> Result<()> {
         for _ in 0..2 {
-            match self.perform_nas_auth(imsi, auth_params).await? {
+            match self.perform_nas_auth(imsi).await? {
                 NasAuthOutcome::Kseaf(kseaf) => {
                     self.ue.kamf = security::derive_kamf(&kseaf, imsi.as_bytes());
                     return Ok(());
                 }
                 NasAuthOutcome::ResyncSqn(sqn) => {
+                    debug!(self.logger, "Resynchronize SQN to {:02x?}", sqn);
                     self.resync_subscriber_sqn(&imsi, sqn).await?;
                 }
             }
@@ -114,16 +118,17 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     }
 
     // Returns Ok(kseaf) on success, Ok(None) on synch failure, and Err for anything else.
-    async fn perform_nas_auth(
-        &mut self,
-        imsi: &String,
-        auth_params: &SubscriberAuthParams,
-    ) -> Result<NasAuthOutcome> {
-        self.inc_subscriber_sqn(&imsi).await?;
-        let challenge = self.generate_challenge(auth_params);
+    async fn perform_nas_auth(&mut self, imsi: &String) -> Result<NasAuthOutcome> {
+        let auth_params = self
+            .lookup_subscriber_creds_and_inc_sqn(&imsi)
+            .await
+            .ok_or_else(|| anyhow!("Unknown IMSI"))?;
+
+        debug!(self.logger, "SQN for challenge {:02x?}", auth_params.sqn);
+        let challenge = self.generate_challenge(&auth_params);
 
         // println!("Challenge generated:");
-        // println!("SQN:      {:02x?}", self.ue.sqn);
+        // println!("SQN:      {:02x?}", auth_params.sqn);
         // println!("K:        {:02x?}", sim.ki);
         // println!("OPC:      {:02x?}", sim.opc);
         // println!("rand:     {:02x?}", challenge.rand);
@@ -143,8 +148,20 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                 Ok(NasAuthOutcome::Kseaf(challenge.kseaf))
             }
             Nas5gsMessage::Gmm(_header, Nas5gmmMessage::AuthenticationFailure(m)) => {
-                let sqn =
-                    self.process_nas_authentication_failure(m, auth_params, &challenge.rand)?;
+                let sqn = self
+                    .process_nas_authentication_failure(m, &auth_params.sim_creds, &challenge.rand)
+                    .or_else(|e| {
+                        if self.config().skip_ue_authentication_check {
+                            warn!(
+                                self.logger,
+                                "Ignoring AUTS MAC-S signature failure for testability reasons"
+                            );
+                            Ok(auth_params.sqn)
+                        } else {
+                            Err(e)
+                        }
+                    })?;
+
                 // None indicates to the caller that we resync'd the SQN.
                 Ok(NasAuthOutcome::ResyncSqn(sqn))
             }
@@ -158,7 +175,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     fn process_nas_authentication_failure(
         &mut self,
         m: NasAuthenticationFailure,
-        auth_params: &SubscriberAuthParams,
+        sim_creds: &SimCreds,
         rand: &[u8; 16],
     ) -> Result<[u8; 6]> {
         let NasAuthenticationFailure {
@@ -181,29 +198,8 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         // println!("AUTS calculation inputs:");
         // println!("auts:     {:x?}", auts);
 
-        match resync_sqn(
-            &auts,
-            &auth_params.sim_creds.ki,
-            &auth_params.sim_creds.opc,
-            rand,
-        ) {
-            Ok(new_sqn) => {
-                info!(self.logger, "Resynchronized SQN to {:02x?}", new_sqn);
-                // println!("sqn-ms:    {:x?}", new_sqn);
-                Ok(new_sqn)
-            }
-            Err(_) => {
-                if self.config().skip_ue_authentication_check {
-                    warn!(
-                        self.logger,
-                        "Ignoring AUTS MAC-S signature failure for testability reasons"
-                    );
-                    Ok(auth_params.sqn)
-                } else {
-                    bail!("Invalid AUTS signature on NAS authentication synch failure")
-                }
-            }
-        }
+        resync_sqn(&auts, &sim_creds.ki, &sim_creds.opc, rand)
+            .map_err(|_| anyhow!("Invalid AUTS signature on NAS authentication synch failure"))
     }
 
     async fn activate_nas_security(
@@ -218,25 +214,17 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         self.check_nas_security_mode_complete(rsp)
     }
 
+    async fn restore_existing_nas_security_context(&mut self, _tmsi: &Tmsi) -> Result<bool> {
+        // TODO
+        Ok(false)
+    }
+
     async fn activate_rrc_security(&mut self, uplink_nas_count: u32) -> Result<()> {
         self.configure_rrc_security(uplink_nas_count);
         let r = crate::rrc::build::security_mode_command(1);
         self.log_message("<< RrcSecurityModeCommand");
         let _rrc_security_mode_complete = self.rrc_request(SrbId(1), r).await;
         self.log_message(">> RRcSecurityModeComplete");
-        Ok(())
-    }
-
-    async fn accept_registration(&mut self) -> Result<()> {
-        let r = crate::nas::build::registration_accept(
-            self.config().sst,
-            &self.config().plmn,
-            &self.config().amf_ids,
-            &self.ue.tmsi,
-        );
-        self.log_message("<< NasRegistrationAccept");
-        let _rsp = expect_nas!(RegistrationComplete, self.nas_request(r).await?)?;
-        self.log_message(">> NasRegistrationComplete");
         Ok(())
     }
 
