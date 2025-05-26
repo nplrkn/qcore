@@ -15,7 +15,7 @@ pub const FGMM_CAUSE_SYNCH_FAILURE: u8 = 0b0010101;
 #[derive(Deref, Debug)]
 pub struct Imsi(pub String);
 
-#[derive(Deref, Debug)]
+#[derive(Deref, Debug, Eq, Hash, PartialEq)]
 pub struct Tmsi(pub [u8; 4]);
 
 #[derive(Deref, Debug)]

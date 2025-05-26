@@ -13,6 +13,7 @@ use aya::Ebpf;
 use dashmap::DashMap;
 use f1ap::F1apPdu;
 use slog::{Logger, info, o};
+use std::collections::HashMap;
 use std::net::IpAddr;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -30,6 +31,7 @@ pub struct QCore {
     packet_processor: PacketProcessor,
     ue_tasks: Arc<DashMap<u32, Sender<F1apPdu>>>,
     sub_db: Arc<Mutex<SubscriberDb>>,
+    nas_contexts: Arc<Mutex<HashMap<Tmsi, NasContext>>>,
 }
 
 pub struct ProgramHandle {
@@ -85,6 +87,7 @@ impl QCore {
             ue_tasks: Arc::new(DashMap::new()),
             packet_processor,
             sub_db: Arc::new(Mutex::new(sub_db)),
+            nas_contexts: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -148,14 +151,14 @@ impl HandlerApi for QCore {
             .map(|entry| entry.sqn = sqn)
     }
 
-    async fn lookup_nas_context(&self, _tmsi: &Tmsi) -> Option<NasContext> {
-        // TODO
-        None
+    async fn take_nas_context(&self, tmsi: &Tmsi) -> Option<NasContext> {
+        self.nas_contexts.lock().await.remove(tmsi)
     }
 
-    // async fn store_nas_context(&self, tmsi: &str, v: ()) {
-    //     todo!()
-    // }
+    async fn put_nas_context(&self, tmsi: Tmsi, c: NasContext, _ttl_secs: u32) {
+        // TODO: implement TTL
+        self.nas_contexts.lock().await.insert(tmsi, c);
+    }
 
     fn spawn_ue_message_handler(&self) -> u32 {
         let mut ue_id = rand::random::<u32>();

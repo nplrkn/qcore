@@ -8,20 +8,22 @@ pub struct NasContext {
 }
 
 impl NasContext {
+    pub fn ul_nas_count(&self) -> u32 {
+        self.security_context
+            .as_ref()
+            .map(|x| x.ul_count)
+            .unwrap_or_default()
+    }
+
     pub fn decode(&mut self, data: &[u8]) -> Result<Nas5gsMessage> {
-        let nas = decode_nas_5gs_message(data)
-            .map_err(|e| anyhow!("NAS decode error - {e} - message bytes: {:?}", data))?;
-        match nas {
-            Nas5gsMessage::SecurityProtected(_security_header, body) => {
-                // TODO: Check the security header
-                Ok(*body)
-            }
-            nas => {
-                // TODO: Check if this is meant to be secured and reject if not
-                Ok(nas)
-            }
+        if let Some(security_context) = &mut self.security_context {
+            security_context.decode_and_check(data)
+        } else {
+            decode_nas_5gs_message(data)
+                .map_err(|e| anyhow!("NAS decode error - {e} - message bytes: {:?}", data))
         }
     }
+
     pub fn enable_security(&mut self, knasint: [u8; 16]) {
         self.security_context = Some(SecurityContext::new(knasint));
     }

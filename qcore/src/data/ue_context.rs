@@ -1,5 +1,5 @@
 use super::nas_context::NasContext;
-use crate::PduSession;
+use crate::{PduSession, protocols::nas::Tmsi};
 use f1ap::{GnbDuUeF1apId, NrCgi};
 use pdcp::PdcpTx;
 
@@ -7,7 +7,7 @@ use pdcp::PdcpTx;
 pub struct UeContext {
     pub key: u32,
     pub gnb_du_ue_f1ap_id: GnbDuUeF1apId,
-    pub tmsi: [u8; 4],
+    pub tmsi: Option<Tmsi>,
     pub kamf: [u8; 32],
     pub pdu_sessions: Vec<PduSession>,
     pub pdcp_tx: PdcpTx,
@@ -20,7 +20,7 @@ impl UeContext {
         UeContext {
             key: ue_id,
             gnb_du_ue_f1ap_id,
-            tmsi: rand::random(), // TODO: 0xffffffff is not a valid TMSI (TS23.003, 2.4)
+            tmsi: None,
             kamf: [0u8; 32],
             pdu_sessions: vec![],
             pdcp_tx: PdcpTx::default(),

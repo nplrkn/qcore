@@ -1,10 +1,10 @@
 In progress
 -  is SQN resync working reliably now?
 -  GUTI registration
+   -  SecurityContext should not call decode_nas_5gs_message()
    -  test GUTI registration reject with real UE and see if it reregisters with SUPI
    -  choose sensible cause codes (not 0) for all registration reject arms
    -  when mapping errors to cause codes, log the error text
-   -  test script for GUTI registration
    -  test successful GUTI registration with real UE
    -  use new newtypes like AmfIds and TMSI everywhere instead of .0
 -  ASN.1 decode failed - Error { cause: Generic, msg: "Extended enum not implemented", context: ["CauseRadioNetwork", "Cause", "UeContextReleaseRequest", "InitiatingMessage", "F1apPdu"] }.  Wireshark: cause = radioNetwork / rl-failure-others (12).

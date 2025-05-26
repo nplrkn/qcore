@@ -1,10 +1,11 @@
 use anyhow::Result;
 use oxirush_nas::{
-    Nas5gmmMessage, Nas5gmmMessageType, Nas5gsMessage, Nas5gsmMessage, Nas5gsmMessageType,
-    NasAuthenticationFailureParameter, NasAuthenticationResponseParameter, NasDeRegistrationType,
-    NasFGmmCause, NasFGsMobileIdentity, NasFGsRegistrationType, NasFGsmCapability,
-    NasIntegrityProtectionMaximumDataRate, NasPayloadContainer, NasPayloadContainerType,
-    NasPduSessionType, NasSscMode, NasUeSecurityCapability, encode_nas_5gs_message,
+    Nas5gmmMessage, Nas5gmmMessageType, Nas5gsMessage, Nas5gsSecurityHeaderType, Nas5gsmMessage,
+    Nas5gsmMessageType, NasAuthenticationFailureParameter, NasAuthenticationResponseParameter,
+    NasDeRegistrationType, NasFGmmCause, NasFGsMobileIdentity, NasFGsRegistrationType,
+    NasFGsmCapability, NasIntegrityProtectionMaximumDataRate, NasPayloadContainer,
+    NasPayloadContainerType, NasPduSessionType, NasSscMode, NasUeSecurityCapability,
+    encode_nas_5gs_message,
     messages::{
         Nas5gmmHeader, Nas5gsmHeader, NasAuthenticationFailure, NasAuthenticationResponse,
         NasDeregistrationRequestFromUe, NasPduSessionEstablishmentRequest, NasRegistrationComplete,
@@ -81,6 +82,7 @@ pub fn mobile_identity_guti(guti: &[u8; 10]) -> NasFGsMobileIdentity {
 }
 
 pub fn registration_request(fgs_mobile_identity: NasFGsMobileIdentity) -> Result<Vec<u8>> {
+    let is_guti = fgs_mobile_identity.value[0] & 0b111 == 0b010;
     let message = Nas5gmmMessage::RegistrationRequest(NasRegistrationRequest {
         fgs_registration_type: NasFGsRegistrationType::new(
             (FollowOnRequest::PENDING << 3) | FivegsRegistrationType::INITIAL_REGISTRATION,
@@ -138,6 +140,15 @@ pub fn registration_request(fgs_mobile_identity: NasFGsMobileIdentity) -> Result
         },
         message,
     );
+
+    // A GUTI registration is integrity protected.
+    // We are using fake values for MAC and sequence number.
+    let message = if is_guti {
+        Nas5gsMessage::protect(message, Nas5gsSecurityHeaderType::IntegrityProtected, 0, 5)
+    } else {
+        message
+    };
+
     Ok(encode_nas_5gs_message(&message)?)
 }
 

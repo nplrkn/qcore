@@ -46,12 +46,13 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     }
 
     async fn accept_registration(&mut self) -> Result<()> {
-        // TODO: generate TMSI here
+        let tmsi: [u8; 4] = rand::random(); // TODO: 0xffffffff is not a valid TMSI (TS23.003, 2.4))
+        self.ue.tmsi = Some(Tmsi(tmsi));
         let r = crate::nas::build::registration_accept(
             self.config().sst,
             &self.config().plmn, // TODO: provide self.guti() -> Guti
             &self.config().amf_ids,
-            &self.ue.tmsi,
+            &tmsi,
         );
         self.log_message("<< NasRegistrationAccept");
         let _rsp = expect_nas!(RegistrationComplete, self.nas_request(r).await?)?;
@@ -71,27 +72,47 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         match self.check_registration_request(registration_request)? {
             RegistrationType::Supi(Imsi(imsi), ue_security_capability) => {
                 info!(self.logger, "Register imsi-{imsi}");
-                self.authenticate_ue(&imsi)
-                    .await
-                    .map_err(|_e| FGMM_CAUSE_ILLEGAL_UE)?;
+                self.authenticate_ue(&imsi).await.map_err(|e| {
+                    warn!(self.logger, "SUPI registration failure - {e}");
+                    FGMM_CAUSE_ILLEGAL_UE
+                })?;
+
                 self.activate_nas_security(ue_security_capability)
                     .await
-                    .map_err(|_e| 0)?;
+                    .map_err(|e| {
+                        warn!(self.logger, "SUPI registration failure - {e}");
+                        0
+                    })?;
             }
 
             RegistrationType::Guti(tmsi) => {
+                info!(self.logger, "Register TMSI {:02x?}", tmsi.0);
+                if let Some(existing_tmsi) = &self.ue.tmsi {
+                    info!(
+                        self.logger,
+                        "UE reregistration when security context is already in place"
+                    );
+                    if *existing_tmsi == tmsi {
+                        // No need to activate either NAS or RRC security.
+                        return Ok(());
+                    } else {
+                        warn!(self.logger, "UE not using TMSI it was given");
+                        return Err(0);
+                    }
+                }
+
                 self.restore_existing_nas_security_context(&tmsi)
                     .await
-                    .map_err(|_e| FGMM_CAUSE_IMPLICITLY_DEREGISTERED)?;
-                {
-                    info!(self.logger, "Register TMSI {:02x?}", tmsi.0);
-                }
+                    .map_err(|e| {
+                        warn!(self.logger, "GUTI registration failure - {e}");
+                        FGMM_CAUSE_IMPLICITLY_DEREGISTERED
+                    })?;
             }
         };
-        let uplink_nas_count = 0; // TODO - put in UE context
-        self.activate_rrc_security(uplink_nas_count)
-            .await
-            .map_err(|_| 0)
+
+        // TODO - this should be moved to a separate procedure
+        // In the standard 5G architecture, it is associated with the NGAP UE context.
+        self.activate_rrc_security().await.map_err(|_| 0)
     }
 
     async fn authenticate_ue(&mut self, imsi: &String) -> Result<()> {
@@ -209,7 +230,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     }
 
     async fn restore_existing_nas_security_context(&mut self, tmsi: &Tmsi) -> Result<()> {
-        match self.lookup_nas_context(tmsi).await {
+        match self.take_nas_context(tmsi).await {
             Some(c) => {
                 self.ue.nas = c;
                 Ok(())
@@ -218,7 +239,12 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         }
     }
 
-    async fn activate_rrc_security(&mut self, uplink_nas_count: u32) -> Result<()> {
+    async fn activate_rrc_security(&mut self) -> Result<()> {
+        let uplink_nas_count = self.ue.nas.ul_nas_count();
+        debug!(
+            self.logger,
+            "Activating RRC security, uplink_nas_count: {}", uplink_nas_count
+        );
         self.configure_rrc_security(uplink_nas_count);
         let r = crate::rrc::build::security_mode_command(1);
         self.log_message("<< RrcSecurityModeCommand");

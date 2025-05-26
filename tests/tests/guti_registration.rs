@@ -13,5 +13,17 @@ async fn guti_registration() -> anyhow::Result<()> {
     ue.handle_rrc_security_mode().await?;
     ue.handle_nas_registration_accept().await?;
 
+    // Drop the UE context.
+    du.send_ue_context_release_request(&ue.du_ue_context)
+        .await?;
+    du.handle_ue_context_release(&ue.du_ue_context).await?;
+
+    // UE does a security protected initial registration with GUTI (as seen with Samsung phone.)
+    ue.perform_rrc_setup().await?;
+
+    // QCore skip NAS authentication + security and moves straight to RRC security.
+    ue.handle_rrc_security_mode().await?;
+    ue.handle_nas_registration_accept().await?;
+
     Ok(())
 }

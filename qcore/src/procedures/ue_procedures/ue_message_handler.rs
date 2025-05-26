@@ -6,7 +6,7 @@ use anyhow::{Result, bail};
 use async_channel::{Receiver, Sender};
 use f1ap::{F1apPdu, InitialUlRrcMessageTransfer, InitiatingMessage};
 use rrc::{C1_6, UlDcchMessageType};
-use slog::{Logger, warn};
+use slog::{Logger, debug, warn};
 
 pub struct UeMessageHandler<A: HandlerApi> {
     receiver: Receiver<F1apPdu>,
@@ -38,8 +38,29 @@ impl<A: HandlerApi> UeMessageHandler<A> {
             bail!("Expected InitialUlRrcMessageTransfer, got {message:?}");
         };
         let mut ue_context = UeContext::new(ue_id, r.gnb_du_ue_f1ap_id, r.nr_cgi.clone());
+
         let result = self.run_inner(&mut ue_context, r).await;
-        self.destroy(&mut ue_context).await;
+
+        if result.is_ok() {
+            // Normal termination of message handler
+
+            // If the UE has a TMSI, save off its NAS context.
+            if let Some(tmsi) = ue_context.tmsi.take() {
+                debug!(self.logger, "Store NAS context for TMSI {:02x?}", &tmsi);
+                self.api.put_nas_context(tmsi, ue_context.nas, 0).await;
+            }
+        }
+
+        // Whether or not the message handler terminated normally, clean up sessions.
+        for session in ue_context.pdu_sessions.drain(..) {
+            self.api
+                .delete_userplane_session(&session.userplane_info, &self.logger)
+                .await;
+        }
+
+        // Remove the channel to this UE.
+        self.api.delete_ue_channel(ue_context.key);
+
         result
     }
 
@@ -84,7 +105,7 @@ impl<A: HandlerApi> UeMessageHandler<A> {
                     UeContextReleaseProcedure::new(ue_procedure)
                         .du_initiated(r)
                         .await?;
-                    bail!("DU initiated context release")
+                    break;
                 }
                 _ => {
                     bail!("Unsupported F1apPdu {pdu:?}");
@@ -92,16 +113,5 @@ impl<A: HandlerApi> UeMessageHandler<A> {
             }
         }
         Ok(())
-    }
-
-    async fn destroy(&self, ue_context: &mut UeContext) {
-        for session in ue_context.pdu_sessions.drain(..) {
-            self.api
-                .delete_userplane_session(&session.userplane_info, &self.logger)
-                .await;
-        }
-
-        // Remove the channel to this UE.
-        self.api.delete_ue_channel(ue_context.key);
     }
 }

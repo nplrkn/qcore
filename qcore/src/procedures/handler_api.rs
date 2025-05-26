@@ -21,8 +21,8 @@ pub trait HandlerApi: Send + Sync + Clone + 'static {
     -> Option<SubscriberAuthParams>;
     async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
 
-    async fn lookup_nas_context(&self, tmsi: &Tmsi) -> Option<NasContext>;
-    // async fn store_nas_context(&self, tmsi: &str, v: ());
+    async fn take_nas_context(&self, tmsi: &Tmsi) -> Option<NasContext>;
+    async fn put_nas_context(&self, tmsi: Tmsi, c: NasContext, ttl_secs: u32);
 
     fn spawn_ue_message_handler(&self) -> u32;
     async fn dispatch_ue_message(&self, ue_id: u32, message: F1apPdu) -> Result<()>;

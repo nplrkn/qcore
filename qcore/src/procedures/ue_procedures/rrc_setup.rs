@@ -40,6 +40,15 @@ impl<'a, A: HandlerApi> RrcSetupProcedure<'a, A> {
         let response = self.rrc_request(SrbId(0), rrc_setup).await?;
         let nas_bytes = self.check_rrc_setup_complete(response)?;
         self.log_message(">> RrcSetupComplete");
+
+        // TODO
+
+        // If this is a integrity protected message (e.g. Registration or Service Request), we need to retrieve
+        // the NAS security context by GUTI in order to verify it.
+
+        // This means we need to call security context check() on the message after we have gone in and got the GUTI.
+        // Perhaps two entry points to the registration procedure - run_with_plain_register() and run_with_protected_register().
+
         expect_nas!(RegistrationRequest, self.ue.nas.decode(&nas_bytes)?)
     }
 

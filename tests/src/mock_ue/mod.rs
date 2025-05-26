@@ -111,8 +111,22 @@ impl<'a> MockUe<'a> {
     }
 
     pub async fn handle_nas_registration_accept(&mut self) -> Result<()> {
-        let _nas_registration_accept = self.receive_nas().await?;
+        let nas_registration_accept = self.receive_nas().await?;
         info!(&self.logger, "NAS Registration Accept <<");
+        let nas = decode_nas_5gs_message(&nas_registration_accept)?;
+        let Nas5gsMessage::SecurityProtected(_header, message) = nas else {
+            bail!("Expected security protected message, got {nas:?}")
+        };
+        let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationAccept(message)) = *message else {
+            bail!("Expected security protected registration accept")
+        };
+        let Some(guti_ie) = message.fg_guti else {
+            bail!("Expected GUTI in registration accept")
+        };
+        let guti = &guti_ie.value[1..11];
+        info!(&self.logger, "UE was assigned GUTI {:02x?}", guti);
+        self.use_guti(guti.try_into().unwrap());
+
         let nas_registration_complete = build_nas::registration_complete()?;
         info!(&self.logger, "NAS Registration Complete >>");
         self.send_nas(nas_registration_complete).await
@@ -231,6 +245,7 @@ impl<'a> MockUe<'a> {
 
     pub async fn send_nas_deregistration_request(&mut self) -> Result<()> {
         let nas_deregistration_request = build_nas::deregistration_request()?;
+        self.guti = None;
         info!(&self.logger, "NAS deregistration request >>");
         self.send_nas(nas_deregistration_request).await
     }
