@@ -118,9 +118,8 @@ impl<'a, A: HandlerApi> InitialAccessProcedure<'a, A> {
         auth_params: &SubscriberAuthParams,
     ) -> Result<()> {
         for _ in 0..2 {
-            match self.perform_nas_auth(auth_params).await? {
+            match self.perform_nas_auth(imsi, auth_params).await? {
                 NasAuthOutcome::Kseaf(kseaf) => {
-                    self.inc_subscriber_sqn(&imsi).await?;
                     self.ue.kamf = security::derive_kamf(&kseaf, imsi.as_bytes());
                     return Ok(());
                 }
@@ -136,8 +135,10 @@ impl<'a, A: HandlerApi> InitialAccessProcedure<'a, A> {
     // Returns Ok(kseaf) on success, Ok(None) on synch failure, and Err for anything else.
     async fn perform_nas_auth(
         &mut self,
+        imsi: &String,
         auth_params: &SubscriberAuthParams,
     ) -> Result<NasAuthOutcome> {
+        self.inc_subscriber_sqn(&imsi).await?;
         let challenge = self.generate_challenge(auth_params);
 
         // println!("Challenge generated:");
@@ -206,7 +207,7 @@ impl<'a, A: HandlerApi> InitialAccessProcedure<'a, A> {
             rand,
         ) {
             Ok(new_sqn) => {
-                info!(self.logger, "Resynchronized SQN");
+                info!(self.logger, "Resynchronized SQN to {:02x?}", new_sqn);
                 // println!("sqn-ms:    {:x?}", new_sqn);
                 Ok(new_sqn)
             }
