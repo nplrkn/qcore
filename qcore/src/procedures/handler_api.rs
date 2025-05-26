@@ -13,9 +13,12 @@ use xxap::{GtpTunnel, Indication, Procedure, RequestError};
 pub trait HandlerApi: Send + Sync + Clone + 'static {
     fn config(&self) -> &Config;
 
+    // Returns the K, OPC and SQN, and increments the SQN.
+    // The returned SQN is the one _before_ the increment.  This means that
+    // resync_subscriber_sqn() followed by lookup_subscriber_creds_and_inc_sqn()
+    // returns the SQN supplied by the UE for the next challenge.
     async fn lookup_subscriber_creds_and_inc_sqn(&self, imsi: &str)
     -> Option<SubscriberAuthParams>;
-    //async fn inc_subscriber_sqn(&self, imsi: &str) -> Result<()>;
     async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
 
     async fn lookup_nas_context(&self, tmsi: &Tmsi) -> Option<NasContext>;

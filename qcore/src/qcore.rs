@@ -133,8 +133,9 @@ impl HandlerApi for QCore {
         imsi: &str,
     ) -> Option<SubscriberAuthParams> {
         self.sub_db.lock().await.get_mut(imsi).map(|entry| {
+            let pre_increment = entry.clone();
             entry.inc_sqn();
-            entry.clone()
+            pre_increment
         })
     }
 
