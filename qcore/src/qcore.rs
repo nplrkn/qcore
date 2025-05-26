@@ -1,5 +1,7 @@
+use crate::data::NasContext;
 use crate::f1ap::{F1AP_BIND_PORT, F1AP_SCTP_PPID};
 use crate::procedures::{F1apHandler, UeMessageHandler};
+use crate::protocols::nas::Tmsi;
 use crate::userplane::PacketProcessor;
 use crate::{Config, HandlerApi, SubscriberAuthParams, SubscriberDb, UserplaneSession};
 use anyhow::{Result, anyhow, bail};
@@ -136,15 +138,6 @@ impl HandlerApi for QCore {
         })
     }
 
-    // async fn inc_subscriber_sqn(&self, imsi: &str) -> Result<()> {
-    //     self.sub_db
-    //         .lock()
-    //         .await
-    //         .get_mut(imsi)
-    //         .ok_or(anyhow!("IMSI not found"))
-    //         .map(|entry| entry.inc_sqn())
-    // }
-
     async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()> {
         self.sub_db
             .lock()
@@ -154,9 +147,11 @@ impl HandlerApi for QCore {
             .map(|entry| entry.sqn = sqn)
     }
 
-    // async fn lookup_nas_context(&self, tmsi: &str) -> Result<()> {
-    //     todo!()
-    // }
+    async fn lookup_nas_context(&self, _tmsi: &Tmsi) -> Option<NasContext> {
+        // TODO
+        None
+    }
+
     // async fn store_nas_context(&self, tmsi: &str, v: ()) {
     //     todo!()
     // }

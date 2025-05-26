@@ -46,9 +46,10 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     }
 
     async fn accept_registration(&mut self) -> Result<()> {
+        // TODO: generate TMSI here
         let r = crate::nas::build::registration_accept(
             self.config().sst,
-            &self.config().plmn,
+            &self.config().plmn, // TODO: provide self.guti() -> Guti
             &self.config().amf_ids,
             &self.ue.tmsi,
         );
@@ -79,18 +80,11 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
             }
 
             RegistrationType::Guti(tmsi) => {
-                if self
-                    .restore_existing_nas_security_context(&tmsi)
+                self.restore_existing_nas_security_context(&tmsi)
                     .await
-                    .map_err(|_e| 0)?
+                    .map_err(|_e| FGMM_CAUSE_IMPLICITLY_DEREGISTERED)?;
                 {
                     info!(self.logger, "Register TMSI {:02x?}", tmsi.0);
-                } else {
-                    warn!(
-                        self.logger,
-                        "Unknown TMSI {:02x?} tried to register", tmsi.0
-                    );
-                    return Err(FGMM_CAUSE_IMPLICITLY_DEREGISTERED);
                 }
             }
         };
@@ -214,9 +208,14 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         self.check_nas_security_mode_complete(rsp)
     }
 
-    async fn restore_existing_nas_security_context(&mut self, _tmsi: &Tmsi) -> Result<bool> {
-        // TODO
-        Ok(false)
+    async fn restore_existing_nas_security_context(&mut self, tmsi: &Tmsi) -> Result<()> {
+        match self.lookup_nas_context(tmsi).await {
+            Some(c) => {
+                self.ue.nas = c;
+                Ok(())
+            }
+            None => bail!("Unknown TMSI"),
+        }
     }
 
     async fn activate_rrc_security(&mut self, uplink_nas_count: u32) -> Result<()> {

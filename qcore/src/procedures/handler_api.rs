@@ -1,4 +1,6 @@
 use crate::SubscriberAuthParams;
+use crate::data::NasContext;
+use crate::protocols::nas::Tmsi;
 use crate::{Config, UserplaneSession};
 use anyhow::Result;
 use async_trait::async_trait;
@@ -16,7 +18,7 @@ pub trait HandlerApi: Send + Sync + Clone + 'static {
     //async fn inc_subscriber_sqn(&self, imsi: &str) -> Result<()>;
     async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
 
-    // async fn lookup_nas_context(&self, tmsi: &str) -> Result<()>;
+    async fn lookup_nas_context(&self, tmsi: &Tmsi) -> Option<NasContext>;
     // async fn store_nas_context(&self, tmsi: &str, v: ());
 
     fn spawn_ue_message_handler(&self) -> u32;

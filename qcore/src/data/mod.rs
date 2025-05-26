@@ -7,6 +7,7 @@ mod ue_context;
 mod userplane_session;
 
 pub use config::*;
+pub use nas_context::*;
 pub use pdu_session::*;
 pub use subscriber::*;
 pub use ue_context::*;

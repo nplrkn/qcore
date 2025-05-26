@@ -8,6 +8,7 @@ In progress
    -  test successful GUTI registration with real UE
    -  use new newtypes like AmfIds and TMSI everywhere instead of .0
 -  ASN.1 decode failed - Error { cause: Generic, msg: "Extended enum not implemented", context: ["CauseRadioNetwork", "Cause", "UeContextReleaseRequest", "InitiatingMessage", "F1apPdu"] }.  Wireshark: cause = radioNetwork / rl-failure-others (12).
+- Regression test using real AUTS calculation (to catch SQN handling changes).
  
 Performance
 - iperf framework
