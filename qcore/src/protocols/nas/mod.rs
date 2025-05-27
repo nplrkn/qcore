@@ -7,6 +7,7 @@ pub mod parse;
 // TS24.501, Table 9.11.3.2.1
 pub const FGMM_CAUSE_ILLEGAL_UE: u8 = 0b00000011;
 pub const FGMM_CAUSE_IMPLICITLY_DEREGISTERED: u8 = 0b00001010;
+#[allow(dead_code)]
 pub const FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED: u8 = 0b00001001;
 #[allow(dead_code)]
 pub const FGMM_CAUSE_PLMN_NOT_ALLOWED: u8 = 0b00001011;

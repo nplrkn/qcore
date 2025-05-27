@@ -5,8 +5,8 @@ use crate::SubscriberAuthParams;
 use crate::expect_nas;
 use crate::nas::{
     FGMM_CAUSE_ILLEGAL_UE, FGMM_CAUSE_IMPLICITLY_DEREGISTERED,
-    FGMM_CAUSE_SEMANTICALLY_INCORRECT_MESSAGE, FGMM_CAUSE_SYNCH_FAILURE,
-    FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED, Imsi, MobileIdentity, Tmsi,
+    FGMM_CAUSE_SEMANTICALLY_INCORRECT_MESSAGE, FGMM_CAUSE_SYNCH_FAILURE, Imsi, MobileIdentity,
+    Tmsi,
 };
 use anyhow::{Result, anyhow, bail};
 use derive_deref::{Deref, DerefMut};
@@ -69,6 +69,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
 
     async fn reject_registration(&mut self, cause: u8) -> Result<()> {
         let reject = crate::nas::build::registration_reject(cause);
+        self.log_message("<< NAS Registration Reject");
         self.nas_indication(reject).await
     }
 
@@ -145,7 +146,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     }
 
     async fn authenticate_ue(&mut self, imsi: &String) -> Result<()> {
-        for _ in 0..2 {
+        for i in 0..3 {
             match self.perform_nas_auth(imsi).await? {
                 NasAuthOutcome::Kseaf(kseaf) => {
                     self.ue.kamf = security::derive_kamf(&kseaf, imsi.as_bytes());
@@ -154,9 +155,30 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                 NasAuthOutcome::ResyncSqn(sqn) => {
                     debug!(self.logger, "Resynchronize SQN to {:02x?}", sqn);
                     self.resync_subscriber_sqn(&imsi, sqn).await?;
-                }
+
+                    match i {
+                        0 => println!("First loop - no SQN increment"),
+                        1 => {
+                            println!("Second loop - SQN incrmement");
+                            let _ = self
+                                .lookup_subscriber_creds_and_inc_sqn(&imsi)
+                                .await
+                                .unwrap();
+                        }
+                        _ => {
+                            println!("Third loop - double SQN incrmement");
+                            let _ = self
+                                .lookup_subscriber_creds_and_inc_sqn(&imsi)
+                                .await
+                                .unwrap();
+                            let _ = self
+                                .lookup_subscriber_creds_and_inc_sqn(&imsi)
+                                .await
+                                .unwrap();
+                        }
+                    }
+                } // Getting here means we have resynchronized the SQN
             }
-            // Getting here means we have resynchronized the SQN
         }
         bail!("Successive synch failure during NAS authentication")
     }
@@ -168,18 +190,16 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
             .await
             .ok_or_else(|| anyhow!("Unknown IMSI"))?;
 
-        debug!(self.logger, "SQN for challenge {:02x?}", auth_params.sqn);
         let challenge = self.generate_challenge(&auth_params);
 
-        // println!("Challenge generated:");
-        // println!("SQN:      {:02x?}", auth_params.sqn);
-        // println!("K:        {:02x?}", sim.ki);
-        // println!("OPC:      {:02x?}", sim.opc);
-        // println!("rand:     {:02x?}", challenge.rand);
-        // println!("autn:     {:02x?}", challenge.autn);
-        // println!("xresstar: {:02x?}", challenge.xres_star);
-        // println!("kseaf:    {:02x?}", challenge.kseaf);
-        // println!("ak:       {:02x?}", challenge.ak);
+        println!("Challenge generated:");
+        println!("SQN:      {:02x?}", auth_params.sqn);
+        println!("K:        {:02x?}", auth_params.sim_creds.ki);
+        println!("OPC:      {:02x?}", auth_params.sim_creds.opc);
+        println!("rand:     {:02x?}", challenge.rand);
+        println!("autn:     {:02x?}", challenge.autn);
+        println!("xresstar: {:02x?}", challenge.xres_star);
+        println!("kseaf:    {:02x?}", challenge.kseaf);
 
         let r = crate::nas::build::authentication_request(&challenge.rand, &challenge.autn);
         self.log_message("<< NasAuthenticationRequest");
@@ -239,8 +259,8 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                 "Bad authentication failure parameter length on NAS authentication synch failure",
             );
         };
-        // println!("AUTS calculation inputs:");
-        // println!("auts:     {:x?}", auts);
+        println!("AUTS calculation inputs:");
+        println!("auts:     {:x?}", auts);
 
         resync_sqn(&auts, &sim_creds.ki, &sim_creds.opc, rand)
             .map_err(|_| anyhow!("Invalid AUTS signature on NAS authentication synch failure"))
@@ -302,7 +322,9 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                             amf_ids.0,
                             self.config().amf_ids
                         );
-                        return Err(FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED);
+                        // FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED - did not trigger Motorola to retry with SUPI
+                        // FGMM_CAUSE_IMPLICITLY_DEREGISTERED
+                        return Err(FGMM_CAUSE_IMPLICITLY_DEREGISTERED);
                     }
                     (plmn.0, RegistrationType::Guti(tmsi))
                 }
