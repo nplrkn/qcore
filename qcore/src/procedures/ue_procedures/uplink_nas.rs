@@ -24,7 +24,18 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
     pub async fn run(mut self, mut nas_bytes: Vec<u8>) -> Result<()> {
         patch_nas_for_oai_deregistration_security_header(&mut nas_bytes, self.logger);
 
-        let message = self.ue.nas.decode(&nas_bytes)?;
+        // Strip off the security header if there is one.
+        let (message, security_header) = if !self.ue.nas.security_activated() {
+            // No NAS security context yet - so the options are
+            // - a plain SUPI registration -  allows us to create a new security context
+            // - an integrity protected message with a GUTI that allow - allows us to retrieve an existing security context.
+            self.ue.nas.decode_with_security_header(&nas_bytes)?
+        } else {
+            // Security context exists
+            (self.ue.nas.decode(&nas_bytes)?, None)
+        };
+
+        // The outer message must now be a MM message.
         let Nas5gsMessage::Gmm(_, mm_message) = message else {
             warn!(self.logger, "Unhandled NAS UL message {:?}", message);
             return Ok(());
@@ -58,7 +69,9 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
                 // TODO: PduSessionReleaseRequest(NasPduSessionReleaseRequest)
             }
             Nas5gmmMessage::RegistrationRequest(r) => {
-                RegistrationProcedure::new(self.0).run(r).await?;
+                RegistrationProcedure::new(self.0)
+                    .run(r, security_header)
+                    .await?;
             }
             Nas5gmmMessage::DeregistrationRequestFromUe(r) => {
                 DeregistrationProcedure::new(self.0).run(r).await?;

@@ -4,19 +4,22 @@ use crate::SimCreds;
 use crate::SubscriberAuthParams;
 use crate::expect_nas;
 use crate::nas::{
-    FGMM_CAUSE_ILLEGAL_UE, FGMM_CAUSE_IMPLICITLY_DEREGISTERED, FGMM_CAUSE_SYNCH_FAILURE,
+    FGMM_CAUSE_ILLEGAL_UE, FGMM_CAUSE_IMPLICITLY_DEREGISTERED,
+    FGMM_CAUSE_SEMANTICALLY_INCORRECT_MESSAGE, FGMM_CAUSE_SYNCH_FAILURE,
     FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED, Imsi, MobileIdentity, Tmsi,
 };
 use anyhow::{Result, anyhow, bail};
 use derive_deref::{Deref, DerefMut};
 use f1ap::SrbId;
+use oxirush_nas::Nas5gsSecurityHeaderType;
 use oxirush_nas::messages::{
-    NasAuthenticationFailure, NasAuthenticationResponse, NasRegistrationRequest,
-    NasSecurityModeComplete,
+    Nas5gsSecurityHeader, NasAuthenticationFailure, NasAuthenticationResponse,
+    NasRegistrationRequest, NasSecurityModeComplete,
 };
 use oxirush_nas::{Nas5gmmMessage, Nas5gsMessage, NasUeSecurityCapability};
 use security::{Challenge, resync_sqn};
 use slog::debug;
+use slog::error;
 use slog::{info, warn};
 
 enum RegistrationType {
@@ -37,9 +40,13 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         RegistrationProcedure(inner)
     }
 
-    pub async fn run(mut self, r: NasRegistrationRequest) -> Result<()> {
+    pub async fn run(
+        mut self,
+        r: NasRegistrationRequest,
+        security_header: Option<Nas5gsSecurityHeader>,
+    ) -> Result<()> {
         self.log_message(">> RegistrationRequest");
-        match self.handle_registration(r).await {
+        match self.handle_registration(r, security_header).await {
             Ok(_) => self.accept_registration().await,
             Err(cause) => self.reject_registration(cause).await,
         }
@@ -68,6 +75,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     async fn handle_registration(
         &mut self,
         registration_request: NasRegistrationRequest,
+        security_header: Option<Nas5gsSecurityHeader>,
     ) -> Result<(), u8> {
         match self.check_registration_request(registration_request)? {
             RegistrationType::Supi(Imsi(imsi), ue_security_capability) => {
@@ -86,12 +94,19 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
             }
 
             RegistrationType::Guti(tmsi) => {
+                // TODO move to subfunction
                 info!(self.logger, "Register TMSI {:02x?}", tmsi.0);
+
                 if let Some(existing_tmsi) = &self.ue.tmsi {
                     info!(
                         self.logger,
                         "UE reregistration when security context is already in place"
                     );
+                    if !self.ue.nas.security_activated() {
+                        // This is a logic error.  The TMSI should have the same lifetime as the security context.
+                        error!(self.logger, "TMSI allocated but no security context exists");
+                        return Err(0);
+                    }
                     if *existing_tmsi == tmsi {
                         // No need to activate either NAS or RRC security.
                         return Ok(());
@@ -101,12 +116,26 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                     }
                 }
 
+                let security_type = security_header
+                    .map(|hdr| hdr.security_header_type)
+                    .unwrap_or(Nas5gsSecurityHeaderType::PlainNasMessage);
+
+                if security_type != Nas5gsSecurityHeaderType::IntegrityProtected {
+                    warn!(
+                        self.logger,
+                        "GUTI registration with wrong security protection {:?}", security_type
+                    );
+                    return Err(FGMM_CAUSE_SEMANTICALLY_INCORRECT_MESSAGE);
+                }
+
                 self.restore_existing_nas_security_context(&tmsi)
                     .await
                     .map_err(|e| {
                         warn!(self.logger, "GUTI registration failure - {e}");
                         FGMM_CAUSE_IMPLICITLY_DEREGISTERED
                     })?;
+
+                // TODO: check integrity on the message now we have recovered the IK
             }
         };
 

@@ -11,6 +11,7 @@ pub const FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED: u8 = 0b00001001;
 #[allow(dead_code)]
 pub const FGMM_CAUSE_PLMN_NOT_ALLOWED: u8 = 0b00001011;
 pub const FGMM_CAUSE_SYNCH_FAILURE: u8 = 0b0010101;
+pub const FGMM_CAUSE_SEMANTICALLY_INCORRECT_MESSAGE: u8 = 0b01011111;
 
 #[derive(Deref, Debug)]
 pub struct Imsi(pub String);

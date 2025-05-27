@@ -1,6 +1,8 @@
 use super::security_context::SecurityContext;
-use anyhow::{Result, anyhow};
-use oxirush_nas::{Nas5gsMessage, decode_nas_5gs_message, encode_nas_5gs_message};
+use anyhow::{Result, anyhow, bail};
+use oxirush_nas::{
+    Nas5gsMessage, decode_nas_5gs_message, encode_nas_5gs_message, messages::Nas5gsSecurityHeader,
+};
 
 #[derive(Debug, Default)]
 pub struct NasContext {
@@ -8,6 +10,10 @@ pub struct NasContext {
 }
 
 impl NasContext {
+    pub fn security_activated(&self) -> bool {
+        self.security_context.is_some()
+    }
+
     pub fn ul_nas_count(&self) -> u32 {
         self.security_context
             .as_ref()
@@ -22,6 +28,21 @@ impl NasContext {
             decode_nas_5gs_message(data)
                 .map_err(|e| anyhow!("NAS decode error - {e} - message bytes: {:?}", data))
         }
+    }
+
+    // This is used for situations where the security context might need to be retrieved using a GUTI
+    // (registration, service request).
+    pub fn decode_with_security_header(
+        &mut self,
+        data: &[u8],
+    ) -> Result<(Nas5gsMessage, Option<Nas5gsSecurityHeader>)> {
+        let nas_message = decode_nas_5gs_message(data)
+            .map_err(|e| anyhow!("NAS decode error - {e} - message bytes: {:?}", data))?;
+        Ok(match nas_message {
+            Nas5gsMessage::Gmm(_, _) => (nas_message, None),
+            Nas5gsMessage::SecurityProtected(hdr, bx) => (*bx, Some(hdr)),
+            Nas5gsMessage::Gsm(_, _) => bail!("Unexpected Nas SM message {:?} ", nas_message),
+        })
     }
 
     pub fn enable_security(&mut self, knasint: [u8; 16]) {
