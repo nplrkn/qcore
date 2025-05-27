@@ -56,7 +56,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
 
     async fn accept_registration(&mut self) -> Result<()> {
         let tmsi = Tmsi(rand::random()); // TODO: 0xffffffff is not a valid TMSI (TS23.003, 2.4))
-        debug!(self.logger, "Assigned TMSI {}", tmsi);
+        debug!(self.logger, "Assigned {}", tmsi);
         let r = crate::nas::build::registration_accept(
             self.config().sst,
             &self.config().plmn,
@@ -101,7 +101,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
 
             RegistrationType::Guti(tmsi) => {
                 // TODO move to subfunction
-                info!(self.logger, "Register TMSI {}", tmsi);
+                info!(self.logger, "Register {}", tmsi);
 
                 if let Some(existing_tmsi) = &self.ue.tmsi {
                     info!(

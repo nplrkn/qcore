@@ -1,6 +1,5 @@
 In progress
 -  GUTI registration
-   -  impl display for GUTI / TMSI for INFO tracing (like "imsi-20893222" not [02, f8, 39...])
    -  case where GUTI is used with new F1AP ID while old message handler is still running
    -  debug wireshark issue with MAC on registration accept
    -  SecurityContext should not call decode_nas_5gs_message()
