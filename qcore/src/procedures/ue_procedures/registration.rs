@@ -161,13 +161,13 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
 
                     // TODO - cleanup
                     let _ = self
-                            .lookup_subscriber_creds_and_inc_sqn(&imsi)
-                            .await
-                            .unwrap();
+                        .lookup_subscriber_creds_and_inc_sqn(&imsi)
+                        .await
+                        .unwrap();
                     let _ = self
-                            .lookup_subscriber_creds_and_inc_sqn(&imsi)
-                            .await
-                            .unwrap();
+                        .lookup_subscriber_creds_and_inc_sqn(&imsi)
+                        .await
+                        .unwrap();
                 } // Getting here means we have resynchronized the SQN
             }
         }
@@ -250,8 +250,8 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                 "Bad authentication failure parameter length on NAS authentication synch failure",
             );
         };
-        println!("AUTS calculation inputs:");
-        println!("auts:     {:x?}", auts);
+        // println!("AUTS calculation inputs:");
+        // println!("auts:     {:x?}", auts);
 
         resync_sqn(&auts, &sim_creds.ki, &sim_creds.opc, rand)
             .map_err(|_| anyhow!("Invalid AUTS signature on NAS authentication synch failure"))

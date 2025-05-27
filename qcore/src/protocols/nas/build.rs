@@ -5,9 +5,9 @@ use oxirush_nas::{
     Nas5gmmMessage, Nas5gmmMessageType, Nas5gsMessage, Nas5gsmMessage, Nas5gsmMessageType, NasAbba,
     NasAdditionalFGSecurityInformation, NasAuthenticationParameterAutn,
     NasAuthenticationParameterRand, NasDnn, NasFGmmCause, NasFGsMobileIdentity,
-    NasFGsRegistrationResult, NasKeySetIdentifier, NasNssai, NasPayloadContainer,
-    NasPayloadContainerType, NasPduAddress, NasPduSessionType, NasQosRules, NasSecurityAlgorithms,
-    NasSessionAmbr, NasUeSecurityCapability, encode_nas_5gs_message,
+    NasFGsNetworkFeatureSupport, NasFGsRegistrationResult, NasKeySetIdentifier, NasNssai,
+    NasPayloadContainer, NasPayloadContainerType, NasPduAddress, NasPduSessionType, NasQosRules,
+    NasSecurityAlgorithms, NasSessionAmbr, NasUeSecurityCapability, encode_nas_5gs_message,
     messages::{
         NasAuthenticationRequest, NasDlNasTransport, NasPduSessionEstablishmentAccept,
         NasRegistrationAccept, NasRegistrationReject, NasSecurityModeCommand,
@@ -76,11 +76,15 @@ pub fn registration_accept(
     let nas_allowed_nssais = vec![0x01, allowed_sst];
     let fg_guti = Some(nas_mobile_identity_guti(plmn, amf_ids, tmsi));
 
+    // Fake up IMS support - necessary to keep certain UEs registered.
+    let fgs_network_feature_support = Some(NasFGsNetworkFeatureSupport::new(vec![0b00000001]));
+
     Nas5gsMessage::new_5gmm(
         Nas5gmmMessageType::RegistrationAccept,
         Nas5gmmMessage::RegistrationAccept(NasRegistrationAccept {
             fg_guti,
             allowed_nssai: Some(NasNssai::new(nas_allowed_nssais)),
+            fgs_network_feature_support,
             ..NasRegistrationAccept::new(NasFGsRegistrationResult::new(
                 vec![0b00_0_0_0_001], // no emergency, no slice-specific auth, no SMS, 3GPP access
             ))
