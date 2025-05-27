@@ -157,9 +157,8 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                     self.resync_subscriber_sqn(&imsi, sqn).await?;
 
                     match i {
-                        0 => println!("First loop - no SQN increment"),
-                        1 => {
-                            println!("Second loop - SQN incrmement");
+                        0 => {
+                            println!("First loop - SQN incrmement");
                             let _ = self
                                 .lookup_subscriber_creds_and_inc_sqn(&imsi)
                                 .await
