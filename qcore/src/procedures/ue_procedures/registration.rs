@@ -8,6 +8,7 @@ use crate::nas::{
     FGMM_CAUSE_SEMANTICALLY_INCORRECT_MESSAGE, FGMM_CAUSE_SYNCH_FAILURE, Imsi, MobileIdentity,
     Tmsi,
 };
+use crate::protocols::nas::FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED;
 use anyhow::{Result, anyhow, bail};
 use derive_deref::{Deref, DerefMut};
 use f1ap::SrbId;
@@ -133,7 +134,8 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                     .await
                     .map_err(|e| {
                         warn!(self.logger, "GUTI registration failure - {e}");
-                        FGMM_CAUSE_IMPLICITLY_DEREGISTERED
+                        //FGMM_CAUSE_IMPLICITLY_DEREGISTERED
+                        FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED
                     })?;
 
                 // TODO: check integrity on the message now we have recovered the IK
@@ -303,7 +305,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
             match crate::nas::parse::fgs_mobile_identity(&registration_request.fgs_mobile_identity)
                 .map_err(|e| {
                     warn!(self.logger, "{e}");
-                    0
+                    FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED
                 })? {
                 MobileIdentity::Guti(plmn, amf_ids, tmsi) => {
                     if amf_ids.0 != self.config().amf_ids {
@@ -315,7 +317,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                         );
                         // FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED - did not trigger Motorola to retry with SUPI
                         // FGMM_CAUSE_IMPLICITLY_DEREGISTERED
-                        return Err(FGMM_CAUSE_IMPLICITLY_DEREGISTERED);
+                        return Err(FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED);
                     }
                     (plmn.0, RegistrationType::Guti(tmsi))
                 }

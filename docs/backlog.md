@@ -1,5 +1,4 @@
 In progress
--  fix SQN resync with Samsung
 -  GUTI registration
    -  debug wireshark issue with MAC on registration accept
    -  SecurityContext should not call decode_nas_5gs_message()
@@ -10,9 +9,14 @@ In progress
    -  use new newtypes like AmfIds and TMSI everywhere instead of .0
    -  impl display for GUTI / TMSI for INFO tracing (like "imsi-20893222" not [02, f8, 39...])
 -  ASN.1 decode failed - Error { cause: Generic, msg: "Extended enum not implemented", context: ["CauseRadioNetwork", "Cause", "UeContextReleaseRequest", "InitiatingMessage", "F1apPdu"] }.  Wireshark: cause = radioNetwork / rl-failure-others (12).
--  Regression test using real AUTS calculation (to catch SQN handling changes).
--  Reduce occurance of heatmap spam log
+-  Reduce occurrence of heatmap log spam
 -  set SD to 0, not omit it
+-  NAS library crashes with unknown IEI (max number of packet filter??) on PDU session establishment (?) - see ies-moto.pcap 
+-  Regression test using real AUTS calculation (to catch SQN handling changes).
+-  on receipt of a session establishment request with DNN="ims"
+   -  don't send session establishment reject
+   -  instead send 5GMM Status, cause = 5GMM "DNN not supported or not subscriber in the slice"
+   -  this then provokes a new session establishment request on UL NAS transport with DNN=internet  
  
 Performance
 - iperf framework
