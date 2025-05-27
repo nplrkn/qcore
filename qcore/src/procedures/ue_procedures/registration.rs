@@ -146,7 +146,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     }
 
     async fn authenticate_ue(&mut self, imsi: &String) -> Result<()> {
-        for i in 0..3 {
+        for _ in 0..2 {
             match self.perform_nas_auth(imsi).await? {
                 NasAuthOutcome::Kseaf(kseaf) => {
                     self.ue.kamf = security::derive_kamf(&kseaf, imsi.as_bytes());
@@ -156,26 +156,18 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                     debug!(self.logger, "Resynchronize SQN to {:02x?}", sqn);
                     self.resync_subscriber_sqn(&imsi, sqn).await?;
 
-                    match i {
-                        0 => {
-                            println!("First loop - SQN incrmement");
-                            let _ = self
-                                .lookup_subscriber_creds_and_inc_sqn(&imsi)
-                                .await
-                                .unwrap();
-                        }
-                        _ => {
-                            println!("Third loop - double SQN incrmement");
-                            let _ = self
-                                .lookup_subscriber_creds_and_inc_sqn(&imsi)
-                                .await
-                                .unwrap();
-                            let _ = self
-                                .lookup_subscriber_creds_and_inc_sqn(&imsi)
-                                .await
-                                .unwrap();
-                        }
-                    }
+                    // Testing with Samsung phone - indicates that we need to do a double
+                    // increment after receiving the resync SQN.
+
+                    // TODO - cleanup
+                    let _ = self
+                            .lookup_subscriber_creds_and_inc_sqn(&imsi)
+                            .await
+                            .unwrap();
+                    let _ = self
+                            .lookup_subscriber_creds_and_inc_sqn(&imsi)
+                            .await
+                            .unwrap();
                 } // Getting here means we have resynchronized the SQN
             }
         }
@@ -191,14 +183,14 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
 
         let challenge = self.generate_challenge(&auth_params);
 
-        println!("Challenge generated:");
+        // println!("Challenge generated:");
         println!("SQN:      {:02x?}", auth_params.sqn);
-        println!("K:        {:02x?}", auth_params.sim_creds.ki);
-        println!("OPC:      {:02x?}", auth_params.sim_creds.opc);
-        println!("rand:     {:02x?}", challenge.rand);
-        println!("autn:     {:02x?}", challenge.autn);
-        println!("xresstar: {:02x?}", challenge.xres_star);
-        println!("kseaf:    {:02x?}", challenge.kseaf);
+        // println!("K:        {:02x?}", auth_params.sim_creds.ki);
+        // println!("OPC:      {:02x?}", auth_params.sim_creds.opc);
+        // println!("rand:     {:02x?}", challenge.rand);
+        // println!("autn:     {:02x?}", challenge.autn);
+        // println!("xresstar: {:02x?}", challenge.xres_star);
+        // println!("kseaf:    {:02x?}", challenge.kseaf);
 
         let r = crate::nas::build::authentication_request(&challenge.rand, &challenge.autn);
         self.log_message("<< NasAuthenticationRequest");

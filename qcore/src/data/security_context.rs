@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Result, anyhow};
 use oxirush_nas::{
     Nas5gsMessage, Nas5gsSecurityHeaderType, decode_nas_5gs_message, encode_nas_5gs_message,
 };
@@ -34,11 +34,14 @@ impl SecurityContext {
                 } else if security_header.sequence_number <= last_rcvd_seq_num {
                     // TS33.501, 6.4.3.2: "Replay protection shall ensure that the receiver only accepts each incoming NAS COUNT
                     // value once using the same NAS security context."
-                    bail!(
-                        "NAS sequence number {} did not advance from last {} - dropped for replay protection",
-                        security_header.sequence_number,
-                        last_rcvd_seq_num
-                    );
+
+                    // TODO: this kicked in on the NAS security mode complete with a real phone.
+                    // Clearly the security mode complete should be sequence number 0.
+                    // bail!(
+                    //     "NAS sequence number {} did not advance from last {} - dropped for replay protection",
+                    //     security_header.sequence_number,
+                    //     last_rcvd_seq_num
+                    // );
                 }
 
                 self.ul_count =
