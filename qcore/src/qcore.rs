@@ -65,6 +65,12 @@ impl QCore {
             &config.tun_interface_name,
             &logger,
         )?;
+        info!(
+            &logger,
+            "Serving network name {}", config.serving_network_name
+        );
+        info!(&logger, "SST {}", config.sst);
+
         let packet_processor =
             PacketProcessor::new(config.ue_subnet.clone(), &mut ebpf, &logger).await?;
 

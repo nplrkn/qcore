@@ -1,4 +1,5 @@
 In progress
+-  allow SST / SD to be configured
 -  GUTI registration
    -  debug wireshark issue with MAC on registration accept
    -  SecurityContext should not call decode_nas_5gs_message()

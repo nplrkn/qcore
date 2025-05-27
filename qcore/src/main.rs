@@ -53,6 +53,10 @@ struct Args {
     /// SIM credentials file to load.
     #[arg(long, default_value = "./sims.toml")]
     sim_cred_file: String,
+
+    /// SST to support.  (SD is always set to 0.)
+    #[arg(long, default_value_t = 1)]
+    sst: u8,
 }
 
 #[async_std::main]
@@ -64,7 +68,6 @@ async fn main() -> Result<()> {
     let (plmn, serving_network_name) = convert_mcc_mnc(&args.mcc, &args.mnc).unwrap();
     check_ue_subnet(&args.ue_subnet)?;
     check_local_ip(&args.local_ip)?;
-    slog::info!(&logger, "Serving network name {}", serving_network_name);
 
     let sub_db = SubscriberDb::new_from_sim_file(&args.sim_cred_file, &logger)?;
 
@@ -76,7 +79,7 @@ async fn main() -> Result<()> {
             name: Some("QCore".to_string()),
             serving_network_name,
             skip_ue_authentication_check: false,
-            sst: 1,
+            sst: args.sst,
             f1u_interface_name: args.f1u_interface_name,
             n6_interface_name: args.n6_interface_name,
             tun_interface_name: args.tun_interface_name,

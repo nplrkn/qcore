@@ -73,7 +73,13 @@ pub fn registration_accept(
 ) -> Nas5gsMessage {
     // TS24.501, 9.11.3.37 defines as a list of NSSAI length and value from TS24.501, 9.11.2.8.
     // This is a single NSSAI with an SST and no SSD.
-    let nas_allowed_nssais = vec![0x01, allowed_sst];
+    let nas_allowed_nssais = vec![
+        0b00000100, // SST and SD
+        allowed_sst,
+        0x00, // 24 bit SD value
+        0x00,
+        0x00,
+    ];
     let fg_guti = Some(nas_mobile_identity_guti(plmn, amf_ids, tmsi));
 
     // Fake up IMS support - necessary to keep certain UEs registered.

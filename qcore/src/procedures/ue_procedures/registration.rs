@@ -4,9 +4,8 @@ use crate::SimCreds;
 use crate::SubscriberAuthParams;
 use crate::expect_nas;
 use crate::nas::{
-    FGMM_CAUSE_ILLEGAL_UE, FGMM_CAUSE_IMPLICITLY_DEREGISTERED,
-    FGMM_CAUSE_SEMANTICALLY_INCORRECT_MESSAGE, FGMM_CAUSE_SYNCH_FAILURE, Imsi, MobileIdentity,
-    Tmsi,
+    FGMM_CAUSE_ILLEGAL_UE, FGMM_CAUSE_SEMANTICALLY_INCORRECT_MESSAGE, FGMM_CAUSE_SYNCH_FAILURE,
+    Imsi, MobileIdentity, Tmsi,
 };
 use crate::protocols::nas::FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED;
 use anyhow::{Result, anyhow, bail};
@@ -135,7 +134,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                     .map_err(|e| {
                         warn!(self.logger, "GUTI registration failure - {e}");
                         //FGMM_CAUSE_IMPLICITLY_DEREGISTERED
-                        FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED
+                        FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED // seemed to work
                     })?;
 
                 // TODO: check integrity on the message now we have recovered the IK
