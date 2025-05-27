@@ -54,7 +54,8 @@ struct Args {
     #[arg(long, default_value = "./sims.toml")]
     sim_cred_file: String,
 
-    /// SST to support.  (SD is always set to 0.)
+    /// Slice SST to support.  (SD is always set to 0.)  This is signalled as the allowed SST on NAS registration accept
+    /// and Nssai on PDU session establishment accept.
     #[arg(long, default_value_t = 1)]
     sst: u8,
 }

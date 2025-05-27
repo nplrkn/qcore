@@ -7,6 +7,8 @@ use crate::nas::{
     FGMM_CAUSE_ILLEGAL_UE, FGMM_CAUSE_SEMANTICALLY_INCORRECT_MESSAGE, FGMM_CAUSE_SYNCH_FAILURE,
     Imsi, MobileIdentity, Tmsi,
 };
+use crate::protocols::nas::FGMM_CAUSE_IE_NONEXISTENT_OR_NOT_IMPLEMENTED;
+use crate::protocols::nas::FGMM_CAUSE_PLMN_NOT_ALLOWED;
 use crate::protocols::nas::FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED;
 use anyhow::{Result, anyhow, bail};
 use derive_deref::{Deref, DerefMut};
@@ -53,14 +55,15 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     }
 
     async fn accept_registration(&mut self) -> Result<()> {
-        let tmsi: [u8; 4] = rand::random(); // TODO: 0xffffffff is not a valid TMSI (TS23.003, 2.4))
-        self.ue.tmsi = Some(Tmsi(tmsi));
+        let tmsi = Tmsi(rand::random()); // TODO: 0xffffffff is not a valid TMSI (TS23.003, 2.4))
+        debug!(self.logger, "Assigned TMSI {}", tmsi);
         let r = crate::nas::build::registration_accept(
             self.config().sst,
-            &self.config().plmn, // TODO: provide self.guti() -> Guti
+            &self.config().plmn,
             &self.config().amf_ids,
-            &tmsi,
+            &tmsi.0,
         );
+        self.ue.tmsi = Some(tmsi);
         self.log_message("<< NasRegistrationAccept");
         let _rsp = expect_nas!(RegistrationComplete, self.nas_request(r).await?)?;
         self.log_message(">> NasRegistrationComplete");
@@ -78,6 +81,8 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         registration_request: NasRegistrationRequest,
         security_header: Option<Nas5gsSecurityHeader>,
     ) -> Result<(), u8> {
+        let error_cause_code = FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED;
+
         match self.check_registration_request(registration_request)? {
             RegistrationType::Supi(Imsi(imsi), ue_security_capability) => {
                 info!(self.logger, "Register imsi-{imsi}");
@@ -90,13 +95,13 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                     .await
                     .map_err(|e| {
                         warn!(self.logger, "SUPI registration failure - {e}");
-                        0
+                        error_cause_code
                     })?;
             }
 
             RegistrationType::Guti(tmsi) => {
                 // TODO move to subfunction
-                info!(self.logger, "Register TMSI {:02x?}", tmsi.0);
+                info!(self.logger, "Register TMSI {}", tmsi);
 
                 if let Some(existing_tmsi) = &self.ue.tmsi {
                     info!(
@@ -106,14 +111,14 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                     if !self.ue.nas.security_activated() {
                         // This is a logic error.  The TMSI should have the same lifetime as the security context.
                         error!(self.logger, "TMSI allocated but no security context exists");
-                        return Err(0);
+                        return Err(error_cause_code);
                     }
                     if *existing_tmsi == tmsi {
                         // No need to activate either NAS or RRC security.
                         return Ok(());
                     } else {
                         warn!(self.logger, "UE not using TMSI it was given");
-                        return Err(0);
+                        return Err(error_cause_code);
                     }
                 }
 
@@ -133,8 +138,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                     .await
                     .map_err(|e| {
                         warn!(self.logger, "GUTI registration failure - {e}");
-                        //FGMM_CAUSE_IMPLICITLY_DEREGISTERED
-                        FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED // seemed to work
+                        error_cause_code
                     })?;
 
                 // TODO: check integrity on the message now we have recovered the IK
@@ -185,7 +189,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         let challenge = self.generate_challenge(&auth_params);
 
         // println!("Challenge generated:");
-        println!("SQN:      {:02x?}", auth_params.sqn);
+        // println!("SQN:      {:02x?}", auth_params.sqn);
         // println!("K:        {:02x?}", auth_params.sim_creds.ki);
         // println!("OPC:      {:02x?}", auth_params.sim_creds.opc);
         // println!("rand:     {:02x?}", challenge.rand);
@@ -314,8 +318,6 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                             amf_ids.0,
                             self.config().amf_ids
                         );
-                        // FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED - did not trigger Motorola to retry with SUPI
-                        // FGMM_CAUSE_IMPLICITLY_DEREGISTERED
                         return Err(FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED);
                     }
                     (plmn.0, RegistrationType::Guti(tmsi))
@@ -327,7 +329,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                             self.logger,
                             "UE security capability missing from Registration Request"
                         );
-                        return Err(0);
+                        return Err(FGMM_CAUSE_IE_NONEXISTENT_OR_NOT_IMPLEMENTED);
                     };
                     let ue_security_capability = ue_security_capability.to_owned();
                     (plmn.0, RegistrationType::Supi(imsi, ue_security_capability))
@@ -343,7 +345,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                 &plmn,
                 self.config().plmn
             );
-            return Err(0);
+            return Err(FGMM_CAUSE_PLMN_NOT_ALLOWED);
         }
 
         Ok(registration_type)

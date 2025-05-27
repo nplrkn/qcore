@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use derive_deref::Deref;
 use f1ap::PlmnIdentity;
 
@@ -13,12 +15,22 @@ pub const FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED: u8 = 0b00001001;
 pub const FGMM_CAUSE_PLMN_NOT_ALLOWED: u8 = 0b00001011;
 pub const FGMM_CAUSE_SYNCH_FAILURE: u8 = 0b0010101;
 pub const FGMM_CAUSE_SEMANTICALLY_INCORRECT_MESSAGE: u8 = 0b01011111;
+pub const FGMM_CAUSE_IE_NONEXISTENT_OR_NOT_IMPLEMENTED: u8 = 0b01100011;
 
 #[derive(Deref, Debug)]
 pub struct Imsi(pub String);
 
 #[derive(Deref, Debug, Eq, Hash, PartialEq)]
 pub struct Tmsi(pub [u8; 4]);
+impl Display for Tmsi {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "tmsi-{:02x}{:02x}{:02x}{:02x}",
+            self.0[0], self.0[1], self.0[2], self.0[3]
+        )
+    }
+}
 
 #[derive(Deref, Debug)]
 pub struct AmfIds(pub [u8; 3]);

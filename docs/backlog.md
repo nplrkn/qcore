@@ -1,24 +1,23 @@
 In progress
--  allow SST / SD to be configured
 -  GUTI registration
+   -  impl display for GUTI / TMSI for INFO tracing (like "imsi-20893222" not [02, f8, 39...])
+   -  case where GUTI is used with new F1AP ID while old message handler is still running
    -  debug wireshark issue with MAC on registration accept
    -  SecurityContext should not call decode_nas_5gs_message()
-   -  test GUTI registration reject with real UE and see if it reregisters with SUPI
-   -  choose sensible cause codes (not 0) for all registration reject arms
    -  when mapping errors to cause codes, log the error text
    -  test successful GUTI registration with real UE
    -  use new newtypes like AmfIds and TMSI everywhere instead of .0
-   -  impl display for GUTI / TMSI for INFO tracing (like "imsi-20893222" not [02, f8, 39...])
+   -  in case of unknown GUTI, should we do identity request?
 -  ASN.1 decode failed - Error { cause: Generic, msg: "Extended enum not implemented", context: ["CauseRadioNetwork", "Cause", "UeContextReleaseRequest", "InitiatingMessage", "F1apPdu"] }.  Wireshark: cause = radioNetwork / rl-failure-others (12).
 -  Reduce occurrence of heatmap log spam
--  set SD to 0, not omit it
 -  NAS library crashes with unknown IEI (max number of packet filter??) on PDU session establishment (?) - see ies-moto.pcap 
 -  Regression test using real AUTS calculation (to catch SQN handling changes).
 -  on receipt of a session establishment request with DNN="ims"
    -  don't send session establishment reject
    -  instead send 5GMM Status, cause = 5GMM "DNN not supported or not subscriber in the slice"
    -  this then provokes a new session establishment request on UL NAS transport with DNN=internet  
- 
+ - remaining SQN failure - with different SIM, with long SQN (top byte 01 not 00)?
+
 Performance
 - iperf framework
 - Release build perf profiling + tuning
