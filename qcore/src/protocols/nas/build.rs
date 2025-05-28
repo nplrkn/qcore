@@ -1,6 +1,7 @@
 #![allow(clippy::unusual_byte_groupings)]
 use crate::PduSession;
 use anyhow::{Result, bail};
+use f1ap::PlmnIdentity;
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gmmMessageType, Nas5gsMessage, Nas5gsmMessage, Nas5gsmMessageType, NasAbba,
     NasAdditionalFGSecurityInformation, NasAuthenticationParameterAutn,
@@ -15,6 +16,8 @@ use oxirush_nas::{
 };
 use security::NAS_ABBA;
 use std::net::IpAddr;
+
+use super::AmfIds;
 
 pub fn authentication_request(rand: &[u8; 16], autn: &[u8; 16]) -> Nas5gsMessage {
     // "The SEAF shall set the ABBA parameter as defined in Annex A.7.1."
@@ -53,22 +56,22 @@ pub fn security_mode_command(
 }
 
 fn nas_mobile_identity_guti(
-    plmn: &[u8; 3],
-    guami: &[u8; 3],
+    plmn: &PlmnIdentity,
+    amf_ids: &AmfIds,
     tmsi: &[u8; 4],
 ) -> NasFGsMobileIdentity {
     // See TS24.501, Figure 9.11.3.4.1
     let mut guti = vec![0b11110_010]; // octet 4 , type of identity = 010 = GUTI
-    guti.extend_from_slice(plmn);
-    guti.extend_from_slice(guami);
+    guti.extend_from_slice(&plmn.0);
+    guti.extend_from_slice(&amf_ids.0);
     guti.extend_from_slice(tmsi);
     NasFGsMobileIdentity::new(guti)
 }
 
 pub fn registration_accept(
     allowed_sst: u8,
-    plmn: &[u8; 3],
-    amf_ids: &[u8; 3],
+    plmn: &PlmnIdentity,
+    amf_ids: &AmfIds,
     tmsi: &[u8; 4],
 ) -> Nas5gsMessage {
     // TS24.501, 9.11.3.37 defines as a list of NSSAI length and value from TS24.501, 9.11.2.8.

@@ -1,11 +1,9 @@
 In progress
 -  GUTI registration
-   -  case where GUTI is used with new F1AP ID while old message handler is still running
-   -  debug wireshark issue with MAC on registration accept
    -  SecurityContext should not call decode_nas_5gs_message()
    -  when mapping errors to cause codes, log the error text
+   -  debug wireshark issue with MAC on registration accept
    -  test successful GUTI registration with real UE
-   -  use new newtypes like AmfIds and TMSI everywhere instead of .0
    -  in case of unknown GUTI, should we do identity request?
 -  ASN.1 decode failed - Error { cause: Generic, msg: "Extended enum not implemented", context: ["CauseRadioNetwork", "Cause", "UeContextReleaseRequest", "InitiatingMessage", "F1apPdu"] }.  Wireshark: cause = radioNetwork / rl-failure-others (12).
 -  Reduce occurrence of heatmap log spam

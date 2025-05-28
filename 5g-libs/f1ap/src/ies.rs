@@ -22733,7 +22733,7 @@ impl PerCodec for PhInfoScg {
     }
 }
 // PlmnIdentity
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PlmnIdentity(pub [u8; 3]);
 
 impl PlmnIdentity {

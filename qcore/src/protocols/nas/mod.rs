@@ -32,8 +32,13 @@ impl Display for Tmsi {
     }
 }
 
-#[derive(Deref, Debug)]
+#[derive(Deref, Debug, Eq, PartialEq, Clone)]
 pub struct AmfIds(pub [u8; 3]);
+impl Display for AmfIds {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:02x}{:02x}{:02x}", self.0[0], self.0[1], self.0[2])
+    }
+}
 
 pub enum MobileIdentity {
     Supi(PlmnIdentity, Imsi),

@@ -7,7 +7,7 @@ use async_std::channel::Sender;
 use async_std::prelude::*;
 use clap::Parser;
 use local_ip_address;
-use qcore::{Config, QCore, SubscriberDb};
+use qcore::{AmfIds, Config, PlmnIdentity, QCore, SubscriberDb};
 use signal_hook::consts::signal::*;
 use signal_hook_async_std::Signals;
 use slog::{Drain, Logger, o};
@@ -75,8 +75,8 @@ async fn main() -> Result<()> {
     let _qc = QCore::start(
         Config {
             ip_addr: args.local_ip,
-            plmn,
-            amf_ids: [0x01, 0x00, 0x80],
+            plmn: PlmnIdentity(plmn),
+            amf_ids: AmfIds([0x01, 0x00, 0x80]),
             name: Some("QCore".to_string()),
             serving_network_name,
             skip_ue_authentication_check: false,

@@ -1,0 +1,6 @@
+# To reduce linker memory needs, `lld` is used as the linker.  
+# Requires lld to be installed (`sudo apt install lld` or similar).
+[build]
+rustflags = [
+    "-C", "link-arg=-fuse-ld=lld",
+]

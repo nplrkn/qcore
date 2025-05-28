@@ -1,5 +1,9 @@
 use std::net::{IpAddr, Ipv4Addr};
 
+use f1ap::PlmnIdentity;
+
+use crate::protocols::nas::AmfIds;
+
 #[derive(Debug, Clone)]
 pub struct Config {
     // The F1 IP address, used for both F1AP and F1-U.
@@ -9,7 +13,7 @@ pub struct Config {
     pub name: Option<String>,
 
     // PLMN
-    pub plmn: [u8; 3],
+    pub plmn: PlmnIdentity,
 
     // Serving network name
     pub serving_network_name: String,
@@ -21,7 +25,7 @@ pub struct Config {
     pub skip_ue_authentication_check: bool,
 
     // AMF IDs (AMF region / AMF set / AMF pointer)
-    pub amf_ids: [u8; 3],
+    pub amf_ids: AmfIds,
 
     // Name of the F1U ethernet device
     pub f1u_interface_name: String,

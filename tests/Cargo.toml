@@ -23,10 +23,3 @@ async-net = "1.6.1"
 pnet_packet = "0.35.0"
 slog-term = "2.8.0"
 slog-envlogger = "2.2.0"
-
-# To reduce linker memory needs, `lld` is used as the linker.  
-# Requires lld to be installed (`sudo apt install lld` or similar).
-[build]
-rustflags = [
-    "-C", "link-arg=-fuse-ld=lld",
-]

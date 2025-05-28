@@ -315,16 +315,16 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                     FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED
                 })? {
                 MobileIdentity::Guti(plmn, amf_ids, tmsi) => {
-                    if amf_ids.0 != self.config().amf_ids {
+                    if amf_ids != self.config().amf_ids {
                         warn!(
                             self.logger,
-                            "Wrong AMF IDs in GUTI - theirs {:02x?} ours {:02x?}",
-                            amf_ids.0,
+                            "Wrong AMF IDs in GUTI - theirs {} ours {}",
+                            amf_ids,
                             self.config().amf_ids
                         );
                         return Err(FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED);
                     }
-                    (plmn.0, RegistrationType::Guti(tmsi))
+                    (plmn, RegistrationType::Guti(tmsi))
                 }
                 MobileIdentity::Supi(plmn, imsi) => {
                     let Some(ue_security_capability) = registration_request.ue_security_capability
@@ -336,7 +336,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                         return Err(FGMM_CAUSE_IE_NONEXISTENT_OR_NOT_IMPLEMENTED);
                     };
                     let ue_security_capability = ue_security_capability.to_owned();
-                    (plmn.0, RegistrationType::Supi(imsi, ue_security_capability))
+                    (plmn, RegistrationType::Supi(imsi, ue_security_capability))
                 }
             };
 
