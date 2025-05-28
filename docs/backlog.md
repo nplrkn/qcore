@@ -8,11 +8,8 @@ In progress
 -  Reduce occurrence of heatmap log spam
 -  NAS library crashes with unknown IEI (max number of packet filter??) on PDU session establishment (?) - see ies-moto.pcap 
 -  Regression test using real AUTS calculation (to catch SQN handling changes).
--  on receipt of a session establishment request with DNN="ims"
-   -  don't send session establishment reject
-   -  instead send 5GMM Status, cause = 5GMM "DNN not supported or not subscriber in the slice"
-   -  this then provokes a new session establishment request on UL NAS transport with DNN=internet  
  - remaining SQN failure - with different SIM, with long SQN (top byte 01 not 00)?
+ - test script should check there are no further messages when a mock is dropped
 
 Performance
 - iperf framework

@@ -10,8 +10,9 @@ use oxirush_nas::{
     NasPayloadContainer, NasPayloadContainerType, NasPduAddress, NasPduSessionType, NasQosRules,
     NasSecurityAlgorithms, NasSessionAmbr, NasUeSecurityCapability, encode_nas_5gs_message,
     messages::{
-        NasAuthenticationRequest, NasDlNasTransport, NasPduSessionEstablishmentAccept,
-        NasRegistrationAccept, NasRegistrationReject, NasSecurityModeCommand,
+        NasAuthenticationRequest, NasDlNasTransport, NasFGmmStatus,
+        NasPduSessionEstablishmentAccept, NasRegistrationAccept, NasRegistrationReject,
+        NasSecurityModeCommand,
     },
 };
 use security::NAS_ABBA;
@@ -105,6 +106,13 @@ pub fn registration_reject(cause: u8) -> Nas5gsMessage {
     Nas5gsMessage::new_5gmm(
         Nas5gmmMessageType::RegistrationReject,
         Nas5gmmMessage::RegistrationReject(NasRegistrationReject::new(NasFGmmCause::new(cause))),
+    )
+}
+
+pub fn fgmm_status(cause: u8) -> Nas5gsMessage {
+    Nas5gsMessage::new_5gmm(
+        Nas5gmmMessageType::FGmmStatus,
+        Nas5gmmMessage::FGmmStatus(NasFGmmStatus::new(NasFGmmCause::new(cause))),
     )
 }
 

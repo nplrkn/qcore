@@ -17,6 +17,7 @@ pub struct MockUe<'a> {
     du: &'a MockDu,
     pub du_ue_context: DuUeContext,
     pub ipv4_addr: Ipv4Addr,
+    dnn: Option<&'static [u8]>,
     logger: Logger,
 }
 
@@ -34,12 +35,17 @@ impl<'a> MockUe<'a> {
             du,
             du_ue_context: du.new_ue_context(ue_id, cu_ip_addr).await?,
             ipv4_addr: Ipv4Addr::UNSPECIFIED,
+            dnn: None,
             logger: logger.new(o!("ue" => ue_id)),
         })
     }
 
     pub fn use_guti(&mut self, guti: [u8; 10]) {
         self.guti = Some(guti);
+    }
+
+    pub fn use_dnn(&mut self, dnn: &'static [u8]) {
+        self.dnn = Some(dnn);
     }
 
     pub async fn perform_rrc_setup(&mut self) -> Result<()> {
@@ -133,7 +139,8 @@ impl<'a> MockUe<'a> {
     }
 
     pub async fn send_nas_pdu_session_establishment_request(&mut self) -> Result<()> {
-        let nas_session_establishment_request = build_nas::pdu_session_establishment_request()?;
+        let nas_session_establishment_request =
+            build_nas::pdu_session_establishment_request(self.dnn)?;
         info!(&self.logger, "NAS PDU session establishment request >>");
         self.send_nas(nas_session_establishment_request).await
     }
@@ -286,6 +293,24 @@ impl<'a> MockUe<'a> {
         match decode_nas_5gs_message(&self.receive_nas().await?)? {
             Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationReject(_)) => Ok(()),
             m => bail!("Expected reject, got {:?}", m),
+        }
+    }
+
+    async fn receive_security_protected_nas(&self) -> Result<Nas5gmmMessage> {
+        let nas = decode_nas_5gs_message(&self.receive_nas().await?)?;
+        let Nas5gsMessage::SecurityProtected(_, message) = nas else {
+            bail!("Expected security protected message, got bytes: {:?}", nas);
+        };
+        match *message {
+            Nas5gsMessage::Gmm(_, nas_gmm) => Ok(nas_gmm),
+            _ => bail!("Expected 5GMM message, got GSM message"),
+        }
+    }
+
+    pub async fn receive_nas_5gmm_status(&self) -> Result<()> {
+        match self.receive_security_protected_nas().await? {
+            Nas5gmmMessage::FGmmStatus(_) => Ok(()),
+            m => bail!("Expected 5GMM status, got {:?}", m),
         }
     }
 }

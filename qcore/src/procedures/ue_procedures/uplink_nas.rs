@@ -4,7 +4,9 @@ use super::{
     DeregistrationProcedure, SessionEstablishmentProcedure, UeProcedure,
     registration::RegistrationProcedure,
 };
-use crate::HandlerApi;
+use crate::{
+    HandlerApi, protocols::nas::FGMM_CAUSE_DNN_NOT_SUPPORTED_OR_NOT_SUBSCRIBED_IN_THE_SLICE,
+};
 use anyhow::Result;
 use derive_deref::{Deref, DerefMut};
 use oxirush_nas::{
@@ -48,14 +50,21 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
                 ..
             }) => {
                 self.log_message(">> UlNasTransport");
-                let dnn_bytes = dnn.map(|nas_dnn| nas_dnn.value);
+
+                let dnn = dnn.map(|nas_dnn| nas_dnn.value);
+                if let Some(ref dnn) = dnn {
+                    if !self.check_dnn(dnn).await? {
+                        return Ok(());
+                    }
+                }
+
                 match decode_nas_5gs_message(&payload_container.value)? {
                     Nas5gsMessage::Gsm(
                         header,
                         Nas5gsmMessage::PduSessionEstablishmentRequest(r),
                     ) => {
                         SessionEstablishmentProcedure::new(self.0)
-                            .run(header, r, dnn_bytes)
+                            .run(header, r, dnn)
                             .await?;
                     }
                     m => {
@@ -82,6 +91,26 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
             }
         }
         Ok(())
+    }
+
+    // Return true if the DNN is ok, false otherwise
+    async fn check_dnn(&mut self, dnn: &[u8]) -> Result<bool> {
+        // Send a 5GMM Status if the DNN is not supported.  A typical scenario is
+        // where a UE requests the 'ims' DNN and then falls back to the 'internet' DNN.
+        // Right now we give the UE what it asks for, so long as it is not 'ims'.
+        if dnn == b"ims" {
+            warn!(
+                self.logger,
+                "UE asked for 'ims' DNN - sending 5GMM Status and ignoring session establishment request"
+            );
+            let status = crate::nas::build::fgmm_status(
+                FGMM_CAUSE_DNN_NOT_SUPPORTED_OR_NOT_SUBSCRIBED_IN_THE_SLICE,
+            );
+            self.nas_indication(status).await?;
+            Ok(false)
+        } else {
+            Ok(true)
+        }
     }
 }
 

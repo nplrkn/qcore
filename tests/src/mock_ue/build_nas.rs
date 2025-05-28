@@ -2,7 +2,7 @@ use anyhow::Result;
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gmmMessageType, Nas5gsMessage, Nas5gsSecurityHeaderType, Nas5gsmMessage,
     Nas5gsmMessageType, NasAuthenticationFailureParameter, NasAuthenticationResponseParameter,
-    NasDeRegistrationType, NasFGmmCause, NasFGsMobileIdentity, NasFGsRegistrationType,
+    NasDeRegistrationType, NasDnn, NasFGmmCause, NasFGsMobileIdentity, NasFGsRegistrationType,
     NasFGsmCapability, NasIntegrityProtectionMaximumDataRate, NasPayloadContainer,
     NasPayloadContainerType, NasPduSessionType, NasSscMode, NasUeSecurityCapability,
     encode_nas_5gs_message,
@@ -216,7 +216,7 @@ pub fn registration_complete() -> Result<Vec<u8>> {
     Ok(encode_nas_5gs_message(&message)?)
 }
 
-pub fn pdu_session_establishment_request() -> Result<Vec<u8>> {
+pub fn pdu_session_establishment_request(dnn: Option<&[u8]>) -> Result<Vec<u8>> {
     // See https://www.sharetechnote.com/html/5G/5G_PDUSessionEstablishment.html for an example.
     let inner_message = Nas5gsMessage::Gsm(
         Nas5gsmHeader {
@@ -261,7 +261,7 @@ pub fn pdu_session_establishment_request() -> Result<Vec<u8>> {
             old_pdu_session_id: None,
             request_type: None,
             s_nssai: None,
-            dnn: None,
+            dnn: dnn.map(|bytes| NasDnn::new(bytes.to_vec())),
             additional_information: None,
             ma_pdu_session_information: None,
             release_assistance_indication: None,
