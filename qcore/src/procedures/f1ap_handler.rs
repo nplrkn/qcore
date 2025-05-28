@@ -1,5 +1,6 @@
 //! f1ap - F1AP entry points
 use super::gnb_du_configuration_update::GnbDuConfigurationUpdateProcedure;
+use super::handler_api::UeMessage;
 use super::{f1_removal::F1RemovalProcedure, f1_setup::F1SetupProcedure};
 use crate::HandlerApi;
 use async_trait::async_trait;
@@ -71,7 +72,9 @@ impl<A: HandlerApi> IndicationHandler<InitialUlRrcMessageTransferProcedure> for 
         if let Err(e) = self
             .dispatch_ue_message(
                 id,
-                F1apPdu::InitiatingMessage(InitiatingMessage::InitialUlRrcMessageTransfer(r)),
+                UeMessage::F1ap(F1apPdu::InitiatingMessage(
+                    InitiatingMessage::InitialUlRrcMessageTransfer(r),
+                )),
             )
             .await
         {
@@ -89,7 +92,9 @@ impl<A: HandlerApi> IndicationHandler<UlRrcMessageTransferProcedure> for F1apHan
         if let Err(e) = self
             .dispatch_ue_message(
                 r.gnb_cu_ue_f1ap_id.0,
-                F1apPdu::InitiatingMessage(InitiatingMessage::UlRrcMessageTransfer(r)),
+                UeMessage::F1ap(F1apPdu::InitiatingMessage(
+                    InitiatingMessage::UlRrcMessageTransfer(r),
+                )),
             )
             .await
         {
@@ -104,7 +109,9 @@ impl<A: HandlerApi> IndicationHandler<UeContextReleaseRequestProcedure> for F1ap
         if let Err(e) = self
             .dispatch_ue_message(
                 r.gnb_cu_ue_f1ap_id.0,
-                F1apPdu::InitiatingMessage(InitiatingMessage::UeContextReleaseRequest(r)),
+                UeMessage::F1ap(F1apPdu::InitiatingMessage(
+                    InitiatingMessage::UeContextReleaseRequest(r),
+                )),
             )
             .await
         {

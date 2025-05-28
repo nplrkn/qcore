@@ -63,6 +63,10 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
             &self.config().amf_ids,
             &tmsi.0,
         );
+        // TODO: should register_new_tmsi be called allocate_tmsi() and return the TMSI?
+        self.api
+            .register_new_tmsi(tmsi.clone(), self.ue.key, &self.logger)
+            .await;
         self.ue.tmsi = Some(tmsi);
         self.log_message("<< NasRegistrationAccept");
         let _rsp = expect_nas!(RegistrationComplete, self.nas_request(r).await?)?;

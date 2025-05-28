@@ -3,10 +3,17 @@ use crate::data::NasContext;
 use crate::protocols::nas::Tmsi;
 use crate::{Config, UserplaneSession};
 use anyhow::Result;
+use async_std::channel::Sender;
 use async_trait::async_trait;
 use f1ap::F1apPdu;
 use slog::Logger;
 use xxap::{GtpTunnel, Indication, Procedure, RequestError};
+
+#[derive(Debug)]
+pub enum UeMessage {
+    F1ap(F1apPdu),
+    TakeContext(Sender<NasContext>),
+}
 
 /// Trait representing the collection of services needed by QCore handlers.
 #[async_trait]
@@ -21,11 +28,19 @@ pub trait HandlerApi: Send + Sync + Clone + 'static {
     -> Option<SubscriberAuthParams>;
     async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
 
+    async fn register_new_tmsi(&self, tmsi: Tmsi, ue_id: u32, logger: &Logger);
     async fn take_nas_context(&self, tmsi: &Tmsi) -> Option<NasContext>;
-    async fn put_nas_context(&self, tmsi: Tmsi, c: NasContext, ttl_secs: u32);
+    async fn put_nas_context(
+        &self,
+        tmsi: Tmsi,
+        ue_id: u32,
+        c: NasContext,
+        ttl_secs: u32,
+        logger: &Logger,
+    );
 
     fn spawn_ue_message_handler(&self) -> u32;
-    async fn dispatch_ue_message(&self, ue_id: u32, message: F1apPdu) -> Result<()>;
+    async fn dispatch_ue_message(&self, ue_id: u32, message: UeMessage) -> Result<()>;
     fn delete_ue_channel(&self, ue_id: u32);
     fn delete_ue_channels(&self);
 

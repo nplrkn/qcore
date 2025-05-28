@@ -7,6 +7,7 @@ mod ue_message_handler;
 mod ul_information_transfer;
 mod uplink_nas;
 
+use async_std::channel::{Receiver, Sender};
 pub use deregistration::DeregistrationProcedure;
 pub use pdu_session_establishment::SessionEstablishmentProcedure;
 pub use rrc_setup::RrcSetupProcedure;
@@ -15,11 +16,10 @@ pub use ue_message_handler::UeMessageHandler;
 pub use ul_information_transfer::UlInformationTransferProcedure;
 pub use uplink_nas::UplinkNasProcedure;
 
-use super::Procedure;
-use crate::{HandlerApi, UeContext};
+use super::{Procedure, UeMessage};
+use crate::{HandlerApi, UeContext, data::NasContext};
 use anyhow::{Result, anyhow, bail};
 use asn1_per::SerDes;
-use async_channel::Receiver;
 use f1ap::{
     DlRrcMessageTransferProcedure, F1apPdu, InitiatingMessage, RrcContainer, SrbId,
     UlRrcMessageTransfer,
@@ -35,7 +35,8 @@ use slog::Logger;
 pub struct UeProcedure<'a, A: HandlerApi> {
     base: Procedure<'a, A>,
     ue: &'a mut UeContext,
-    receiver: &'a Receiver<F1apPdu>,
+    receiver: &'a Receiver<UeMessage>,
+    give_context: &'a mut Option<Sender<NasContext>>,
 }
 
 impl<'a, A: HandlerApi> std::ops::Deref for UeProcedure<'a, A> {
@@ -51,12 +52,55 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         api: &'a A,
         ue: &'a mut UeContext,
         logger: &'a Logger,
-        receiver: &'a Receiver<F1apPdu>,
+        receiver: &'a Receiver<UeMessage>,
+        give_context: &'a mut Option<Sender<NasContext>>,
     ) -> Self {
         UeProcedure {
             base: Procedure::new(api, logger),
             ue,
             receiver,
+            give_context,
+        }
+    }
+
+    // Return Err if the UE handler should exit.
+    async fn dispatch(mut self) -> Result<()> {
+        match self.receive_pdu().await? {
+            F1apPdu::InitiatingMessage(InitiatingMessage::UlRrcMessageTransfer(r)) => {
+                self.log_message(">> F1ap UlRrcMessageTransfer");
+                let rrc = self.extract_ul_dcch_message(r)?;
+                match rrc.message {
+                    UlDcchMessageType::C1(C1_6::UlInformationTransfer(ul_information_transfer)) => {
+                        UlInformationTransferProcedure::new(self)
+                            .run(ul_information_transfer)
+                            .await?
+                    }
+                    _ => {
+                        bail!("Unsupported UlDcchMessage {rrc:?}");
+                    }
+                }
+            }
+            F1apPdu::InitiatingMessage(InitiatingMessage::UeContextReleaseRequest(r)) => {
+                UeContextReleaseProcedure::new(self).du_initiated(r).await?;
+                bail!("Context release");
+            }
+            pdu => {
+                bail!("Unsupported F1apPdu {pdu:?}");
+            }
+        }
+        Ok(())
+    }
+
+    // Returns the next F1AP PDU, and also handles TakeContext messages.
+    // The latter causes the self-destruction of the UE handler by returning
+    // an error.
+    async fn receive_pdu(&mut self) -> Result<F1apPdu> {
+        match self.receiver.recv().await? {
+            UeMessage::F1ap(pdu) => Ok(pdu),
+            UeMessage::TakeContext(sender) => {
+                *self.give_context = Some(sender);
+                Err(anyhow!("Take context"))
+            }
         }
     }
 
@@ -67,7 +111,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
     ) -> Result<UlDcchMessage> {
         self.rrc_indication(srb_id, rrc).await?;
 
-        let pdu = self.receiver.recv().await?;
+        let pdu = self.receive_pdu().await?;
         let F1apPdu::InitiatingMessage(InitiatingMessage::UlRrcMessageTransfer(
             ul_rrc_message_transfer,
         )) = pdu

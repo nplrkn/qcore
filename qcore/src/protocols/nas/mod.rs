@@ -20,7 +20,7 @@ pub const FGMM_CAUSE_IE_NONEXISTENT_OR_NOT_IMPLEMENTED: u8 = 0b01100011;
 #[derive(Deref, Debug)]
 pub struct Imsi(pub String);
 
-#[derive(Deref, Debug, Eq, Hash, PartialEq)]
+#[derive(Deref, Debug, Eq, Hash, PartialEq, Clone)]
 pub struct Tmsi(pub [u8; 4]);
 impl Display for Tmsi {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

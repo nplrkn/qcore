@@ -13,15 +13,23 @@ async fn guti_registration() -> anyhow::Result<()> {
     ue.handle_rrc_security_mode().await?;
     ue.handle_nas_registration_accept().await?;
 
-    // Drop the UE context.
+    // In the first variant, the UE message handler is not running.
+
+    // Drop the UE context causing the message handler to exit and park the NAS context.
     du.send_ue_context_release_request(&ue.du_ue_context)
         .await?;
     du.handle_ue_context_release(&ue.du_ue_context).await?;
 
-    // UE does a security protected initial registration with GUTI (as seen with Samsung phone.)
-    ue.perform_rrc_setup().await?;
-
+    // UE does a security protected initial registration with GUTI.
     // QCore skip NAS authentication + security and moves straight to RRC security.
+    ue.perform_rrc_setup().await?;
+    ue.handle_rrc_security_mode().await?;
+    ue.handle_nas_registration_accept().await?;
+
+    // In the second variant, the UE message handler is running.
+
+    // This is the case where the UE resets and its GUTI registration comes in using a new F1AP ID.
+    ue.perform_rrc_setup().await?;
     ue.handle_rrc_security_mode().await?;
     ue.handle_nas_registration_accept().await?;
 
