@@ -22,12 +22,20 @@ impl NasContext {
     }
 
     pub fn decode(&mut self, data: &[u8]) -> Result<Nas5gsMessage> {
-        if let Some(security_context) = &mut self.security_context {
-            security_context.decode_and_check(data)
+        let nas = decode_nas_5gs_message(data)
+            .map_err(|e| anyhow!("NAS decode error - {e} - message bytes: {:?}", data))?;
+
+        let security_header = if let Nas5gsMessage::SecurityProtected(hdr, _) = &nas {
+            Some(hdr)
         } else {
-            decode_nas_5gs_message(data)
-                .map_err(|e| anyhow!("NAS decode error - {e} - message bytes: {:?}", data))
+            None
+        };
+
+        if let Some(security_context) = &mut self.security_context {
+            security_context.admit_message(security_header, data)?;
         }
+
+        Ok(nas)
     }
 
     // This is used for situations where the security context might need to be retrieved using a GUTI

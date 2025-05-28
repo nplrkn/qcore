@@ -1,6 +1,5 @@
 In progress
 -  GUTI registration
-   -  SecurityContext should not call decode_nas_5gs_message()
    -  when mapping errors to cause codes, log the error text
    -  debug wireshark issue with MAC on registration accept
    -  test successful GUTI registration with real UE

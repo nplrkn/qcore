@@ -1,6 +1,7 @@
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use oxirush_nas::{
-    Nas5gsMessage, Nas5gsSecurityHeaderType, decode_nas_5gs_message, encode_nas_5gs_message,
+    Nas5gsMessage, Nas5gsSecurityHeaderType, encode_nas_5gs_message,
+    messages::Nas5gsSecurityHeader,
 };
 use security::nia2::calculate_nia2_mac;
 
@@ -21,42 +22,41 @@ impl SecurityContext {
         }
     }
 
-    pub fn decode_and_check(&mut self, bytes: &[u8]) -> Result<Nas5gsMessage> {
-        let nas = decode_nas_5gs_message(bytes)
-            .map_err(|e| anyhow!("NAS decode error - {e} - message bytes: {:?}", bytes))?;
-        match nas {
-            Nas5gsMessage::SecurityProtected(security_header, body) => {
-                let last_rcvd_seq_num = (self.ul_count & 0xff) as u8;
+    pub fn admit_message(
+        &mut self,
+        security_header: Option<&Nas5gsSecurityHeader>,
+        _bytes: &[u8],  // for integrity check in future
+    ) -> Result<()> {
+        if let Some(security_header) = security_header {
+            let last_rcvd_seq_num = (self.ul_count & 0xff) as u8;
 
-                if last_rcvd_seq_num > 0xf0 && security_header.sequence_number < 0x10 {
-                    // u8 overflow of sequence number past of NAS COUNT - see TS33.501, 6.4.3.1.
-                    self.ul_count += 0x00000100;
-                } else if security_header.sequence_number <= last_rcvd_seq_num {
-                    // TS33.501, 6.4.3.2: "Replay protection shall ensure that the receiver only accepts each incoming NAS COUNT
-                    // value once using the same NAS security context."
+            if last_rcvd_seq_num > 0xf0 && security_header.sequence_number < 0x10 {
+                // u8 overflow of sequence number past of NAS COUNT - see TS33.501, 6.4.3.1.
+                self.ul_count += 0x00000100;
+            } else if security_header.sequence_number <= last_rcvd_seq_num {
+                // TS33.501, 6.4.3.2: "Replay protection shall ensure that the receiver only accepts each incoming NAS COUNT
+                // value once using the same NAS security context."
 
-                    // TODO: this kicked in on the NAS security mode complete with a real phone.
-                    // Clearly the security mode complete should be sequence number 0.
-                    // bail!(
-                    //     "NAS sequence number {} did not advance from last {} - dropped for replay protection",
-                    //     security_header.sequence_number,
-                    //     last_rcvd_seq_num
-                    // );
-                }
-
-                self.ul_count =
-                    (self.ul_count & 0x00ffff00) | security_header.sequence_number as u32;
-
-                // TODO: Check the security header type
-                // For example,
-                // -  Most messages should be Integrity Protected + Ciphered
-                // -  GUTI registration should be Integrity Protected
-                Ok(*body)
+                // TODO: this kicked in on the NAS security mode complete with a real phone.
+                // Clearly the security mode complete should be sequence number 0.
+                // bail!(
+                //     "NAS sequence number {} did not advance from last {} - dropped for replay protection",
+                //     security_header.sequence_number,
+                //     last_rcvd_seq_num
+                // );
             }
 
-            // TODO: do not allow unprotected messages - currently necessary for testing simplification
-            nas => Ok(nas),
+            self.ul_count = (self.ul_count & 0x00ffff00) | security_header.sequence_number as u32;
         }
+
+        // TODO: Check the security header type
+        // For example,
+        // -  Most messages should be Integrity Protected + Ciphered
+        // -  GUTI registration should be Integrity Protected
+
+        // TODO: Do not allow plain messages (without security header) except for specific cases
+
+        Ok(())
     }
 
     pub fn encode_with_integrity(&mut self, nas: Nas5gsMessage) -> Result<Vec<u8>> {
