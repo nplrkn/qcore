@@ -9,7 +9,7 @@ async-std = { version = "1.13.1", features = ["attributes"] }
 async-trait = "0.1.88"
 slog = "2.7.0"
 qcore = { path = "../qcore" }
-oxirush-nas = { git = "https://github.com/nplrkn/oxirush-nas", branch = "fix-length-1-checks" }
+oxirush-nas = { git = "https://github.com/nplrkn/oxirush-nas", branch = "all-fixes" }
 local-ip-address = "0.6.3"
 f1ap = { path = "../5g-libs/f1ap" }
 xxap = { path = "../5g-libs/xxap" }
@@ -23,3 +23,6 @@ async-net = "1.6.1"
 pnet_packet = "0.35.0"
 slog-term = "2.8.0"
 slog-envlogger = "2.2.0"
+
+[profile.dev]
+debug = 1
