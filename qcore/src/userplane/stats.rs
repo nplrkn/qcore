@@ -92,40 +92,42 @@ pub async fn dump_stats(
             warn!(&logger, "{}", s);
         }
 
-        next_cpu_heatmap -= SAMPLE_INTERVAL_SECS as isize;
-        if next_cpu_heatmap <= 0 {
-            let Ok(per_cpu_ul) = per_cpu_ebpf_counters.get(&(UlRxPkts as u32), 0) else {
-                continue;
-            };
-            let Ok(per_cpu_dl) = per_cpu_ebpf_counters.get(&(DlRxPkts as u32), 0) else {
-                continue;
-            };
-            let mut ul_string = String::new();
-            let mut dl_string = String::new();
-            for cpu in 0..num_cpus {
-                write!(
-                    &mut ul_string,
-                    "{}|",
-                    per_cpu_ul[cpu] - ul_heatmap_last[cpu]
-                )?;
-                write!(
-                    &mut dl_string,
-                    "{}|",
-                    per_cpu_dl[cpu] - dl_heatmap_last[cpu]
-                )?;
-                ul_heatmap_last[cpu] = per_cpu_ul[cpu];
-                dl_heatmap_last[cpu] = per_cpu_dl[cpu];
-            }
-            info!(
-                &logger,
-                "UL CPU heatmap last {}s: {}", CPU_HEATMAP_INTERVAL_SEC, ul_string
-            );
-            info!(
-                &logger,
-                "DL CPU heatmap last {}s: {}", CPU_HEATMAP_INTERVAL_SEC, dl_string
-            );
+        if info_needed {
+            next_cpu_heatmap -= SAMPLE_INTERVAL_SECS as isize;
+            if next_cpu_heatmap <= 0 {
+                let Ok(per_cpu_ul) = per_cpu_ebpf_counters.get(&(UlRxPkts as u32), 0) else {
+                    continue;
+                };
+                let Ok(per_cpu_dl) = per_cpu_ebpf_counters.get(&(DlRxPkts as u32), 0) else {
+                    continue;
+                };
+                let mut ul_string = String::new();
+                let mut dl_string = String::new();
+                for cpu in 0..num_cpus {
+                    write!(
+                        &mut ul_string,
+                        "{}|",
+                        per_cpu_ul[cpu] - ul_heatmap_last[cpu]
+                    )?;
+                    write!(
+                        &mut dl_string,
+                        "{}|",
+                        per_cpu_dl[cpu] - dl_heatmap_last[cpu]
+                    )?;
+                    ul_heatmap_last[cpu] = per_cpu_ul[cpu];
+                    dl_heatmap_last[cpu] = per_cpu_dl[cpu];
+                }
+                info!(
+                    &logger,
+                    "UL CPU heatmap last {}s: {}", CPU_HEATMAP_INTERVAL_SEC, ul_string
+                );
+                info!(
+                    &logger,
+                    "DL CPU heatmap last {}s: {}", CPU_HEATMAP_INTERVAL_SEC, dl_string
+                );
 
-            next_cpu_heatmap = CPU_HEATMAP_INTERVAL_SEC as isize;
+                next_cpu_heatmap = CPU_HEATMAP_INTERVAL_SEC as isize;
+            }
         }
     }
 }
