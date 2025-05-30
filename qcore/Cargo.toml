@@ -43,9 +43,6 @@ ebpf-common = { path = "../ebpf/ebpf-common", features = ["user"]}
 num_cpus = "1.16.0"
 strum = "0.27.1"
 
-[profile.dev]
-debug = 1
-
 [build-dependencies]
 anyhow = "1.0.97"
 aya-build = { version = "0.1.2", default-features = false }

@@ -5,11 +5,11 @@ use f1ap::PlmnIdentity;
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gmmMessageType, Nas5gsMessage, Nas5gsmMessage, Nas5gsmMessageType, NasAbba,
     NasAdditionalFGSecurityInformation, NasAuthenticationParameterAutn,
-    NasAuthenticationParameterRand, NasDnn, NasFGmmCause, NasFGsMobileIdentity,
-    NasFGsNetworkFeatureSupport, NasFGsRegistrationResult, NasKeySetIdentifier, NasNssai,
-    NasPayloadContainer, NasPayloadContainerType, NasPduAddress, NasPduSessionType,
-    NasQosFlowDescriptions, NasQosRules, NasSNssai, NasSecurityAlgorithms, NasSessionAmbr,
-    NasUeSecurityCapability, encode_nas_5gs_message,
+    NasAuthenticationParameterRand, NasDnn, NasExtendedProtocolConfigurationOptions, NasFGmmCause,
+    NasFGsMobileIdentity, NasFGsNetworkFeatureSupport, NasFGsRegistrationResult,
+    NasKeySetIdentifier, NasNssai, NasPayloadContainer, NasPayloadContainerType, NasPduAddress,
+    NasPduSessionType, NasQosFlowDescriptions, NasQosRules, NasSNssai, NasSecurityAlgorithms,
+    NasSessionAmbr, NasUeSecurityCapability, encode_nas_5gs_message,
     messages::{
         NasAuthenticationRequest, NasDlNasTransport, NasFGmmStatus,
         NasPduSessionEstablishmentAccept, NasRegistrationAccept, NasRegistrationReject,
@@ -125,27 +125,21 @@ pub fn fgmm_status(cause: u8) -> Nas5gsMessage {
     )
 }
 
-pub fn pdu_session_establishment_accept(
-    pdu_session: &PduSession,
-    pti: u8,
-    sst: u8,
-) -> Result<Nas5gsMessage> {
-    let ue_ip_addr = pdu_session.userplane_info.ue_ip_addr;
-    let IpAddr::V4(ue_ipv4) = ue_ip_addr else {
-        bail!("IPv6 not implemented")
-    };
-
+fn session_ambr() -> NasSessionAmbr {
     // TODO - make configurable
-    let session_ambr = NasSessionAmbr::new(vec![
+    NasSessionAmbr::new(vec![
         // TS24.501, 9.11.4.14
         0b00000110, // Unit for downlink = Mbps
         0x00, 0x01,       // Downlink session AMBR = 1 Mbps
         0b00000110, // Unit for uplink = Mbps
         0x00, 0x01, // Uplink session AMBR = 1 Mbps
-    ]);
+    ])
+}
 
-    let qfi_1 = 0b00_000001;
-    let authorized_qos_rules = NasQosRules::new(vec![
+const QFI_1: u8 = 0b00_000001;
+
+fn authorized_qos_rules() -> NasQosRules {
+    NasQosRules::new(vec![
         // TS24.501, 9.11.4.13
         0x01, // Qos Rule Identifier = 1
         0x00,
@@ -157,59 +151,84 @@ pub fn pdu_session_establishment_accept(
         // Packet filter 1 contents
         0b00000001, // Packet filter type = match all
         0xff,       // QoS rule precedence,
-        qfi_1,      // spare; QFI 1
-    ]);
+        QFI_1,      // spare; QFI 1
+    ])
+}
 
-    let five_qi = pdu_session.userplane_info.five_qi;
-    let authorized_qos_flow_descriptions = Some(NasQosFlowDescriptions::new(vec![
+fn authorized_qos_flow_descriptions(five_qi: u8) -> NasQosFlowDescriptions {
+    NasQosFlowDescriptions::new(vec![
         // TS24.501, 9.11.4.12
-        qfi_1, // QFI 1
+        QFI_1, // QFI 1
         0x20,  // Create new
         0x41,  // 1 parameter supplied
         0x01,  // Param type = 5QI
         0x01,  // Length 1
         five_qi,
-    ]));
+    ])
+}
 
-    let pdu_address = Some(NasPduAddress::new(vec![
+fn nas_pdu_address(ue_ipv4: &[u8; 4]) -> NasPduAddress {
+    NasPduAddress::new(vec![
         // TS24.501, 9.11.4.10
         0b0000_0_001, // spare; no SMF IPv6 link local address; PDU session type = 001 (IPv4)
-        ue_ipv4.octets()[0],
-        ue_ipv4.octets()[1],
-        ue_ipv4.octets()[2],
-        ue_ipv4.octets()[3],
-    ]));
+        ue_ipv4[0],
+        ue_ipv4[1],
+        ue_ipv4[2],
+        ue_ipv4[3],
+    ])
+}
 
-    let dnn = Some(NasDnn::new(pdu_session.dnn.clone()));
+fn nas_dnn(dnn: &[u8]) -> NasDnn {
+    let mut dnn_contents = vec![dnn.len() as u8];
+    dnn_contents.extend_from_slice(&dnn);
+    NasDnn::new(dnn_contents)
+}
 
-    let inner_message = Nas5gsMessage::new_5gsm(
-        Nas5gsmMessageType::PduSessionEstablishmentAccept,
-        Nas5gsmMessage::PduSessionEstablishmentAccept(NasPduSessionEstablishmentAccept {
-            selected_pdu_session_type: NasPduSessionType::new(0b001), // IPv4
-            authorized_qos_rules,
-            session_ambr,
-            fgsm_cause: None,
-            pdu_address,
-            rq_timer_value: None,
-            s_nssai: Some(snssai(sst)),
-            always_on_pdu_session_indication: None,
-            mapped_eps_bearer_contexts: None,
-            eap_message: None,
-            authorized_qos_flow_descriptions,
-            extended_protocol_configuration_options: None,
-            dnn,
-            fgsm_network_feature_support: None,
-            serving_plmn_rate_control: None,
-            atsss_container: None,
-            control_plane_only_indication: None,
-            ip_header_compression_configuration: None,
-            ethernet_header_compression_configuration: None,
-            service_level_aa_container: None,
-            received_mbs_container: None,
-        }),
-        pdu_session.id,
-        pti,
-    );
+pub fn pdu_session_establishment_accept(
+    pdu_session: &PduSession,
+    pti: u8,
+    sst: u8,
+) -> Result<Nas5gsMessage> {
+    let ue_ip_addr = pdu_session.userplane_info.ue_ip_addr;
+    let IpAddr::V4(ue_ipv4) = ue_ip_addr else {
+        bail!("IPv6 not implemented")
+    };
+
+    let five_qi = pdu_session.userplane_info.five_qi;
+    let dns_primary = &[0x08, 0x08, 0x08, 0x08];
+    let dns_secondary = &[0x08, 0x08, 0x04, 0x04];
+
+    let inner_message =
+        Nas5gsMessage::new_5gsm(
+            Nas5gsmMessageType::PduSessionEstablishmentAccept,
+            Nas5gsmMessage::PduSessionEstablishmentAccept(NasPduSessionEstablishmentAccept {
+                selected_pdu_session_type: NasPduSessionType::new(0b001), // IPv4
+                authorized_qos_rules: authorized_qos_rules(),
+                session_ambr: session_ambr(),
+                fgsm_cause: None,
+                pdu_address: Some(nas_pdu_address(&ue_ipv4.octets())),
+                rq_timer_value: None,
+                s_nssai: Some(snssai(sst)),
+                always_on_pdu_session_indication: None,
+                mapped_eps_bearer_contexts: None,
+                eap_message: None,
+                authorized_qos_flow_descriptions: Some(authorized_qos_flow_descriptions(five_qi)),
+                extended_protocol_configuration_options: Some(
+                    extended_protocol_configuration_options(&dns_primary, &dns_secondary, true),
+                ),
+                dnn: Some(nas_dnn(&pdu_session.dnn)),
+                fgsm_network_feature_support: None,
+                serving_plmn_rate_control: None,
+                atsss_container: None,
+                control_plane_only_indication: None,
+                ip_header_compression_configuration: None,
+                ethernet_header_compression_configuration: None,
+                service_level_aa_container: None,
+                received_mbs_container: None,
+            }),
+            pdu_session.id,
+            pti,
+        );
     let inner_message = encode_nas_5gs_message(&inner_message)?;
     let outer_message = Nas5gsMessage::new_5gmm(
         Nas5gmmMessageType::DlNasTransport,
@@ -224,4 +243,49 @@ pub fn pdu_session_establishment_accept(
         }),
     );
     Ok(outer_message)
+}
+
+fn extended_protocol_configuration_options(
+    dns_primary: &[u8; 4],
+    dns_secondary: &[u8; 4],
+    include_ppp_ip_configuration_ack: bool,
+) -> NasExtendedProtocolConfigurationOptions {
+    let mut epco = vec![];
+    if include_ppp_ip_configuration_ack {
+        epco.extend_from_slice(&[
+            0x80, // PPP for use with IP PDP type or IP PDN type
+            0x80, 0x21, // Internet Protocol Control Protocol
+            0x10, // Length = 16
+            0x02, // Type = Configuration Ack
+            0x00, // Identifier
+            0x00, 0x10, // Length = 16
+            0x81, // Primary DNS address
+            0x06, // Length = 6
+        ]);
+        epco.extend_from_slice(dns_primary);
+        epco.extend_from_slice(&[
+            0x83, // Secondary DNS address
+            0x06, // Length = 6
+        ]);
+        epco.extend_from_slice(dns_secondary);
+    }
+
+    epco.extend_from_slice(&[
+        0x00, 0x0d, // DNS server address
+        0x04, // Length
+    ]);
+    epco.extend_from_slice(dns_primary);
+
+    epco.extend_from_slice(&[
+        0x00, 0x0d, // DNS server address
+        0x04, // Length
+    ]);
+    epco.extend_from_slice(dns_secondary);
+
+    epco.extend_from_slice(&[
+        0x00, 0x10, // Link MTU
+        0x02, // Length
+        0x05, 0xdc, // 1500
+    ]);
+    NasExtendedProtocolConfigurationOptions::new(epco)
 }

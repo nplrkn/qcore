@@ -32,7 +32,7 @@ impl<'a, A: HandlerApi> SessionEstablishmentProcedure<'a, A> {
             id: session_id,
             snssai: Snssai(self.config().sst, None),
             userplane_info: self.api.reserve_userplane_session(&self.logger).await?,
-            dnn: dnn.unwrap_or_default(),
+            dnn: dnn.unwrap_or(b"internet".to_vec()),
         };
 
         let (cell_group_config, remote_tunnel_info) =

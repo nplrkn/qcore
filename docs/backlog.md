@@ -1,31 +1,16 @@
 In progress
 
--  Supply EPCO on session establishment accept
 -  Session establishment with real phone
    -  OnePlus
-      -  First attempt with ims, slice 1 followed by second attempt with internet, slice 3
-      -  Request 
-         -  Extended PCO - DNS, MTU
-         -  NR-CGI + TAI
-      -  Response
-         -  QoS rule 1 -> match all QFI 1
-         -  QoS flow descriptor -> QFI 1 = 5QI 9
-         -  EPCO
-            - PPP IP
-            - DNS = 8.8.8.8 or 8.8.4.4
-            - MTU = 1400
-         -  Slice
    -  Samsung
+   -  Motorola
 
-
-
+-  NAS library crashes with unknown IEI (max number of packet filter??) on PDU session establishment (?) - see ies-moto.pcap 
 
 -  GUTI registration
-   -  debug wireshark issue with MAC on registration accept
    -  test successful GUTI registration with real UE
    -  in case of unknown GUTI, do identity request
 -  ASN.1 decode failed - Error { cause: Generic, msg: "Extended enum not implemented", context: ["CauseRadioNetwork", "Cause", "UeContextReleaseRequest", "InitiatingMessage", "F1apPdu"] }.  Wireshark: cause = radioNetwork / rl-failure-others (12).
--  NAS library crashes with unknown IEI (max number of packet filter??) on PDU session establishment (?) - see ies-moto.pcap 
 -  Regression test using real AUTS calculation (to catch SQN handling changes).
  - remaining SQN failure - with different SIM, with long SQN (top byte 01 not 00)?
  - test script should check there are no further messages when a mock is dropped
