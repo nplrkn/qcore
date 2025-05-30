@@ -41,6 +41,7 @@ impl<'a, A: HandlerApi> SessionEstablishmentProcedure<'a, A> {
         let accept = crate::nas::build::pdu_session_establishment_accept(
             &session,
             hdr.procedure_transaction_identity,
+            self.config().sst,
         )?;
         let accept = self.ue.nas.encode(accept)?;
 

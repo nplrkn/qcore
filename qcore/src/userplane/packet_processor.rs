@@ -127,6 +127,7 @@ impl PacketProcessor {
             uplink_gtp_teid: GtpTeid(teid),
             ue_ip_addr: IpAddr::V4(ue_ipv4_addr),
             qfi: 0,
+            five_qi: 82,
         })
     }
 

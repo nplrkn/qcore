@@ -140,13 +140,14 @@ pub fn drb_to_be_setup_item(
     gtp_tunnel: GtpTunnel,
     pdu_session_id: u8,
     qfi: u8,
+    five_qi: u8,
 ) -> DrbsToBeSetupItem {
     DrbsToBeSetupItem {
         drb_id: DrbId(1),
         qos_information: QosInformation::DrbInformation(DrbInformation {
             drb_qos: QosFlowLevelQosParameters {
                 qos_characteristics: QosCharacteristics::NonDynamic5qi(NonDynamic5qiDescriptor {
-                    five_qi: 82,
+                    five_qi,
                     qos_priority_level: None,
                     averaging_window: None,
                     max_data_burst_volume: None,
@@ -171,7 +172,7 @@ pub fn drb_to_be_setup_item(
                 qos_flow_level_qos_parameters: QosFlowLevelQosParameters {
                     qos_characteristics: QosCharacteristics::NonDynamic5qi(
                         NonDynamic5qiDescriptor {
-                            five_qi: 82,
+                            five_qi,
                             qos_priority_level: None,
                             averaging_window: None,
                             max_data_burst_volume: None,
@@ -236,7 +237,8 @@ pub fn ue_context_setup_request(
             gtp_teid: session.userplane_info.uplink_gtp_teid.clone()
         },
         session.id,
-        session.userplane_info.qfi
+        session.userplane_info.qfi,
+        session.userplane_info.five_qi
     )]));
 
     Ok(UeContextSetupRequest {

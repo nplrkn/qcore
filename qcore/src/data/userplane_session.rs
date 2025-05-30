@@ -4,6 +4,7 @@ use xxap::GtpTeid;
 #[derive(Debug)]
 pub struct UserplaneSession {
     pub qfi: u8,
+    pub five_qi: u8,
     pub uplink_gtp_teid: GtpTeid,
     pub ue_ip_addr: IpAddr,
 }
