@@ -14,6 +14,7 @@ In progress
 -  Regression test using real AUTS calculation (to catch SQN handling changes).
  - remaining SQN failure - with different SIM, with long SQN (top byte 01 not 00)?
  - test script should check there are no further messages when a mock is dropped
+ - check stack usage with cargo +nightly rustc -- -Z print-type-sizes
 
 Performance
 - iperf framework

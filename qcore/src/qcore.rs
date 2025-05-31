@@ -40,7 +40,7 @@ enum NasContextLocator {
 
 pub struct ProgramHandle {
     _ebpf: Ebpf,
-    qc: QCore,
+    qc: Box<QCore>,
 }
 impl Deref for ProgramHandle {
     type Target = QCore;
@@ -78,7 +78,7 @@ impl QCore {
         let packet_processor =
             PacketProcessor::new(config.ue_subnet.clone(), &mut ebpf, &logger).await?;
 
-        let mut qc = Self::new(config, packet_processor, logger, sub_db).await?;
+        let mut qc = Box::new(Self::new(config, packet_processor, logger, sub_db).await?);
         qc.run().await.expect("Startup failure");
         Ok(ProgramHandle { qc, _ebpf: ebpf })
     }

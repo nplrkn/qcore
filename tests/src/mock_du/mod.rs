@@ -94,13 +94,13 @@ impl MockDu {
             .await;
         let pdu = build_f1ap::f1_setup_request();
         info!(self.logger, "F1SetupRequest >>");
-        self.send(pdu, None).await;
+        self.send(&pdu, None).await;
         self.receive_f1_setup_response().await
     }
 
     async fn receive_f1_setup_response(&self) -> Result<()> {
         let pdu = self.receive_pdu().await?;
-        let F1apPdu::SuccessfulOutcome(SuccessfulOutcome::F1SetupResponse(_)) = pdu else {
+        let F1apPdu::SuccessfulOutcome(SuccessfulOutcome::F1SetupResponse(_)) = *pdu else {
             bail!("Unexpected F1ap message {:?}", pdu)
         };
         info!(self.logger, "F1SetupResponse <<");
@@ -110,13 +110,13 @@ impl MockDu {
     pub async fn perform_f1_removal(&mut self) -> Result<()> {
         let pdu = build_f1ap::f1_removal_request();
         info!(self.logger, "F1RemovalRequest >>");
-        self.send(pdu, None).await;
+        self.send(&pdu, None).await;
         self.receive_f1_removal_response().await
     }
 
     async fn receive_f1_removal_response(&self) -> Result<()> {
         let pdu = self.receive_pdu().await?;
-        let F1apPdu::SuccessfulOutcome(SuccessfulOutcome::F1RemovalResponse(_)) = pdu else {
+        let F1apPdu::SuccessfulOutcome(SuccessfulOutcome::F1RemovalResponse(_)) = *pdu else {
             bail!("Unexpected F1ap message {:?}", pdu)
         };
         info!(self.logger, "F1RemovalResponse <<");
@@ -135,7 +135,7 @@ impl MockDu {
             self.logger,
             "InitialUlRrcMessageTransfer(RrcSetupRequest) >>"
         );
-        self.send(f1_indication, Some(ue.binding.assoc_id)).await;
+        self.send(&f1_indication, Some(ue.binding.assoc_id)).await;
 
         Ok(())
     }
@@ -145,7 +145,7 @@ impl MockDu {
         let pdu = self.receive_pdu().await?;
         let F1apPdu::InitiatingMessage(InitiatingMessage::DlRrcMessageTransfer(
             dl_rrc_message_transfer,
-        )) = pdu
+        )) = *pdu
         else {
             bail!("Unexpected F1ap message {:?}", pdu)
         };
@@ -159,7 +159,7 @@ impl MockDu {
         Ok(DlCcchMessage::from_bytes(&rrc_message_bytes)?.message)
     }
 
-    pub async fn send_ul_rrc(&self, ue: &mut UeContext, rrc: UlDcchMessage) -> Result<()> {
+    pub async fn send_ul_rrc(&self, ue: &mut UeContext, rrc: &UlDcchMessage) -> Result<()> {
         let gnb_cu_ue_f1ap_id = ue.gnb_cu_ue_f1ap_id.unwrap();
 
         // Encapsulate RRC message in PDCP PDU.
@@ -169,9 +169,10 @@ impl MockDu {
 
         // Wrap it in an UL Rrc Message Transfer
         let f1_indication =
-            build_f1ap::ul_rrc_message_transfer(gnb_cu_ue_f1ap_id, ue.ue_id, pdcp_pdu.into());
+            Box::new(build_f1ap::ul_rrc_message_transfer(gnb_cu_ue_f1ap_id, ue.ue_id, pdcp_pdu.into()));
 
-        self.send(f1_indication, Some(ue.binding.assoc_id)).await;
+        self.send(&f1_indication, Some(ue.binding.assoc_id)).await;
+
         Ok(())
     }
 
@@ -183,7 +184,7 @@ impl MockDu {
 
         let F1apPdu::InitiatingMessage(InitiatingMessage::DlRrcMessageTransfer(
             dl_rrc_message_transfer,
-        )) = pdu
+        )) = *pdu
         else {
             bail!("Unexpected F1ap message {:?}", pdu)
         };
@@ -206,18 +207,18 @@ impl MockDu {
         info!(&self.logger, "UeContextSetupRequest <<");
         let ue_setup_response = build_f1ap::ue_context_setup_response(ue, &self.local_ip)?;
         info!(&self.logger, "UeContextSetupResponse >>");
-        self.send(ue_setup_response, Some(assoc_id)).await;
+        self.send(&ue_setup_response, Some(assoc_id)).await;
 
         Ok(())
     }
 
     fn check_and_store_ue_context_setup_request(
         &self,
-        pdu: F1apPdu,
+        pdu: Box<F1apPdu>,
         ue: &mut UeContext,
     ) -> Result<()> {
         let F1apPdu::InitiatingMessage(InitiatingMessage::UeContextSetupRequest(ue_setup_request)) =
-            pdu
+            *pdu
         else {
             bail!("Unexpected F1ap message {:?}", pdu)
         };
@@ -263,14 +264,14 @@ impl MockDu {
     pub async fn send_ue_context_release_request(&self, ue: &UeContext) -> Result<()> {
         let pdu = build_f1ap::ue_context_release_request(ue);
         info!(self.logger, "UeContextReleaseRequest >>");
-        self.send(pdu, Some(ue.binding.assoc_id)).await;
+        self.send(&pdu, Some(ue.binding.assoc_id)).await;
         Ok(())
     }
 
     pub async fn handle_ue_context_release(&self, ue: &UeContext) -> Result<()> {
         // Receive release command
         let ReceivedPdu { pdu, assoc_id } = self.receive_pdu_with_assoc_id().await?;
-        let F1apPdu::InitiatingMessage(InitiatingMessage::UeContextReleaseCommand(r)) = pdu else {
+        let F1apPdu::InitiatingMessage(InitiatingMessage::UeContextReleaseCommand(r)) = *pdu else {
             bail!("Unexpected F1ap message {:?}", pdu)
         };
         info!(&self.logger, "UeContextReleaseCommand <<");
@@ -288,7 +289,7 @@ impl MockDu {
         );
 
         info!(&self.logger, "UeContextReleaseComplete >>");
-        self.send(ue_release_complete, Some(assoc_id)).await;
+        self.send(&ue_release_complete, Some(assoc_id)).await;
         Ok(())
     }
 
@@ -309,7 +310,7 @@ impl MockDu {
             expected_address,
         );
         info!(self.logger, "GnbCuConfigurationUpdateAcknowledge >>");
-        self.send(pdu, Some(assoc_id)).await;
+        self.send(&pdu, Some(assoc_id)).await;
         Ok(())
     }
 
@@ -322,7 +323,7 @@ impl MockDu {
 
         let F1apPdu::InitiatingMessage(InitiatingMessage::GnbCuConfigurationUpdate(
             cu_configuration_update,
-        )) = pdu
+        )) = *pdu
         else {
             bail!("Expected GnbCuConfigurationUpdate, got {:?}", pdu)
         };
@@ -350,10 +351,10 @@ impl MockDu {
     pub async fn perform_du_configuration_update(&self) -> Result<()> {
         let pdu = build_f1ap::gnb_du_configuration_update();
         info!(self.logger, "GnbDuConfigurationUpdate >>");
-        self.send(pdu, None).await;
+        self.send(&pdu, None).await;
         let pdu = self.receive_pdu().await?;
         let F1apPdu::SuccessfulOutcome(SuccessfulOutcome::GnbDuConfigurationUpdateAcknowledge(_)) =
-            pdu
+            *pdu
         else {
             bail!("Unexpected F1ap message {:?}", pdu)
         };

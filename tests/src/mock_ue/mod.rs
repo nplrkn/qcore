@@ -68,7 +68,7 @@ impl<'a> MockUe<'a> {
             "Rrc SetupComplete + NAS Registration Request >>"
         );
         self.du
-            .send_ul_rrc(&mut self.du_ue_context, rrc_setup_complete)
+            .send_ul_rrc(&mut self.du_ue_context, &rrc_setup_complete)
             .await
     }
 
@@ -112,7 +112,7 @@ impl<'a> MockUe<'a> {
             build_rrc::security_mode_complete(security_mode_command.rrc_transaction_identifier);
         info!(&self.logger, "Rrc SecurityModeComplete >>");
         self.du
-            .send_ul_rrc(&mut self.du_ue_context, security_mode_complete)
+            .send_ul_rrc(&mut self.du_ue_context, &security_mode_complete)
             .await
     }
 
@@ -218,7 +218,7 @@ impl<'a> MockUe<'a> {
             build_rrc::reconfiguration_complete(RrcTransactionIdentifier(0));
         info!(&self.logger, "Rrc ReconfigurationComplete >>");
         self.du
-            .send_ul_rrc(&mut self.du_ue_context, rrc_reconfiguration_complete)
+            .send_ul_rrc(&mut self.du_ue_context, &rrc_reconfiguration_complete)
             .await?;
 
         Ok(nas)
@@ -227,7 +227,7 @@ impl<'a> MockUe<'a> {
     async fn send_nas(&mut self, nas_bytes: Vec<u8>) -> Result<()> {
         let rrc = build_rrc::ul_information_transfer(nas_bytes);
         info!(&self.logger, "UlInformationTransfer(Nas) >>");
-        self.du.send_ul_rrc(&mut self.du_ue_context, rrc).await
+        self.du.send_ul_rrc(&mut self.du_ue_context, &rrc).await
     }
 
     pub async fn receive_nas(&self) -> Result<Vec<u8>> {
