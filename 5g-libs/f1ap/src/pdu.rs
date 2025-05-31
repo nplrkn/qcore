@@ -160,21 +160,25 @@ impl PerCodec for ResetType {
 }
 // ResetAll
 #[derive(Clone, Debug, Copy, TryFromPrimitive)]
-#[repr(u8)]
+#[repr(u32)]
 pub enum ResetAll {
     ResetAll,
 }
 
 impl ResetAll {
     fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
-        let (idx, extended) = decode::decode_enumerated(data, Some(0), Some(0), true)?;
-        if extended {
-            return Err(per_codec_error_new("Extended enum not implemented"));
-        }
-        Self::try_from(idx as u8).map_err(|_| per_codec_error_new("Unknown enum variant"))
+        let (idx, _extended) = decode::decode_enumerated(data, Some(0), Some(0), true)?;
+        Self::try_from(idx as u32).map_err(|_| per_codec_error_new("Unknown enum variant"))
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
-        encode::encode_enumerated(data, Some(0), Some(0), true, *self as i128, false)
+        encode::encode_enumerated(
+            data,
+            Some(0),
+            Some(0),
+            true,
+            *self as i128,
+            (*self as u32) >= 1,
+        )
     }
 }
 
@@ -525,7 +529,9 @@ pub struct F1SetupRequest {
     pub gnb_du_rrc_version: RrcVersion,
     pub transport_layer_address_info: Option<TransportLayerAddressInfo>,
     pub bap_address: Option<BapAddress>,
-    pub extended_gnb_cu_name: Option<ExtendedGnbCuName>,
+    pub extended_gnb_du_name: Option<ExtendedGnbDuName>,
+    pub rrc_terminating_iab_donor_gnb_id: Option<GlobalGnbId>,
+    pub mobile_iab_mt_user_location_information: Option<MobileIabMtUserLocationInformation>,
 }
 
 impl F1SetupRequest {
@@ -540,7 +546,11 @@ impl F1SetupRequest {
         let mut gnb_du_rrc_version: Option<RrcVersion> = None;
         let mut transport_layer_address_info: Option<TransportLayerAddressInfo> = None;
         let mut bap_address: Option<BapAddress> = None;
-        let mut extended_gnb_cu_name: Option<ExtendedGnbCuName> = None;
+        let mut extended_gnb_du_name: Option<ExtendedGnbDuName> = None;
+        let mut rrc_terminating_iab_donor_gnb_id: Option<GlobalGnbId> = None;
+        let mut mobile_iab_mt_user_location_information: Option<
+            MobileIabMtUserLocationInformation,
+        > = None;
 
         for _ in 0..num_ies {
             let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
@@ -556,7 +566,12 @@ impl F1SetupRequest {
                     transport_layer_address_info = Some(TransportLayerAddressInfo::decode(data)?)
                 }
                 281 => bap_address = Some(BapAddress::decode(data)?),
-                427 => extended_gnb_cu_name = Some(ExtendedGnbCuName::decode(data)?),
+                427 => extended_gnb_du_name = Some(ExtendedGnbDuName::decode(data)?),
+                762 => rrc_terminating_iab_donor_gnb_id = Some(GlobalGnbId::decode(data)?),
+                765 => {
+                    mobile_iab_mt_user_location_information =
+                        Some(MobileIabMtUserLocationInformation::decode(data)?)
+                }
                 x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
             }
             data.decode_align()?;
@@ -578,7 +593,9 @@ impl F1SetupRequest {
             gnb_du_rrc_version,
             transport_layer_address_info,
             bap_address,
-            extended_gnb_cu_name,
+            extended_gnb_du_name,
+            rrc_terminating_iab_donor_gnb_id,
+            mobile_iab_mt_user_location_information,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
@@ -649,10 +666,30 @@ impl F1SetupRequest {
             num_ies += 1;
         }
 
-        if let Some(x) = &self.extended_gnb_cu_name {
+        if let Some(x) = &self.extended_gnb_du_name {
             let ie = &mut Allocator::new_codec_data();
             x.encode(ie)?;
             encode::encode_integer(ies, Some(0), Some(65535), false, 427, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.rrc_terminating_iab_donor_gnb_id {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 762, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.mobile_iab_mt_user_location_information {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 765, false)?;
             Criticality::Ignore.encode(ies)?;
             encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
             ies.append_aligned(ie);
@@ -739,7 +776,8 @@ pub struct F1SetupResponse {
     pub transport_layer_address_info: Option<TransportLayerAddressInfo>,
     pub ul_bh_non_up_traffic_mapping: Option<UlBhNonUpTrafficMapping>,
     pub bap_address: Option<BapAddress>,
-    pub extended_gnb_du_name: Option<ExtendedGnbDuName>,
+    pub extended_gnb_cu_name: Option<ExtendedGnbCuName>,
+    pub ncgi_to_be_updated_list: Option<NcgiToBeUpdatedList>,
 }
 
 impl F1SetupResponse {
@@ -754,7 +792,8 @@ impl F1SetupResponse {
         let mut transport_layer_address_info: Option<TransportLayerAddressInfo> = None;
         let mut ul_bh_non_up_traffic_mapping: Option<UlBhNonUpTrafficMapping> = None;
         let mut bap_address: Option<BapAddress> = None;
-        let mut extended_gnb_du_name: Option<ExtendedGnbDuName> = None;
+        let mut extended_gnb_cu_name: Option<ExtendedGnbCuName> = None;
+        let mut ncgi_to_be_updated_list: Option<NcgiToBeUpdatedList> = None;
 
         for _ in 0..num_ies {
             let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
@@ -770,7 +809,8 @@ impl F1SetupResponse {
                 }
                 287 => ul_bh_non_up_traffic_mapping = Some(UlBhNonUpTrafficMapping::decode(data)?),
                 281 => bap_address = Some(BapAddress::decode(data)?),
-                426 => extended_gnb_du_name = Some(ExtendedGnbDuName::decode(data)?),
+                426 => extended_gnb_cu_name = Some(ExtendedGnbCuName::decode(data)?),
+                763 => ncgi_to_be_updated_list = Some(NcgiToBeUpdatedList::decode(data)?),
                 x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
             }
             data.decode_align()?;
@@ -789,7 +829,8 @@ impl F1SetupResponse {
             transport_layer_address_info,
             ul_bh_non_up_traffic_mapping,
             bap_address,
-            extended_gnb_du_name,
+            extended_gnb_cu_name,
+            ncgi_to_be_updated_list,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
@@ -862,11 +903,21 @@ impl F1SetupResponse {
             num_ies += 1;
         }
 
-        if let Some(x) = &self.extended_gnb_du_name {
+        if let Some(x) = &self.extended_gnb_cu_name {
             let ie = &mut Allocator::new_codec_data();
             x.encode(ie)?;
             encode::encode_integer(ies, Some(0), Some(65535), false, 426, false)?;
             Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.ncgi_to_be_updated_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 763, false)?;
+            Criticality::Reject.encode(ies)?;
             encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
             ies.append_aligned(ie);
             num_ies += 1;
@@ -938,6 +989,54 @@ impl PerCodec for CellsToBeActivatedList {
     fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
         self.encode_inner(data).map_err(|mut e: PerCodecError| {
             e.push_context("CellsToBeActivatedList");
+            e
+        })
+    }
+}
+// NcgiToBeUpdatedList
+#[derive(Clone, Debug)]
+pub struct NcgiToBeUpdatedList(pub NonEmpty<NcgiToBeUpdatedListItem>);
+
+impl NcgiToBeUpdatedList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(512), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(NcgiToBeUpdatedListItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(512), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 764, false)?;
+            Criticality::Reject.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for NcgiToBeUpdatedList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        NcgiToBeUpdatedList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("NcgiToBeUpdatedList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("NcgiToBeUpdatedList");
             e
         })
     }
@@ -1059,6 +1158,11 @@ pub struct GnbDuConfigurationUpdate {
     pub gnb_du_id: Option<GnbDuId>,
     pub gnb_du_tnl_association_to_remove_list: Option<GnbDuTnlAssociationToRemoveList>,
     pub transport_layer_address_info: Option<TransportLayerAddressInfo>,
+    pub coverage_modification_notification: Option<CoverageModificationNotification>,
+    pub gnb_du_name: Option<GnbDuName>,
+    pub extended_gnb_du_name: Option<ExtendedGnbDuName>,
+    pub rrc_terminating_iab_donor_related_info: Option<RrcTerminatingIabDonorRelatedInfo>,
+    pub mobile_iab_mt_user_location_information: Option<MobileIabMtUserLocationInformation>,
 }
 
 impl GnbDuConfigurationUpdate {
@@ -1077,6 +1181,14 @@ impl GnbDuConfigurationUpdate {
         let mut gnb_du_tnl_association_to_remove_list: Option<GnbDuTnlAssociationToRemoveList> =
             None;
         let mut transport_layer_address_info: Option<TransportLayerAddressInfo> = None;
+        let mut coverage_modification_notification: Option<CoverageModificationNotification> = None;
+        let mut gnb_du_name: Option<GnbDuName> = None;
+        let mut extended_gnb_du_name: Option<ExtendedGnbDuName> = None;
+        let mut rrc_terminating_iab_donor_related_info: Option<RrcTerminatingIabDonorRelatedInfo> =
+            None;
+        let mut mobile_iab_mt_user_location_information: Option<
+            MobileIabMtUserLocationInformation,
+        > = None;
 
         for _ in 0..num_ies {
             let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
@@ -1100,6 +1212,20 @@ impl GnbDuConfigurationUpdate {
                 254 => {
                     transport_layer_address_info = Some(TransportLayerAddressInfo::decode(data)?)
                 }
+                446 => {
+                    coverage_modification_notification =
+                        Some(CoverageModificationNotification::decode(data)?)
+                }
+                45 => gnb_du_name = Some(GnbDuName::decode(data)?),
+                427 => extended_gnb_du_name = Some(ExtendedGnbDuName::decode(data)?),
+                761 => {
+                    rrc_terminating_iab_donor_related_info =
+                        Some(RrcTerminatingIabDonorRelatedInfo::decode(data)?)
+                }
+                765 => {
+                    mobile_iab_mt_user_location_information =
+                        Some(MobileIabMtUserLocationInformation::decode(data)?)
+                }
                 x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
             }
             data.decode_align()?;
@@ -1117,6 +1243,11 @@ impl GnbDuConfigurationUpdate {
             gnb_du_id,
             gnb_du_tnl_association_to_remove_list,
             transport_layer_address_info,
+            coverage_modification_notification,
+            gnb_du_name,
+            extended_gnb_du_name,
+            rrc_terminating_iab_donor_related_info,
+            mobile_iab_mt_user_location_information,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
@@ -1205,6 +1336,56 @@ impl GnbDuConfigurationUpdate {
             let ie = &mut Allocator::new_codec_data();
             x.encode(ie)?;
             encode::encode_integer(ies, Some(0), Some(65535), false, 254, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.coverage_modification_notification {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 446, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.gnb_du_name {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 45, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.extended_gnb_du_name {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 427, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.rrc_terminating_iab_donor_related_info {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 761, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.mobile_iab_mt_user_location_information {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 765, false)?;
             Criticality::Ignore.encode(ies)?;
             encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
             ies.append_aligned(ie);
@@ -1531,6 +1712,7 @@ pub struct GnbDuConfigurationUpdateAcknowledge {
     pub transport_layer_address_info: Option<TransportLayerAddressInfo>,
     pub ul_bh_non_up_traffic_mapping: Option<UlBhNonUpTrafficMapping>,
     pub bap_address: Option<BapAddress>,
+    pub cells_for_son_list: Option<CellsForSonList>,
 }
 
 impl GnbDuConfigurationUpdateAcknowledge {
@@ -1545,6 +1727,7 @@ impl GnbDuConfigurationUpdateAcknowledge {
         let mut transport_layer_address_info: Option<TransportLayerAddressInfo> = None;
         let mut ul_bh_non_up_traffic_mapping: Option<UlBhNonUpTrafficMapping> = None;
         let mut bap_address: Option<BapAddress> = None;
+        let mut cells_for_son_list: Option<CellsForSonList> = None;
 
         for _ in 0..num_ies {
             let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
@@ -1560,6 +1743,7 @@ impl GnbDuConfigurationUpdateAcknowledge {
                 }
                 287 => ul_bh_non_up_traffic_mapping = Some(UlBhNonUpTrafficMapping::decode(data)?),
                 281 => bap_address = Some(BapAddress::decode(data)?),
+                449 => cells_for_son_list = Some(CellsForSonList::decode(data)?),
                 x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
             }
             data.decode_align()?;
@@ -1575,6 +1759,7 @@ impl GnbDuConfigurationUpdateAcknowledge {
             transport_layer_address_info,
             ul_bh_non_up_traffic_mapping,
             bap_address,
+            cells_for_son_list,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
@@ -1643,6 +1828,16 @@ impl GnbDuConfigurationUpdateAcknowledge {
             let ie = &mut Allocator::new_codec_data();
             x.encode(ie)?;
             encode::encode_integer(ies, Some(0), Some(65535), false, 281, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.cells_for_son_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 449, false)?;
             Criticality::Ignore.encode(ies)?;
             encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
             ies.append_aligned(ie);
@@ -1791,6 +1986,11 @@ pub struct GnbCuConfigurationUpdate {
     pub transport_layer_address_info: Option<TransportLayerAddressInfo>,
     pub ul_bh_non_up_traffic_mapping: Option<UlBhNonUpTrafficMapping>,
     pub bap_address: Option<BapAddress>,
+    pub cco_assistance_information: Option<CcoAssistanceInformation>,
+    pub cells_for_son_list: Option<CellsForSonList>,
+    pub gnb_cu_name: Option<GnbCuName>,
+    pub extended_gnb_cu_name: Option<ExtendedGnbCuName>,
+    pub cells_allowed_to_be_deactivated_list: Option<CellsAllowedToBeDeactivatedList>,
 }
 
 impl GnbCuConfigurationUpdate {
@@ -1812,6 +2012,12 @@ impl GnbCuConfigurationUpdate {
         let mut transport_layer_address_info: Option<TransportLayerAddressInfo> = None;
         let mut ul_bh_non_up_traffic_mapping: Option<UlBhNonUpTrafficMapping> = None;
         let mut bap_address: Option<BapAddress> = None;
+        let mut cco_assistance_information: Option<CcoAssistanceInformation> = None;
+        let mut cells_for_son_list: Option<CellsForSonList> = None;
+        let mut gnb_cu_name: Option<GnbCuName> = None;
+        let mut extended_gnb_cu_name: Option<ExtendedGnbCuName> = None;
+        let mut cells_allowed_to_be_deactivated_list: Option<CellsAllowedToBeDeactivatedList> =
+            None;
 
         for _ in 0..num_ies {
             let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
@@ -1847,6 +2053,14 @@ impl GnbCuConfigurationUpdate {
                 }
                 287 => ul_bh_non_up_traffic_mapping = Some(UlBhNonUpTrafficMapping::decode(data)?),
                 281 => bap_address = Some(BapAddress::decode(data)?),
+                447 => cco_assistance_information = Some(CcoAssistanceInformation::decode(data)?),
+                449 => cells_for_son_list = Some(CellsForSonList::decode(data)?),
+                82 => gnb_cu_name = Some(GnbCuName::decode(data)?),
+                426 => extended_gnb_cu_name = Some(ExtendedGnbCuName::decode(data)?),
+                746 => {
+                    cells_allowed_to_be_deactivated_list =
+                        Some(CellsAllowedToBeDeactivatedList::decode(data)?)
+                }
                 x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
             }
             data.decode_align()?;
@@ -1867,6 +2081,11 @@ impl GnbCuConfigurationUpdate {
             transport_layer_address_info,
             ul_bh_non_up_traffic_mapping,
             bap_address,
+            cco_assistance_information,
+            cells_for_son_list,
+            gnb_cu_name,
+            extended_gnb_cu_name,
+            cells_allowed_to_be_deactivated_list,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
@@ -1985,6 +2204,56 @@ impl GnbCuConfigurationUpdate {
             let ie = &mut Allocator::new_codec_data();
             x.encode(ie)?;
             encode::encode_integer(ies, Some(0), Some(65535), false, 281, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.cco_assistance_information {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 447, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.cells_for_son_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 449, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.gnb_cu_name {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 82, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.extended_gnb_cu_name {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 426, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.cells_allowed_to_be_deactivated_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 746, false)?;
             Criticality::Ignore.encode(ies)?;
             encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
             ies.append_aligned(ie);
@@ -2253,6 +2522,54 @@ impl PerCodec for CellsToBeBarredList {
         })
     }
 }
+// CellsAllowedToBeDeactivatedList
+#[derive(Clone, Debug)]
+pub struct CellsAllowedToBeDeactivatedList(pub NonEmpty<CellsAllowedToBeDeactivatedListItem>);
+
+impl CellsAllowedToBeDeactivatedList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(512), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(CellsAllowedToBeDeactivatedListItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(512), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 747, false)?;
+            Criticality::Ignore.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for CellsAllowedToBeDeactivatedList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        CellsAllowedToBeDeactivatedList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("CellsAllowedToBeDeactivatedList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("CellsAllowedToBeDeactivatedList");
+            e
+        })
+    }
+}
 // ProtectedEutraResourcesList
 #[derive(Clone, Debug)]
 pub struct ProtectedEutraResourcesList(pub NonEmpty<ProtectedEutraResourcesItem>);
@@ -2359,6 +2676,7 @@ pub struct GnbCuConfigurationUpdateAcknowledge {
     pub gnb_cu_tnl_association_failed_to_setup_list: Option<GnbCuTnlAssociationFailedToSetupList>,
     pub dedicated_si_delivery_needed_ue_list: Option<DedicatedSiDeliveryNeededUeList>,
     pub transport_layer_address_info: Option<TransportLayerAddressInfo>,
+    pub cells_with_ss_bs_activated_list: Option<CellsWithSsBsActivatedList>,
 }
 
 impl GnbCuConfigurationUpdateAcknowledge {
@@ -2376,6 +2694,7 @@ impl GnbCuConfigurationUpdateAcknowledge {
         let mut dedicated_si_delivery_needed_ue_list: Option<DedicatedSiDeliveryNeededUeList> =
             None;
         let mut transport_layer_address_info: Option<TransportLayerAddressInfo> = None;
+        let mut cells_with_ss_bs_activated_list: Option<CellsWithSsBsActivatedList> = None;
 
         for _ in 0..num_ies {
             let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
@@ -2403,6 +2722,10 @@ impl GnbCuConfigurationUpdateAcknowledge {
                 254 => {
                     transport_layer_address_info = Some(TransportLayerAddressInfo::decode(data)?)
                 }
+                745 => {
+                    cells_with_ss_bs_activated_list =
+                        Some(CellsWithSsBsActivatedList::decode(data)?)
+                }
                 x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
             }
             data.decode_align()?;
@@ -2418,6 +2741,7 @@ impl GnbCuConfigurationUpdateAcknowledge {
             gnb_cu_tnl_association_failed_to_setup_list,
             dedicated_si_delivery_needed_ue_list,
             transport_layer_address_info,
+            cells_with_ss_bs_activated_list,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
@@ -2486,6 +2810,16 @@ impl GnbCuConfigurationUpdateAcknowledge {
             let ie = &mut Allocator::new_codec_data();
             x.encode(ie)?;
             encode::encode_integer(ies, Some(0), Some(65535), false, 254, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.cells_with_ss_bs_activated_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 745, false)?;
             Criticality::Ignore.encode(ies)?;
             encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
             ies.append_aligned(ie);
@@ -3014,6 +3348,35 @@ pub struct UeContextSetupRequest {
     pub management_based_mdt_plmn_list: Option<MdtPlmnList>,
     pub serving_nid: Option<Nid>,
     pub f1c_transfer_path: Option<F1cTransferPath>,
+    pub f1c_transfer_path_nr_dc: Option<F1cTransferPathNrDc>,
+    pub mdt_polluted_measurement_indicator: Option<MdtPollutedMeasurementIndicator>,
+    pub scg_activation_request: Option<ScgActivationRequest>,
+    pub cg_sdt_session_info_old: Option<CgSdtSessionInfo>,
+    pub five_g_pro_se_authorized: Option<FiveGProSeAuthorized>,
+    pub five_g_pro_se_ue_pc5_aggregate_maximum_bitrate: Option<NrUeSidelinkAggregateMaximumBitrate>,
+    pub five_g_pro_se_pc5_link_ambr: Option<BitRate>,
+    pub uu_rlc_channel_to_be_setup_list: Option<UuRlcChannelToBeSetupList>,
+    pub pc5rlc_channel_to_be_setup_list: Option<Pc5rlcChannelToBeSetupList>,
+    pub path_switch_configuration: Option<PathSwitchConfiguration>,
+    pub gnb_du_ue_slice_maximum_bit_rate_list: Option<GnbDuUeSliceMaximumBitRateList>,
+    pub multicast_mbs_session_setup_list: Option<MulticastMbsSessionList>,
+    pub ue_multicast_mr_bs_to_be_setup_list: Option<UeMulticastMrBsToBeSetupList>,
+    pub serving_cell_mo_list: Option<ServingCellMoList>,
+    pub network_controlled_repeater_authorized: Option<NetworkControlledRepeaterAuthorized>,
+    pub sdt_volume_threshold: Option<SdtVolumeThreshold>,
+    pub ltm_information_setup: Option<LtmInformationSetup>,
+    pub ltm_configuration_id_mapping_list: Option<LtmConfigurationIdMappingList>,
+    pub early_sync_information_request: Option<EarlySyncInformationRequest>,
+    pub path_addition_information: Option<PathAdditionInformation>,
+    pub nr_a2x_services_authorized: Option<NrA2xServicesAuthorized>,
+    pub ltea2x_services_authorized: Option<Ltea2xServicesAuthorized>,
+    pub nr_ue_sidelink_aggregate_maximum_bitrate_for_a2x:
+        Option<NrUeSidelinkAggregateMaximumBitrate>,
+    pub lte_ue_sidelink_aggregate_maximum_bitrate_for_a2x:
+        Option<LteUeSidelinkAggregateMaximumBitrate>,
+    pub dllbt_failure_information_request: Option<DllbtFailureInformationRequest>,
+    pub sl_positioning_ranging_service_info: Option<SlPositioningRangingServiceInfo>,
+    pub non_integer_drx_cycle: Option<NonIntegerDrxCycle>,
 }
 
 impl UeContextSetupRequest {
@@ -3068,6 +3431,42 @@ impl UeContextSetupRequest {
         let mut management_based_mdt_plmn_list: Option<MdtPlmnList> = None;
         let mut serving_nid: Option<Nid> = None;
         let mut f1c_transfer_path: Option<F1cTransferPath> = None;
+        let mut f1c_transfer_path_nr_dc: Option<F1cTransferPathNrDc> = None;
+        let mut mdt_polluted_measurement_indicator: Option<MdtPollutedMeasurementIndicator> = None;
+        let mut scg_activation_request: Option<ScgActivationRequest> = None;
+        let mut cg_sdt_session_info_old: Option<CgSdtSessionInfo> = None;
+        let mut five_g_pro_se_authorized: Option<FiveGProSeAuthorized> = None;
+        let mut five_g_pro_se_ue_pc5_aggregate_maximum_bitrate: Option<
+            NrUeSidelinkAggregateMaximumBitrate,
+        > = None;
+        let mut five_g_pro_se_pc5_link_ambr: Option<BitRate> = None;
+        let mut uu_rlc_channel_to_be_setup_list: Option<UuRlcChannelToBeSetupList> = None;
+        let mut pc5rlc_channel_to_be_setup_list: Option<Pc5rlcChannelToBeSetupList> = None;
+        let mut path_switch_configuration: Option<PathSwitchConfiguration> = None;
+        let mut gnb_du_ue_slice_maximum_bit_rate_list: Option<GnbDuUeSliceMaximumBitRateList> =
+            None;
+        let mut multicast_mbs_session_setup_list: Option<MulticastMbsSessionList> = None;
+        let mut ue_multicast_mr_bs_to_be_setup_list: Option<UeMulticastMrBsToBeSetupList> = None;
+        let mut serving_cell_mo_list: Option<ServingCellMoList> = None;
+        let mut network_controlled_repeater_authorized: Option<
+            NetworkControlledRepeaterAuthorized,
+        > = None;
+        let mut sdt_volume_threshold: Option<SdtVolumeThreshold> = None;
+        let mut ltm_information_setup: Option<LtmInformationSetup> = None;
+        let mut ltm_configuration_id_mapping_list: Option<LtmConfigurationIdMappingList> = None;
+        let mut early_sync_information_request: Option<EarlySyncInformationRequest> = None;
+        let mut path_addition_information: Option<PathAdditionInformation> = None;
+        let mut nr_a2x_services_authorized: Option<NrA2xServicesAuthorized> = None;
+        let mut ltea2x_services_authorized: Option<Ltea2xServicesAuthorized> = None;
+        let mut nr_ue_sidelink_aggregate_maximum_bitrate_for_a2x: Option<
+            NrUeSidelinkAggregateMaximumBitrate,
+        > = None;
+        let mut lte_ue_sidelink_aggregate_maximum_bitrate_for_a2x: Option<
+            LteUeSidelinkAggregateMaximumBitrate,
+        > = None;
+        let mut dllbt_failure_information_request: Option<DllbtFailureInformationRequest> = None;
+        let mut sl_positioning_ranging_service_info: Option<SlPositioningRangingServiceInfo> = None;
+        let mut non_integer_drx_cycle: Option<NonIntegerDrxCycle> = None;
 
         for _ in 0..num_ies {
             let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
@@ -3133,6 +3532,73 @@ impl UeContextSetupRequest {
                 377 => management_based_mdt_plmn_list = Some(MdtPlmnList::decode(data)?),
                 382 => serving_nid = Some(Nid::decode(data)?),
                 428 => f1c_transfer_path = Some(F1cTransferPath::decode(data)?),
+                511 => f1c_transfer_path_nr_dc = Some(F1cTransferPathNrDc::decode(data)?),
+                536 => {
+                    mdt_polluted_measurement_indicator =
+                        Some(MdtPollutedMeasurementIndicator::decode(data)?)
+                }
+                547 => scg_activation_request = Some(ScgActivationRequest::decode(data)?),
+                591 => cg_sdt_session_info_old = Some(CgSdtSessionInfo::decode(data)?),
+                594 => five_g_pro_se_authorized = Some(FiveGProSeAuthorized::decode(data)?),
+                595 => {
+                    five_g_pro_se_ue_pc5_aggregate_maximum_bitrate =
+                        Some(NrUeSidelinkAggregateMaximumBitrate::decode(data)?)
+                }
+                596 => five_g_pro_se_pc5_link_ambr = Some(BitRate::decode(data)?),
+                599 => {
+                    uu_rlc_channel_to_be_setup_list = Some(UuRlcChannelToBeSetupList::decode(data)?)
+                }
+                608 => {
+                    pc5rlc_channel_to_be_setup_list =
+                        Some(Pc5rlcChannelToBeSetupList::decode(data)?)
+                }
+                619 => path_switch_configuration = Some(PathSwitchConfiguration::decode(data)?),
+                626 => {
+                    gnb_du_ue_slice_maximum_bit_rate_list =
+                        Some(GnbDuUeSliceMaximumBitRateList::decode(data)?)
+                }
+                632 => {
+                    multicast_mbs_session_setup_list = Some(MulticastMbsSessionList::decode(data)?)
+                }
+                630 => {
+                    ue_multicast_mr_bs_to_be_setup_list =
+                        Some(UeMulticastMrBsToBeSetupList::decode(data)?)
+                }
+                695 => serving_cell_mo_list = Some(ServingCellMoList::decode(data)?),
+                712 => {
+                    network_controlled_repeater_authorized =
+                        Some(NetworkControlledRepeaterAuthorized::decode(data)?)
+                }
+                716 => sdt_volume_threshold = Some(SdtVolumeThreshold::decode(data)?),
+                720 => ltm_information_setup = Some(LtmInformationSetup::decode(data)?),
+                721 => {
+                    ltm_configuration_id_mapping_list =
+                        Some(LtmConfigurationIdMappingList::decode(data)?)
+                }
+                726 => {
+                    early_sync_information_request =
+                        Some(EarlySyncInformationRequest::decode(data)?)
+                }
+                741 => path_addition_information = Some(PathAdditionInformation::decode(data)?),
+                779 => nr_a2x_services_authorized = Some(NrA2xServicesAuthorized::decode(data)?),
+                780 => ltea2x_services_authorized = Some(Ltea2xServicesAuthorized::decode(data)?),
+                781 => {
+                    nr_ue_sidelink_aggregate_maximum_bitrate_for_a2x =
+                        Some(NrUeSidelinkAggregateMaximumBitrate::decode(data)?)
+                }
+                782 => {
+                    lte_ue_sidelink_aggregate_maximum_bitrate_for_a2x =
+                        Some(LteUeSidelinkAggregateMaximumBitrate::decode(data)?)
+                }
+                794 => {
+                    dllbt_failure_information_request =
+                        Some(DllbtFailureInformationRequest::decode(data)?)
+                }
+                801 => {
+                    sl_positioning_ranging_service_info =
+                        Some(SlPositioningRangingServiceInfo::decode(data)?)
+                }
+                838 => non_integer_drx_cycle = Some(NonIntegerDrxCycle::decode(data)?),
                 x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
             }
             data.decode_align()?;
@@ -3187,6 +3653,33 @@ impl UeContextSetupRequest {
             management_based_mdt_plmn_list,
             serving_nid,
             f1c_transfer_path,
+            f1c_transfer_path_nr_dc,
+            mdt_polluted_measurement_indicator,
+            scg_activation_request,
+            cg_sdt_session_info_old,
+            five_g_pro_se_authorized,
+            five_g_pro_se_ue_pc5_aggregate_maximum_bitrate,
+            five_g_pro_se_pc5_link_ambr,
+            uu_rlc_channel_to_be_setup_list,
+            pc5rlc_channel_to_be_setup_list,
+            path_switch_configuration,
+            gnb_du_ue_slice_maximum_bit_rate_list,
+            multicast_mbs_session_setup_list,
+            ue_multicast_mr_bs_to_be_setup_list,
+            serving_cell_mo_list,
+            network_controlled_repeater_authorized,
+            sdt_volume_threshold,
+            ltm_information_setup,
+            ltm_configuration_id_mapping_list,
+            early_sync_information_request,
+            path_addition_information,
+            nr_a2x_services_authorized,
+            ltea2x_services_authorized,
+            nr_ue_sidelink_aggregate_maximum_bitrate_for_a2x,
+            lte_ue_sidelink_aggregate_maximum_bitrate_for_a2x,
+            dllbt_failure_information_request,
+            sl_positioning_ranging_service_info,
+            non_integer_drx_cycle,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
@@ -3555,6 +4048,276 @@ impl UeContextSetupRequest {
             num_ies += 1;
         }
 
+        if let Some(x) = &self.f1c_transfer_path_nr_dc {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 511, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.mdt_polluted_measurement_indicator {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 536, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.scg_activation_request {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 547, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.cg_sdt_session_info_old {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 591, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.five_g_pro_se_authorized {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 594, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.five_g_pro_se_ue_pc5_aggregate_maximum_bitrate {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 595, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.five_g_pro_se_pc5_link_ambr {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 596, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.uu_rlc_channel_to_be_setup_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 599, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.pc5rlc_channel_to_be_setup_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 608, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.path_switch_configuration {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 619, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.gnb_du_ue_slice_maximum_bit_rate_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 626, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.multicast_mbs_session_setup_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 632, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.ue_multicast_mr_bs_to_be_setup_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 630, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.serving_cell_mo_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 695, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.network_controlled_repeater_authorized {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 712, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.sdt_volume_threshold {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 716, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.ltm_information_setup {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 720, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.ltm_configuration_id_mapping_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 721, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.early_sync_information_request {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 726, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.path_addition_information {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 741, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.nr_a2x_services_authorized {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 779, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.ltea2x_services_authorized {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 780, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.nr_ue_sidelink_aggregate_maximum_bitrate_for_a2x {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 781, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.lte_ue_sidelink_aggregate_maximum_bitrate_for_a2x {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 782, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.dllbt_failure_information_request {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 794, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.sl_positioning_ranging_service_info {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 801, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.non_integer_drx_cycle {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 838, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
         encode::encode_sequence_header(data, true, &BitString::new(), false)?;
         encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
         data.append_aligned(ies);
@@ -3865,6 +4628,102 @@ impl PerCodec for SlDrbsToBeSetupList {
         })
     }
 }
+// UeMulticastMrBsToBeSetupList
+#[derive(Clone, Debug)]
+pub struct UeMulticastMrBsToBeSetupList(pub NonEmpty<UeMulticastMrBsToBeSetupItem>);
+
+impl UeMulticastMrBsToBeSetupList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(64), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(UeMulticastMrBsToBeSetupItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(64), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 631, false)?;
+            Criticality::Reject.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for UeMulticastMrBsToBeSetupList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        UeMulticastMrBsToBeSetupList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("UeMulticastMrBsToBeSetupList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("UeMulticastMrBsToBeSetupList");
+            e
+        })
+    }
+}
+// ServingCellMoList
+#[derive(Clone, Debug)]
+pub struct ServingCellMoList(pub NonEmpty<ServingCellMoListItem>);
+
+impl ServingCellMoList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(16), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(ServingCellMoListItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(16), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 696, false)?;
+            Criticality::Reject.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for ServingCellMoList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        ServingCellMoList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("ServingCellMoList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("ServingCellMoList");
+            e
+        })
+    }
+}
 // UeContextSetupResponse
 #[derive(Clone, Debug)]
 pub struct UeContextSetupResponse {
@@ -3886,6 +4745,18 @@ pub struct UeContextSetupResponse {
     pub sl_drbs_setup_list: Option<SlDrbsSetupList>,
     pub sl_drbs_failed_to_be_setup_list: Option<SlDrbsFailedToBeSetupList>,
     pub requested_target_cell_global_id: Option<NrCgi>,
+    pub scg_activation_status: Option<ScgActivationStatus>,
+    pub uu_rlc_channel_setup_list: Option<UuRlcChannelSetupList>,
+    pub uu_rlc_channel_failed_to_be_setup_list: Option<UuRlcChannelFailedToBeSetupList>,
+    pub pc5rlc_channel_setup_list: Option<Pc5rlcChannelSetupList>,
+    pub pc5rlc_channel_failed_to_be_setup_list: Option<Pc5rlcChannelFailedToBeSetupList>,
+    pub serving_cell_mo_encoded_in_cgc_list: Option<ServingCellMoEncodedInCgcList>,
+    pub ue_multicast_mr_bs_setupnew_list: Option<UeMulticastMrBsSetupnewList>,
+    pub dedicated_si_delivery_indication: Option<DedicatedSiDeliveryIndication>,
+    pub configured_bwp_list: Option<ConfiguredBwpList>,
+    pub early_sync_information: Option<EarlySyncInformation>,
+    pub ltm_configuration: Option<LtmConfiguration>,
+    pub s_cpac_configuration: Option<SCpacConfiguration>,
 }
 
 impl UeContextSetupResponse {
@@ -3913,6 +4784,20 @@ impl UeContextSetupResponse {
         let mut sl_drbs_setup_list: Option<SlDrbsSetupList> = None;
         let mut sl_drbs_failed_to_be_setup_list: Option<SlDrbsFailedToBeSetupList> = None;
         let mut requested_target_cell_global_id: Option<NrCgi> = None;
+        let mut scg_activation_status: Option<ScgActivationStatus> = None;
+        let mut uu_rlc_channel_setup_list: Option<UuRlcChannelSetupList> = None;
+        let mut uu_rlc_channel_failed_to_be_setup_list: Option<UuRlcChannelFailedToBeSetupList> =
+            None;
+        let mut pc5rlc_channel_setup_list: Option<Pc5rlcChannelSetupList> = None;
+        let mut pc5rlc_channel_failed_to_be_setup_list: Option<Pc5rlcChannelFailedToBeSetupList> =
+            None;
+        let mut serving_cell_mo_encoded_in_cgc_list: Option<ServingCellMoEncodedInCgcList> = None;
+        let mut ue_multicast_mr_bs_setupnew_list: Option<UeMulticastMrBsSetupnewList> = None;
+        let mut dedicated_si_delivery_indication: Option<DedicatedSiDeliveryIndication> = None;
+        let mut configured_bwp_list: Option<ConfiguredBwpList> = None;
+        let mut early_sync_information: Option<EarlySyncInformation> = None;
+        let mut ltm_configuration: Option<LtmConfiguration> = None;
+        let mut s_cpac_configuration: Option<SCpacConfiguration> = None;
 
         for _ in 0..num_ies {
             let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
@@ -3948,6 +4833,33 @@ impl UeContextSetupResponse {
                     sl_drbs_failed_to_be_setup_list = Some(SlDrbsFailedToBeSetupList::decode(data)?)
                 }
                 376 => requested_target_cell_global_id = Some(NrCgi::decode(data)?),
+                548 => scg_activation_status = Some(ScgActivationStatus::decode(data)?),
+                602 => uu_rlc_channel_setup_list = Some(UuRlcChannelSetupList::decode(data)?),
+                603 => {
+                    uu_rlc_channel_failed_to_be_setup_list =
+                        Some(UuRlcChannelFailedToBeSetupList::decode(data)?)
+                }
+                611 => pc5rlc_channel_setup_list = Some(Pc5rlcChannelSetupList::decode(data)?),
+                612 => {
+                    pc5rlc_channel_failed_to_be_setup_list =
+                        Some(Pc5rlcChannelFailedToBeSetupList::decode(data)?)
+                }
+                697 => {
+                    serving_cell_mo_encoded_in_cgc_list =
+                        Some(ServingCellMoEncodedInCgcList::decode(data)?)
+                }
+                699 => {
+                    ue_multicast_mr_bs_setupnew_list =
+                        Some(UeMulticastMrBsSetupnewList::decode(data)?)
+                }
+                708 => {
+                    dedicated_si_delivery_indication =
+                        Some(DedicatedSiDeliveryIndication::decode(data)?)
+                }
+                709 => configured_bwp_list = Some(ConfiguredBwpList::decode(data)?),
+                727 => early_sync_information = Some(EarlySyncInformation::decode(data)?),
+                725 => ltm_configuration = Some(LtmConfiguration::decode(data)?),
+                792 => s_cpac_configuration = Some(SCpacConfiguration::decode(data)?),
                 x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
             }
             data.decode_align()?;
@@ -3980,6 +4892,18 @@ impl UeContextSetupResponse {
             sl_drbs_setup_list,
             sl_drbs_failed_to_be_setup_list,
             requested_target_cell_global_id,
+            scg_activation_status,
+            uu_rlc_channel_setup_list,
+            uu_rlc_channel_failed_to_be_setup_list,
+            pc5rlc_channel_setup_list,
+            pc5rlc_channel_failed_to_be_setup_list,
+            serving_cell_mo_encoded_in_cgc_list,
+            ue_multicast_mr_bs_setupnew_list,
+            dedicated_si_delivery_indication,
+            configured_bwp_list,
+            early_sync_information,
+            ltm_configuration,
+            s_cpac_configuration,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
@@ -4155,6 +5079,126 @@ impl UeContextSetupResponse {
             x.encode(ie)?;
             encode::encode_integer(ies, Some(0), Some(65535), false, 376, false)?;
             Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.scg_activation_status {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 548, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.uu_rlc_channel_setup_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 602, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.uu_rlc_channel_failed_to_be_setup_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 603, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.pc5rlc_channel_setup_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 611, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.pc5rlc_channel_failed_to_be_setup_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 612, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.serving_cell_mo_encoded_in_cgc_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 697, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.ue_multicast_mr_bs_setupnew_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 699, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.dedicated_si_delivery_indication {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 708, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.configured_bwp_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 709, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.early_sync_information {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 727, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.ltm_configuration {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 725, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.s_cpac_configuration {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 792, false)?;
+            Criticality::Ignore.encode(ies)?;
             encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
             ies.append_aligned(ie);
             num_ies += 1;
@@ -4614,6 +5658,54 @@ impl PerCodec for SlDrbsFailedToBeSetupList {
         })
     }
 }
+// UeMulticastMrBsSetupnewList
+#[derive(Clone, Debug)]
+pub struct UeMulticastMrBsSetupnewList(pub NonEmpty<UeMulticastMrBsSetupnewItem>);
+
+impl UeMulticastMrBsSetupnewList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(64), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(UeMulticastMrBsSetupnewItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(64), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 700, false)?;
+            Criticality::Reject.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for UeMulticastMrBsSetupnewList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        UeMulticastMrBsSetupnewList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("UeMulticastMrBsSetupnewList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("UeMulticastMrBsSetupnewList");
+            e
+        })
+    }
+}
 // UeContextSetupFailure
 #[derive(Clone, Debug)]
 pub struct UeContextSetupFailure {
@@ -4802,6 +5894,7 @@ pub struct UeContextReleaseRequest {
     pub gnb_du_ue_f1ap_id: GnbDuUeF1apId,
     pub cause: Cause,
     pub target_cells_to_cancel: Option<TargetCellList>,
+    pub ltm_cells_to_be_released_list: Option<LtmCellsToBeReleasedList>,
 }
 
 impl UeContextReleaseRequest {
@@ -4813,6 +5906,7 @@ impl UeContextReleaseRequest {
         let mut gnb_du_ue_f1ap_id: Option<GnbDuUeF1apId> = None;
         let mut cause: Option<Cause> = None;
         let mut target_cells_to_cancel: Option<TargetCellList> = None;
+        let mut ltm_cells_to_be_released_list: Option<LtmCellsToBeReleasedList> = None;
 
         for _ in 0..num_ies {
             let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
@@ -4823,6 +5917,9 @@ impl UeContextReleaseRequest {
                 41 => gnb_du_ue_f1ap_id = Some(GnbDuUeF1apId::decode(data)?),
                 0 => cause = Some(Cause::decode(data)?),
                 375 => target_cells_to_cancel = Some(TargetCellList::decode(data)?),
+                723 => {
+                    ltm_cells_to_be_released_list = Some(LtmCellsToBeReleasedList::decode(data)?)
+                }
                 x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
             }
             data.decode_align()?;
@@ -4839,6 +5936,7 @@ impl UeContextReleaseRequest {
             gnb_du_ue_f1ap_id,
             cause,
             target_cells_to_cancel,
+            ltm_cells_to_be_released_list,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
@@ -4879,6 +5977,16 @@ impl UeContextReleaseRequest {
             num_ies += 1;
         }
 
+        if let Some(x) = &self.ltm_cells_to_be_released_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 723, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
         encode::encode_sequence_header(data, true, &BitString::new(), false)?;
         encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
         data.append_aligned(ies);
@@ -4913,6 +6021,10 @@ pub struct UeContextReleaseCommand {
     pub execute_duplication: Option<ExecuteDuplication>,
     pub rrc_delivery_status_request: Option<RrcDeliveryStatusRequest>,
     pub target_cells_to_cancel: Option<TargetCellList>,
+    pub pos_context_rev_indication: Option<PosContextRevIndication>,
+    pub cg_sdt_kept_indicator: Option<CgSdtKeptIndicator>,
+    pub ltm_cells_to_be_released_list: Option<LtmCellsToBeReleasedList>,
+    pub dllbt_failure_information_request: Option<DllbtFailureInformationRequest>,
 }
 
 impl UeContextReleaseCommand {
@@ -4929,6 +6041,10 @@ impl UeContextReleaseCommand {
         let mut execute_duplication: Option<ExecuteDuplication> = None;
         let mut rrc_delivery_status_request: Option<RrcDeliveryStatusRequest> = None;
         let mut target_cells_to_cancel: Option<TargetCellList> = None;
+        let mut pos_context_rev_indication: Option<PosContextRevIndication> = None;
+        let mut cg_sdt_kept_indicator: Option<CgSdtKeptIndicator> = None;
+        let mut ltm_cells_to_be_released_list: Option<LtmCellsToBeReleasedList> = None;
+        let mut dllbt_failure_information_request: Option<DllbtFailureInformationRequest> = None;
 
         for _ in 0..num_ies {
             let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
@@ -4944,6 +6060,15 @@ impl UeContextReleaseCommand {
                 109 => execute_duplication = Some(ExecuteDuplication::decode(data)?),
                 184 => rrc_delivery_status_request = Some(RrcDeliveryStatusRequest::decode(data)?),
                 375 => target_cells_to_cancel = Some(TargetCellList::decode(data)?),
+                576 => pos_context_rev_indication = Some(PosContextRevIndication::decode(data)?),
+                588 => cg_sdt_kept_indicator = Some(CgSdtKeptIndicator::decode(data)?),
+                723 => {
+                    ltm_cells_to_be_released_list = Some(LtmCellsToBeReleasedList::decode(data)?)
+                }
+                794 => {
+                    dllbt_failure_information_request =
+                        Some(DllbtFailureInformationRequest::decode(data)?)
+                }
                 x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
             }
             data.decode_align()?;
@@ -4965,6 +6090,10 @@ impl UeContextReleaseCommand {
             execute_duplication,
             rrc_delivery_status_request,
             target_cells_to_cancel,
+            pos_context_rev_indication,
+            cg_sdt_kept_indicator,
+            ltm_cells_to_be_released_list,
+            dllbt_failure_information_request,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
@@ -5055,6 +6184,46 @@ impl UeContextReleaseCommand {
             num_ies += 1;
         }
 
+        if let Some(x) = &self.pos_context_rev_indication {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 576, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.cg_sdt_kept_indicator {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 588, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.ltm_cells_to_be_released_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 723, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.dllbt_failure_information_request {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 794, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
         encode::encode_sequence_header(data, true, &BitString::new(), false)?;
         encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
         data.append_aligned(ies);
@@ -5083,6 +6252,7 @@ pub struct UeContextReleaseComplete {
     pub gnb_cu_ue_f1ap_id: GnbCuUeF1apId,
     pub gnb_du_ue_f1ap_id: GnbDuUeF1apId,
     pub criticality_diagnostics: Option<CriticalityDiagnostics>,
+    pub recommended_ss_bs_for_paging_list: Option<RecommendedSsBsForPagingList>,
 }
 
 impl UeContextReleaseComplete {
@@ -5093,6 +6263,7 @@ impl UeContextReleaseComplete {
         let mut gnb_cu_ue_f1ap_id: Option<GnbCuUeF1apId> = None;
         let mut gnb_du_ue_f1ap_id: Option<GnbDuUeF1apId> = None;
         let mut criticality_diagnostics: Option<CriticalityDiagnostics> = None;
+        let mut recommended_ss_bs_for_paging_list: Option<RecommendedSsBsForPagingList> = None;
 
         for _ in 0..num_ies {
             let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
@@ -5102,6 +6273,10 @@ impl UeContextReleaseComplete {
                 40 => gnb_cu_ue_f1ap_id = Some(GnbCuUeF1apId::decode(data)?),
                 41 => gnb_du_ue_f1ap_id = Some(GnbDuUeF1apId::decode(data)?),
                 7 => criticality_diagnostics = Some(CriticalityDiagnostics::decode(data)?),
+                743 => {
+                    recommended_ss_bs_for_paging_list =
+                        Some(RecommendedSsBsForPagingList::decode(data)?)
+                }
                 x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
             }
             data.decode_align()?;
@@ -5116,6 +6291,7 @@ impl UeContextReleaseComplete {
             gnb_cu_ue_f1ap_id,
             gnb_du_ue_f1ap_id,
             criticality_diagnostics,
+            recommended_ss_bs_for_paging_list,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
@@ -5142,6 +6318,16 @@ impl UeContextReleaseComplete {
             let ie = &mut Allocator::new_codec_data();
             x.encode(ie)?;
             encode::encode_integer(ies, Some(0), Some(65535), false, 7, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.recommended_ss_bs_for_paging_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 743, false)?;
             Criticality::Ignore.encode(ies)?;
             encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
             ies.append_aligned(ie);
@@ -5220,6 +6406,58 @@ pub struct UeContextModificationRequest {
     pub conditional_intra_du_mobility_information: Option<ConditionalIntraDuMobilityInformation>,
     pub f1c_transfer_path: Option<F1cTransferPath>,
     pub scg_indicator: Option<ScgIndicator>,
+    pub uplink_tx_direct_current_two_carrier_list_info:
+        Option<UplinkTxDirectCurrentTwoCarrierListInfo>,
+    pub iab_conditional_rrc_message_delivery_indication:
+        Option<IabConditionalRrcMessageDeliveryIndication>,
+    pub f1c_transfer_path_nr_dc: Option<F1cTransferPathNrDc>,
+    pub mdt_polluted_measurement_indicator: Option<MdtPollutedMeasurementIndicator>,
+    pub scg_activation_request: Option<ScgActivationRequest>,
+    pub cg_sdt_query_indication: Option<CgSdtQueryIndication>,
+    pub five_g_pro_se_authorized: Option<FiveGProSeAuthorized>,
+    pub five_g_pro_se_ue_pc5_aggregate_maximum_bitrate: Option<NrUeSidelinkAggregateMaximumBitrate>,
+    pub five_g_pro_se_pc5_link_ambr: Option<BitRate>,
+    pub updated_remote_ue_local_id: Option<RemoteUeLocalId>,
+    pub uu_rlc_channel_to_be_setup_list: Option<UuRlcChannelToBeSetupList>,
+    pub uu_rlc_channel_to_be_modified_list: Option<UuRlcChannelToBeModifiedList>,
+    pub uu_rlc_channel_to_be_released_list: Option<UuRlcChannelToBeReleasedList>,
+    pub pc5rlc_channel_to_be_setup_list: Option<Pc5rlcChannelToBeSetupList>,
+    pub pc5rlc_channel_to_be_modified_list: Option<Pc5rlcChannelToBeModifiedList>,
+    pub pc5rlc_channel_to_be_released_list: Option<Pc5rlcChannelToBeReleasedList>,
+    pub path_switch_configuration: Option<PathSwitchConfiguration>,
+    pub gnb_du_ue_slice_maximum_bit_rate_list: Option<GnbDuUeSliceMaximumBitRateList>,
+    pub multicast_mbs_session_setup_list: Option<MulticastMbsSessionList>,
+    pub multicast_mbs_session_remove_list: Option<MulticastMbsSessionList>,
+    pub ue_multicast_mr_bs_to_be_setup_at_modify_list: Option<UeMulticastMrBsToBeSetupAtModifyList>,
+    pub ue_multicast_mr_bs_to_be_released_list: Option<UeMulticastMrBsToBeReleasedList>,
+    pub sldrx_cycle_list: Option<SldrxCycleList>,
+    pub management_based_mdt_plmn_modification_list: Option<MdtPlmnModificationList>,
+    pub sdt_bearer_configuration_query_indication: Option<SdtBearerConfigurationQueryIndication>,
+    pub daps_ho_status: Option<DapsHoStatus>,
+    pub serving_cell_mo_list: Option<ServingCellMoList>,
+    pub ul_tx_direct_current_more_carrier_information:
+        Option<UlTxDirectCurrentMoreCarrierInformation>,
+    pub cpacmcg_information: Option<CpacmcgInformation>,
+    pub network_controlled_repeater_authorized: Option<NetworkControlledRepeaterAuthorized>,
+    pub sdt_volume_threshold: Option<SdtVolumeThreshold>,
+    pub ltm_information_modify: Option<LtmInformationModify>,
+    pub ltmcfra_resource_config_list: Option<LtmcfraResourceConfigList>,
+    pub ltm_configuration_id_mapping_list: Option<LtmConfigurationIdMappingList>,
+    pub early_sync_information_request: Option<EarlySyncInformationRequest>,
+    pub early_sync_candidate_cell_information_list: Option<EarlySyncCandidateCellInformationList>,
+    pub early_sync_serving_cell_information: Option<EarlySyncServingCellInformation>,
+    pub ltm_cells_to_be_released_list: Option<LtmCellsToBeReleasedList>,
+    pub path_addition_information: Option<PathAdditionInformation>,
+    pub nr_a2x_services_authorized: Option<NrA2xServicesAuthorized>,
+    pub ltea2x_services_authorized: Option<Ltea2xServicesAuthorized>,
+    pub nr_ue_sidelink_aggregate_maximum_bitrate_for_a2x:
+        Option<NrUeSidelinkAggregateMaximumBitrate>,
+    pub lte_ue_sidelink_aggregate_maximum_bitrate_for_a2x:
+        Option<LteUeSidelinkAggregateMaximumBitrate>,
+    pub dllbt_failure_information_request: Option<DllbtFailureInformationRequest>,
+    pub sl_positioning_ranging_service_info: Option<SlPositioningRangingServiceInfo>,
+    pub non_integer_drx_cycle: Option<NonIntegerDrxCycle>,
+    pub ltm_reset_information: Option<LtmResetInformation>,
 }
 
 impl UeContextModificationRequest {
@@ -5288,6 +6526,75 @@ impl UeContextModificationRequest {
         > = None;
         let mut f1c_transfer_path: Option<F1cTransferPath> = None;
         let mut scg_indicator: Option<ScgIndicator> = None;
+        let mut uplink_tx_direct_current_two_carrier_list_info: Option<
+            UplinkTxDirectCurrentTwoCarrierListInfo,
+        > = None;
+        let mut iab_conditional_rrc_message_delivery_indication: Option<
+            IabConditionalRrcMessageDeliveryIndication,
+        > = None;
+        let mut f1c_transfer_path_nr_dc: Option<F1cTransferPathNrDc> = None;
+        let mut mdt_polluted_measurement_indicator: Option<MdtPollutedMeasurementIndicator> = None;
+        let mut scg_activation_request: Option<ScgActivationRequest> = None;
+        let mut cg_sdt_query_indication: Option<CgSdtQueryIndication> = None;
+        let mut five_g_pro_se_authorized: Option<FiveGProSeAuthorized> = None;
+        let mut five_g_pro_se_ue_pc5_aggregate_maximum_bitrate: Option<
+            NrUeSidelinkAggregateMaximumBitrate,
+        > = None;
+        let mut five_g_pro_se_pc5_link_ambr: Option<BitRate> = None;
+        let mut updated_remote_ue_local_id: Option<RemoteUeLocalId> = None;
+        let mut uu_rlc_channel_to_be_setup_list: Option<UuRlcChannelToBeSetupList> = None;
+        let mut uu_rlc_channel_to_be_modified_list: Option<UuRlcChannelToBeModifiedList> = None;
+        let mut uu_rlc_channel_to_be_released_list: Option<UuRlcChannelToBeReleasedList> = None;
+        let mut pc5rlc_channel_to_be_setup_list: Option<Pc5rlcChannelToBeSetupList> = None;
+        let mut pc5rlc_channel_to_be_modified_list: Option<Pc5rlcChannelToBeModifiedList> = None;
+        let mut pc5rlc_channel_to_be_released_list: Option<Pc5rlcChannelToBeReleasedList> = None;
+        let mut path_switch_configuration: Option<PathSwitchConfiguration> = None;
+        let mut gnb_du_ue_slice_maximum_bit_rate_list: Option<GnbDuUeSliceMaximumBitRateList> =
+            None;
+        let mut multicast_mbs_session_setup_list: Option<MulticastMbsSessionList> = None;
+        let mut multicast_mbs_session_remove_list: Option<MulticastMbsSessionList> = None;
+        let mut ue_multicast_mr_bs_to_be_setup_at_modify_list: Option<
+            UeMulticastMrBsToBeSetupAtModifyList,
+        > = None;
+        let mut ue_multicast_mr_bs_to_be_released_list: Option<UeMulticastMrBsToBeReleasedList> =
+            None;
+        let mut sldrx_cycle_list: Option<SldrxCycleList> = None;
+        let mut management_based_mdt_plmn_modification_list: Option<MdtPlmnModificationList> = None;
+        let mut sdt_bearer_configuration_query_indication: Option<
+            SdtBearerConfigurationQueryIndication,
+        > = None;
+        let mut daps_ho_status: Option<DapsHoStatus> = None;
+        let mut serving_cell_mo_list: Option<ServingCellMoList> = None;
+        let mut ul_tx_direct_current_more_carrier_information: Option<
+            UlTxDirectCurrentMoreCarrierInformation,
+        > = None;
+        let mut cpacmcg_information: Option<CpacmcgInformation> = None;
+        let mut network_controlled_repeater_authorized: Option<
+            NetworkControlledRepeaterAuthorized,
+        > = None;
+        let mut sdt_volume_threshold: Option<SdtVolumeThreshold> = None;
+        let mut ltm_information_modify: Option<LtmInformationModify> = None;
+        let mut ltmcfra_resource_config_list: Option<LtmcfraResourceConfigList> = None;
+        let mut ltm_configuration_id_mapping_list: Option<LtmConfigurationIdMappingList> = None;
+        let mut early_sync_information_request: Option<EarlySyncInformationRequest> = None;
+        let mut early_sync_candidate_cell_information_list: Option<
+            EarlySyncCandidateCellInformationList,
+        > = None;
+        let mut early_sync_serving_cell_information: Option<EarlySyncServingCellInformation> = None;
+        let mut ltm_cells_to_be_released_list: Option<LtmCellsToBeReleasedList> = None;
+        let mut path_addition_information: Option<PathAdditionInformation> = None;
+        let mut nr_a2x_services_authorized: Option<NrA2xServicesAuthorized> = None;
+        let mut ltea2x_services_authorized: Option<Ltea2xServicesAuthorized> = None;
+        let mut nr_ue_sidelink_aggregate_maximum_bitrate_for_a2x: Option<
+            NrUeSidelinkAggregateMaximumBitrate,
+        > = None;
+        let mut lte_ue_sidelink_aggregate_maximum_bitrate_for_a2x: Option<
+            LteUeSidelinkAggregateMaximumBitrate,
+        > = None;
+        let mut dllbt_failure_information_request: Option<DllbtFailureInformationRequest> = None;
+        let mut sl_positioning_ranging_service_info: Option<SlPositioningRangingServiceInfo> = None;
+        let mut non_integer_drx_cycle: Option<NonIntegerDrxCycle> = None;
+        let mut ltm_reset_information: Option<LtmResetInformation> = None;
 
         for _ in 0..num_ies {
             let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
@@ -5383,6 +6690,135 @@ impl UeContextModificationRequest {
                 }
                 428 => f1c_transfer_path = Some(F1cTransferPath::decode(data)?),
                 432 => scg_indicator = Some(ScgIndicator::decode(data)?),
+                684 => {
+                    uplink_tx_direct_current_two_carrier_list_info =
+                        Some(UplinkTxDirectCurrentTwoCarrierListInfo::decode(data)?)
+                }
+                510 => {
+                    iab_conditional_rrc_message_delivery_indication =
+                        Some(IabConditionalRrcMessageDeliveryIndication::decode(data)?)
+                }
+                511 => f1c_transfer_path_nr_dc = Some(F1cTransferPathNrDc::decode(data)?),
+                536 => {
+                    mdt_polluted_measurement_indicator =
+                        Some(MdtPollutedMeasurementIndicator::decode(data)?)
+                }
+                547 => scg_activation_request = Some(ScgActivationRequest::decode(data)?),
+                586 => cg_sdt_query_indication = Some(CgSdtQueryIndication::decode(data)?),
+                594 => five_g_pro_se_authorized = Some(FiveGProSeAuthorized::decode(data)?),
+                595 => {
+                    five_g_pro_se_ue_pc5_aggregate_maximum_bitrate =
+                        Some(NrUeSidelinkAggregateMaximumBitrate::decode(data)?)
+                }
+                596 => five_g_pro_se_pc5_link_ambr = Some(BitRate::decode(data)?),
+                618 => updated_remote_ue_local_id = Some(RemoteUeLocalId::decode(data)?),
+                599 => {
+                    uu_rlc_channel_to_be_setup_list = Some(UuRlcChannelToBeSetupList::decode(data)?)
+                }
+                600 => {
+                    uu_rlc_channel_to_be_modified_list =
+                        Some(UuRlcChannelToBeModifiedList::decode(data)?)
+                }
+                601 => {
+                    uu_rlc_channel_to_be_released_list =
+                        Some(UuRlcChannelToBeReleasedList::decode(data)?)
+                }
+                608 => {
+                    pc5rlc_channel_to_be_setup_list =
+                        Some(Pc5rlcChannelToBeSetupList::decode(data)?)
+                }
+                609 => {
+                    pc5rlc_channel_to_be_modified_list =
+                        Some(Pc5rlcChannelToBeModifiedList::decode(data)?)
+                }
+                610 => {
+                    pc5rlc_channel_to_be_released_list =
+                        Some(Pc5rlcChannelToBeReleasedList::decode(data)?)
+                }
+                619 => path_switch_configuration = Some(PathSwitchConfiguration::decode(data)?),
+                626 => {
+                    gnb_du_ue_slice_maximum_bit_rate_list =
+                        Some(GnbDuUeSliceMaximumBitRateList::decode(data)?)
+                }
+                632 => {
+                    multicast_mbs_session_setup_list = Some(MulticastMbsSessionList::decode(data)?)
+                }
+                633 => {
+                    multicast_mbs_session_remove_list = Some(MulticastMbsSessionList::decode(data)?)
+                }
+                685 => {
+                    ue_multicast_mr_bs_to_be_setup_at_modify_list =
+                        Some(UeMulticastMrBsToBeSetupAtModifyList::decode(data)?)
+                }
+                628 => {
+                    ue_multicast_mr_bs_to_be_released_list =
+                        Some(UeMulticastMrBsToBeReleasedList::decode(data)?)
+                }
+                643 => sldrx_cycle_list = Some(SldrxCycleList::decode(data)?),
+                647 => {
+                    management_based_mdt_plmn_modification_list =
+                        Some(MdtPlmnModificationList::decode(data)?)
+                }
+                675 => {
+                    sdt_bearer_configuration_query_indication =
+                        Some(SdtBearerConfigurationQueryIndication::decode(data)?)
+                }
+                683 => daps_ho_status = Some(DapsHoStatus::decode(data)?),
+                695 => serving_cell_mo_list = Some(ServingCellMoList::decode(data)?),
+                690 => {
+                    ul_tx_direct_current_more_carrier_information =
+                        Some(UlTxDirectCurrentMoreCarrierInformation::decode(data)?)
+                }
+                691 => cpacmcg_information = Some(CpacmcgInformation::decode(data)?),
+                712 => {
+                    network_controlled_repeater_authorized =
+                        Some(NetworkControlledRepeaterAuthorized::decode(data)?)
+                }
+                716 => sdt_volume_threshold = Some(SdtVolumeThreshold::decode(data)?),
+                722 => ltm_information_modify = Some(LtmInformationModify::decode(data)?),
+                845 => {
+                    ltmcfra_resource_config_list = Some(LtmcfraResourceConfigList::decode(data)?)
+                }
+                721 => {
+                    ltm_configuration_id_mapping_list =
+                        Some(LtmConfigurationIdMappingList::decode(data)?)
+                }
+                726 => {
+                    early_sync_information_request =
+                        Some(EarlySyncInformationRequest::decode(data)?)
+                }
+                728 => {
+                    early_sync_candidate_cell_information_list =
+                        Some(EarlySyncCandidateCellInformationList::decode(data)?)
+                }
+                843 => {
+                    early_sync_serving_cell_information =
+                        Some(EarlySyncServingCellInformation::decode(data)?)
+                }
+                723 => {
+                    ltm_cells_to_be_released_list = Some(LtmCellsToBeReleasedList::decode(data)?)
+                }
+                741 => path_addition_information = Some(PathAdditionInformation::decode(data)?),
+                779 => nr_a2x_services_authorized = Some(NrA2xServicesAuthorized::decode(data)?),
+                780 => ltea2x_services_authorized = Some(Ltea2xServicesAuthorized::decode(data)?),
+                781 => {
+                    nr_ue_sidelink_aggregate_maximum_bitrate_for_a2x =
+                        Some(NrUeSidelinkAggregateMaximumBitrate::decode(data)?)
+                }
+                782 => {
+                    lte_ue_sidelink_aggregate_maximum_bitrate_for_a2x =
+                        Some(LteUeSidelinkAggregateMaximumBitrate::decode(data)?)
+                }
+                794 => {
+                    dllbt_failure_information_request =
+                        Some(DllbtFailureInformationRequest::decode(data)?)
+                }
+                801 => {
+                    sl_positioning_ranging_service_info =
+                        Some(SlPositioningRangingServiceInfo::decode(data)?)
+                }
+                838 => non_integer_drx_cycle = Some(NonIntegerDrxCycle::decode(data)?),
+                855 => ltm_reset_information = Some(LtmResetInformation::decode(data)?),
                 x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
             }
             data.decode_align()?;
@@ -5441,6 +6877,53 @@ impl UeContextModificationRequest {
             conditional_intra_du_mobility_information,
             f1c_transfer_path,
             scg_indicator,
+            uplink_tx_direct_current_two_carrier_list_info,
+            iab_conditional_rrc_message_delivery_indication,
+            f1c_transfer_path_nr_dc,
+            mdt_polluted_measurement_indicator,
+            scg_activation_request,
+            cg_sdt_query_indication,
+            five_g_pro_se_authorized,
+            five_g_pro_se_ue_pc5_aggregate_maximum_bitrate,
+            five_g_pro_se_pc5_link_ambr,
+            updated_remote_ue_local_id,
+            uu_rlc_channel_to_be_setup_list,
+            uu_rlc_channel_to_be_modified_list,
+            uu_rlc_channel_to_be_released_list,
+            pc5rlc_channel_to_be_setup_list,
+            pc5rlc_channel_to_be_modified_list,
+            pc5rlc_channel_to_be_released_list,
+            path_switch_configuration,
+            gnb_du_ue_slice_maximum_bit_rate_list,
+            multicast_mbs_session_setup_list,
+            multicast_mbs_session_remove_list,
+            ue_multicast_mr_bs_to_be_setup_at_modify_list,
+            ue_multicast_mr_bs_to_be_released_list,
+            sldrx_cycle_list,
+            management_based_mdt_plmn_modification_list,
+            sdt_bearer_configuration_query_indication,
+            daps_ho_status,
+            serving_cell_mo_list,
+            ul_tx_direct_current_more_carrier_information,
+            cpacmcg_information,
+            network_controlled_repeater_authorized,
+            sdt_volume_threshold,
+            ltm_information_modify,
+            ltmcfra_resource_config_list,
+            ltm_configuration_id_mapping_list,
+            early_sync_information_request,
+            early_sync_candidate_cell_information_list,
+            early_sync_serving_cell_information,
+            ltm_cells_to_be_released_list,
+            path_addition_information,
+            nr_a2x_services_authorized,
+            ltea2x_services_authorized,
+            nr_ue_sidelink_aggregate_maximum_bitrate_for_a2x,
+            lte_ue_sidelink_aggregate_maximum_bitrate_for_a2x,
+            dllbt_failure_information_request,
+            sl_positioning_ranging_service_info,
+            non_integer_drx_cycle,
+            ltm_reset_information,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
@@ -5907,6 +7390,476 @@ impl UeContextModificationRequest {
             let ie = &mut Allocator::new_codec_data();
             x.encode(ie)?;
             encode::encode_integer(ies, Some(0), Some(65535), false, 432, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.uplink_tx_direct_current_two_carrier_list_info {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 684, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.iab_conditional_rrc_message_delivery_indication {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 510, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.f1c_transfer_path_nr_dc {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 511, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.mdt_polluted_measurement_indicator {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 536, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.scg_activation_request {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 547, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.cg_sdt_query_indication {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 586, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.five_g_pro_se_authorized {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 594, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.five_g_pro_se_ue_pc5_aggregate_maximum_bitrate {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 595, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.five_g_pro_se_pc5_link_ambr {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 596, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.updated_remote_ue_local_id {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 618, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.uu_rlc_channel_to_be_setup_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 599, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.uu_rlc_channel_to_be_modified_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 600, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.uu_rlc_channel_to_be_released_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 601, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.pc5rlc_channel_to_be_setup_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 608, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.pc5rlc_channel_to_be_modified_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 609, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.pc5rlc_channel_to_be_released_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 610, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.path_switch_configuration {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 619, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.gnb_du_ue_slice_maximum_bit_rate_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 626, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.multicast_mbs_session_setup_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 632, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.multicast_mbs_session_remove_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 633, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.ue_multicast_mr_bs_to_be_setup_at_modify_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 685, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.ue_multicast_mr_bs_to_be_released_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 628, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.sldrx_cycle_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 643, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.management_based_mdt_plmn_modification_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 647, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.sdt_bearer_configuration_query_indication {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 675, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.daps_ho_status {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 683, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.serving_cell_mo_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 695, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.ul_tx_direct_current_more_carrier_information {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 690, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.cpacmcg_information {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 691, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.network_controlled_repeater_authorized {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 712, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.sdt_volume_threshold {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 716, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.ltm_information_modify {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 722, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.ltmcfra_resource_config_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 845, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.ltm_configuration_id_mapping_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 721, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.early_sync_information_request {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 726, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.early_sync_candidate_cell_information_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 728, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.early_sync_serving_cell_information {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 843, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.ltm_cells_to_be_released_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 723, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.path_addition_information {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 741, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.nr_a2x_services_authorized {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 779, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.ltea2x_services_authorized {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 780, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.nr_ue_sidelink_aggregate_maximum_bitrate_for_a2x {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 781, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.lte_ue_sidelink_aggregate_maximum_bitrate_for_a2x {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 782, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.dllbt_failure_information_request {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 794, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.sl_positioning_ranging_service_info {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 801, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.non_integer_drx_cycle {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 838, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.ltm_reset_information {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 855, false)?;
             Criticality::Ignore.encode(ies)?;
             encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
             ies.append_aligned(ie);
@@ -6415,6 +8368,102 @@ impl PerCodec for BhChannelsToBeReleasedList {
         })
     }
 }
+// UeMulticastMrBsToBeSetupAtModifyList
+#[derive(Clone, Debug)]
+pub struct UeMulticastMrBsToBeSetupAtModifyList(pub NonEmpty<UeMulticastMrBsToBeSetupAtModifyItem>);
+
+impl UeMulticastMrBsToBeSetupAtModifyList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(64), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(UeMulticastMrBsToBeSetupAtModifyItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(64), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 686, false)?;
+            Criticality::Reject.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for UeMulticastMrBsToBeSetupAtModifyList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        UeMulticastMrBsToBeSetupAtModifyList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("UeMulticastMrBsToBeSetupAtModifyList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("UeMulticastMrBsToBeSetupAtModifyList");
+            e
+        })
+    }
+}
+// UeMulticastMrBsToBeReleasedList
+#[derive(Clone, Debug)]
+pub struct UeMulticastMrBsToBeReleasedList(pub NonEmpty<UeMulticastMrBsToBeReleasedItem>);
+
+impl UeMulticastMrBsToBeReleasedList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(64), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(UeMulticastMrBsToBeReleasedItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(64), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 629, false)?;
+            Criticality::Reject.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for UeMulticastMrBsToBeReleasedList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        UeMulticastMrBsToBeReleasedList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("UeMulticastMrBsToBeReleasedList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("UeMulticastMrBsToBeReleasedList");
+            e
+        })
+    }
+}
 // SlDrbsToBeSetupModList
 #[derive(Clone, Debug)]
 pub struct SlDrbsToBeSetupModList(pub NonEmpty<SlDrbsToBeSetupModItem>);
@@ -6588,6 +8637,23 @@ pub struct UeContextModificationResponse {
     pub sl_drbs_failed_to_be_setup_mod_list: Option<SlDrbsFailedToBeSetupModList>,
     pub sl_drbs_failed_to_be_modified_list: Option<SlDrbsFailedToBeModifiedList>,
     pub requested_target_cell_global_id: Option<NrCgi>,
+    pub scg_activation_status: Option<ScgActivationStatus>,
+    pub uu_rlc_channel_setup_list: Option<UuRlcChannelSetupList>,
+    pub uu_rlc_channel_failed_to_be_setup_list: Option<UuRlcChannelFailedToBeSetupList>,
+    pub uu_rlc_channel_modified_list: Option<UuRlcChannelModifiedList>,
+    pub uu_rlc_channel_failed_to_be_modified_list: Option<UuRlcChannelFailedToBeModifiedList>,
+    pub pc5rlc_channel_setup_list: Option<Pc5rlcChannelSetupList>,
+    pub pc5rlc_channel_failed_to_be_setup_list: Option<Pc5rlcChannelFailedToBeSetupList>,
+    pub pc5rlc_channel_modified_list: Option<Pc5rlcChannelModifiedList>,
+    pub pc5rlc_channel_failed_to_be_modified_list: Option<Pc5rlcChannelFailedToBeModifiedList>,
+    pub sdt_bearer_configuration_info: Option<SdtBearerConfigurationInfo>,
+    pub ue_multicast_mr_bs_setup_list: Option<UeMulticastMrBsSetupList>,
+    pub serving_cell_mo_encoded_in_cgc_list: Option<ServingCellMoEncodedInCgcList>,
+    pub dedicated_si_delivery_indication: Option<DedicatedSiDeliveryIndication>,
+    pub configured_bwp_list: Option<ConfiguredBwpList>,
+    pub early_sync_information: Option<EarlySyncInformation>,
+    pub ltm_configuration: Option<LtmConfiguration>,
+    pub s_cpac_configuration: Option<SCpacConfiguration>,
 }
 
 impl UeContextModificationResponse {
@@ -6625,6 +8691,29 @@ impl UeContextModificationResponse {
         let mut sl_drbs_failed_to_be_setup_mod_list: Option<SlDrbsFailedToBeSetupModList> = None;
         let mut sl_drbs_failed_to_be_modified_list: Option<SlDrbsFailedToBeModifiedList> = None;
         let mut requested_target_cell_global_id: Option<NrCgi> = None;
+        let mut scg_activation_status: Option<ScgActivationStatus> = None;
+        let mut uu_rlc_channel_setup_list: Option<UuRlcChannelSetupList> = None;
+        let mut uu_rlc_channel_failed_to_be_setup_list: Option<UuRlcChannelFailedToBeSetupList> =
+            None;
+        let mut uu_rlc_channel_modified_list: Option<UuRlcChannelModifiedList> = None;
+        let mut uu_rlc_channel_failed_to_be_modified_list: Option<
+            UuRlcChannelFailedToBeModifiedList,
+        > = None;
+        let mut pc5rlc_channel_setup_list: Option<Pc5rlcChannelSetupList> = None;
+        let mut pc5rlc_channel_failed_to_be_setup_list: Option<Pc5rlcChannelFailedToBeSetupList> =
+            None;
+        let mut pc5rlc_channel_modified_list: Option<Pc5rlcChannelModifiedList> = None;
+        let mut pc5rlc_channel_failed_to_be_modified_list: Option<
+            Pc5rlcChannelFailedToBeModifiedList,
+        > = None;
+        let mut sdt_bearer_configuration_info: Option<SdtBearerConfigurationInfo> = None;
+        let mut ue_multicast_mr_bs_setup_list: Option<UeMulticastMrBsSetupList> = None;
+        let mut serving_cell_mo_encoded_in_cgc_list: Option<ServingCellMoEncodedInCgcList> = None;
+        let mut dedicated_si_delivery_indication: Option<DedicatedSiDeliveryIndication> = None;
+        let mut configured_bwp_list: Option<ConfiguredBwpList> = None;
+        let mut early_sync_information: Option<EarlySyncInformation> = None;
+        let mut ltm_configuration: Option<LtmConfiguration> = None;
+        let mut s_cpac_configuration: Option<SCpacConfiguration> = None;
 
         for _ in 0..num_ies {
             let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
@@ -6686,6 +8775,47 @@ impl UeContextModificationResponse {
                         Some(SlDrbsFailedToBeModifiedList::decode(data)?)
                 }
                 376 => requested_target_cell_global_id = Some(NrCgi::decode(data)?),
+                548 => scg_activation_status = Some(ScgActivationStatus::decode(data)?),
+                602 => uu_rlc_channel_setup_list = Some(UuRlcChannelSetupList::decode(data)?),
+                603 => {
+                    uu_rlc_channel_failed_to_be_setup_list =
+                        Some(UuRlcChannelFailedToBeSetupList::decode(data)?)
+                }
+                604 => uu_rlc_channel_modified_list = Some(UuRlcChannelModifiedList::decode(data)?),
+                605 => {
+                    uu_rlc_channel_failed_to_be_modified_list =
+                        Some(UuRlcChannelFailedToBeModifiedList::decode(data)?)
+                }
+                611 => pc5rlc_channel_setup_list = Some(Pc5rlcChannelSetupList::decode(data)?),
+                612 => {
+                    pc5rlc_channel_failed_to_be_setup_list =
+                        Some(Pc5rlcChannelFailedToBeSetupList::decode(data)?)
+                }
+                616 => {
+                    pc5rlc_channel_modified_list = Some(Pc5rlcChannelModifiedList::decode(data)?)
+                }
+                613 => {
+                    pc5rlc_channel_failed_to_be_modified_list =
+                        Some(Pc5rlcChannelFailedToBeModifiedList::decode(data)?)
+                }
+                676 => {
+                    sdt_bearer_configuration_info = Some(SdtBearerConfigurationInfo::decode(data)?)
+                }
+                679 => {
+                    ue_multicast_mr_bs_setup_list = Some(UeMulticastMrBsSetupList::decode(data)?)
+                }
+                697 => {
+                    serving_cell_mo_encoded_in_cgc_list =
+                        Some(ServingCellMoEncodedInCgcList::decode(data)?)
+                }
+                708 => {
+                    dedicated_si_delivery_indication =
+                        Some(DedicatedSiDeliveryIndication::decode(data)?)
+                }
+                709 => configured_bwp_list = Some(ConfiguredBwpList::decode(data)?),
+                727 => early_sync_information = Some(EarlySyncInformation::decode(data)?),
+                725 => ltm_configuration = Some(LtmConfiguration::decode(data)?),
+                792 => s_cpac_configuration = Some(SCpacConfiguration::decode(data)?),
                 x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
             }
             data.decode_align()?;
@@ -6723,6 +8853,23 @@ impl UeContextModificationResponse {
             sl_drbs_failed_to_be_setup_mod_list,
             sl_drbs_failed_to_be_modified_list,
             requested_target_cell_global_id,
+            scg_activation_status,
+            uu_rlc_channel_setup_list,
+            uu_rlc_channel_failed_to_be_setup_list,
+            uu_rlc_channel_modified_list,
+            uu_rlc_channel_failed_to_be_modified_list,
+            pc5rlc_channel_setup_list,
+            pc5rlc_channel_failed_to_be_setup_list,
+            pc5rlc_channel_modified_list,
+            pc5rlc_channel_failed_to_be_modified_list,
+            sdt_bearer_configuration_info,
+            ue_multicast_mr_bs_setup_list,
+            serving_cell_mo_encoded_in_cgc_list,
+            dedicated_si_delivery_indication,
+            configured_bwp_list,
+            early_sync_information,
+            ltm_configuration,
+            s_cpac_configuration,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
@@ -6980,6 +9127,176 @@ impl UeContextModificationResponse {
             x.encode(ie)?;
             encode::encode_integer(ies, Some(0), Some(65535), false, 376, false)?;
             Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.scg_activation_status {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 548, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.uu_rlc_channel_setup_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 602, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.uu_rlc_channel_failed_to_be_setup_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 603, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.uu_rlc_channel_modified_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 604, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.uu_rlc_channel_failed_to_be_modified_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 605, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.pc5rlc_channel_setup_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 611, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.pc5rlc_channel_failed_to_be_setup_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 612, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.pc5rlc_channel_modified_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 616, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.pc5rlc_channel_failed_to_be_modified_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 613, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.sdt_bearer_configuration_info {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 676, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.ue_multicast_mr_bs_setup_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 679, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.serving_cell_mo_encoded_in_cgc_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 697, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.dedicated_si_delivery_indication {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 708, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.configured_bwp_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 709, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.early_sync_information {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 727, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.ltm_configuration {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 725, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.s_cpac_configuration {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 792, false)?;
+            Criticality::Ignore.encode(ies)?;
             encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
             ies.append_aligned(ie);
             num_ies += 1;
@@ -7823,6 +10140,54 @@ impl PerCodec for SlDrbsFailedToBeSetupModList {
         })
     }
 }
+// UeMulticastMrBsSetupList
+#[derive(Clone, Debug)]
+pub struct UeMulticastMrBsSetupList(pub NonEmpty<UeMulticastMrBsSetupItem>);
+
+impl UeMulticastMrBsSetupList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(64), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(UeMulticastMrBsSetupItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(64), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 680, false)?;
+            Criticality::Reject.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for UeMulticastMrBsSetupList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        UeMulticastMrBsSetupList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("UeMulticastMrBsSetupList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("UeMulticastMrBsSetupList");
+            e
+        })
+    }
+}
 // UeContextModificationFailure
 #[derive(Clone, Debug)]
 pub struct UeContextModificationFailure {
@@ -7958,6 +10323,15 @@ pub struct UeContextModificationRequired {
     pub sl_drbs_required_to_be_modified_list: Option<SlDrbsRequiredToBeModifiedList>,
     pub sl_drbs_required_to_be_released_list: Option<SlDrbsRequiredToBeReleasedList>,
     pub target_cells_to_cancel: Option<TargetCellList>,
+    pub uu_rlc_channel_required_to_be_modified_list: Option<UuRlcChannelRequiredToBeModifiedList>,
+    pub uu_rlc_channel_required_to_be_released_list: Option<UuRlcChannelRequiredToBeReleasedList>,
+    pub pc5rlc_channel_required_to_be_modified_list: Option<Pc5rlcChannelRequiredToBeModifiedList>,
+    pub pc5rlc_channel_required_to_be_released_list: Option<Pc5rlcChannelRequiredToBeReleasedList>,
+    pub ue_multicast_mr_bs_required_to_be_modified_list:
+        Option<UeMulticastMrBsRequiredToBeModifiedList>,
+    pub ue_multicast_mr_bs_required_to_be_released_list:
+        Option<UeMulticastMrBsRequiredToBeReleasedList>,
+    pub ltm_cells_to_be_released_list: Option<LtmCellsToBeReleasedList>,
 }
 
 impl UeContextModificationRequired {
@@ -7981,6 +10355,25 @@ impl UeContextModificationRequired {
         let mut sl_drbs_required_to_be_modified_list: Option<SlDrbsRequiredToBeModifiedList> = None;
         let mut sl_drbs_required_to_be_released_list: Option<SlDrbsRequiredToBeReleasedList> = None;
         let mut target_cells_to_cancel: Option<TargetCellList> = None;
+        let mut uu_rlc_channel_required_to_be_modified_list: Option<
+            UuRlcChannelRequiredToBeModifiedList,
+        > = None;
+        let mut uu_rlc_channel_required_to_be_released_list: Option<
+            UuRlcChannelRequiredToBeReleasedList,
+        > = None;
+        let mut pc5rlc_channel_required_to_be_modified_list: Option<
+            Pc5rlcChannelRequiredToBeModifiedList,
+        > = None;
+        let mut pc5rlc_channel_required_to_be_released_list: Option<
+            Pc5rlcChannelRequiredToBeReleasedList,
+        > = None;
+        let mut ue_multicast_mr_bs_required_to_be_modified_list: Option<
+            UeMulticastMrBsRequiredToBeModifiedList,
+        > = None;
+        let mut ue_multicast_mr_bs_required_to_be_released_list: Option<
+            UeMulticastMrBsRequiredToBeReleasedList,
+        > = None;
+        let mut ltm_cells_to_be_released_list: Option<LtmCellsToBeReleasedList> = None;
 
         for _ in 0..num_ies {
             let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
@@ -8020,6 +10413,33 @@ impl UeContextModificationRequired {
                         Some(SlDrbsRequiredToBeReleasedList::decode(data)?)
                 }
                 375 => target_cells_to_cancel = Some(TargetCellList::decode(data)?),
+                606 => {
+                    uu_rlc_channel_required_to_be_modified_list =
+                        Some(UuRlcChannelRequiredToBeModifiedList::decode(data)?)
+                }
+                607 => {
+                    uu_rlc_channel_required_to_be_released_list =
+                        Some(UuRlcChannelRequiredToBeReleasedList::decode(data)?)
+                }
+                614 => {
+                    pc5rlc_channel_required_to_be_modified_list =
+                        Some(Pc5rlcChannelRequiredToBeModifiedList::decode(data)?)
+                }
+                615 => {
+                    pc5rlc_channel_required_to_be_released_list =
+                        Some(Pc5rlcChannelRequiredToBeReleasedList::decode(data)?)
+                }
+                655 => {
+                    ue_multicast_mr_bs_required_to_be_modified_list =
+                        Some(UeMulticastMrBsRequiredToBeModifiedList::decode(data)?)
+                }
+                657 => {
+                    ue_multicast_mr_bs_required_to_be_released_list =
+                        Some(UeMulticastMrBsRequiredToBeReleasedList::decode(data)?)
+                }
+                723 => {
+                    ltm_cells_to_be_released_list = Some(LtmCellsToBeReleasedList::decode(data)?)
+                }
                 x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
             }
             data.decode_align()?;
@@ -8044,6 +10464,13 @@ impl UeContextModificationRequired {
             sl_drbs_required_to_be_modified_list,
             sl_drbs_required_to_be_released_list,
             target_cells_to_cancel,
+            uu_rlc_channel_required_to_be_modified_list,
+            uu_rlc_channel_required_to_be_released_list,
+            pc5rlc_channel_required_to_be_modified_list,
+            pc5rlc_channel_required_to_be_released_list,
+            ue_multicast_mr_bs_required_to_be_modified_list,
+            ue_multicast_mr_bs_required_to_be_released_list,
+            ltm_cells_to_be_released_list,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
@@ -8158,6 +10585,76 @@ impl UeContextModificationRequired {
             let ie = &mut Allocator::new_codec_data();
             x.encode(ie)?;
             encode::encode_integer(ies, Some(0), Some(65535), false, 375, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.uu_rlc_channel_required_to_be_modified_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 606, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.uu_rlc_channel_required_to_be_released_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 607, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.pc5rlc_channel_required_to_be_modified_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 614, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.pc5rlc_channel_required_to_be_released_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 615, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.ue_multicast_mr_bs_required_to_be_modified_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 655, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.ue_multicast_mr_bs_required_to_be_released_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 657, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.ltm_cells_to_be_released_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 723, false)?;
             Criticality::Reject.encode(ies)?;
             encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
             ies.append_aligned(ie);
@@ -8474,6 +10971,110 @@ impl PerCodec for SlDrbsRequiredToBeReleasedList {
         })
     }
 }
+// UeMulticastMrBsRequiredToBeModifiedList
+#[derive(Clone, Debug)]
+pub struct UeMulticastMrBsRequiredToBeModifiedList(
+    pub NonEmpty<UeMulticastMrBsRequiredToBeModifiedItem>,
+);
+
+impl UeMulticastMrBsRequiredToBeModifiedList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(64), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(UeMulticastMrBsRequiredToBeModifiedItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(64), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 656, false)?;
+            Criticality::Reject.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for UeMulticastMrBsRequiredToBeModifiedList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        UeMulticastMrBsRequiredToBeModifiedList::decode_inner(data).map_err(
+            |mut e: PerCodecError| {
+                e.push_context("UeMulticastMrBsRequiredToBeModifiedList");
+                e
+            },
+        )
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("UeMulticastMrBsRequiredToBeModifiedList");
+            e
+        })
+    }
+}
+// UeMulticastMrBsRequiredToBeReleasedList
+#[derive(Clone, Debug)]
+pub struct UeMulticastMrBsRequiredToBeReleasedList(
+    pub NonEmpty<UeMulticastMrBsRequiredToBeReleasedItem>,
+);
+
+impl UeMulticastMrBsRequiredToBeReleasedList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(64), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(UeMulticastMrBsRequiredToBeReleasedItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(64), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 658, false)?;
+            Criticality::Reject.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for UeMulticastMrBsRequiredToBeReleasedList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        UeMulticastMrBsRequiredToBeReleasedList::decode_inner(data).map_err(
+            |mut e: PerCodecError| {
+                e.push_context("UeMulticastMrBsRequiredToBeReleasedList");
+                e
+            },
+        )
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("UeMulticastMrBsRequiredToBeReleasedList");
+            e
+        })
+    }
+}
 // UeContextModificationConfirm
 #[derive(Clone, Debug)]
 pub struct UeContextModificationConfirm {
@@ -8486,6 +11087,10 @@ pub struct UeContextModificationConfirm {
     pub execute_duplication: Option<ExecuteDuplication>,
     pub resource_coordination_transfer_information: Option<ResourceCoordinationTransferInformation>,
     pub sl_drbs_modified_conf_list: Option<SlDrbsModifiedConfList>,
+    pub uu_rlc_channel_modified_list: Option<UuRlcChannelModifiedList>,
+    pub pc5rlc_channel_modified_list: Option<Pc5rlcChannelModifiedList>,
+    pub ue_multicast_mr_bs_confirmed_to_be_modified_list:
+        Option<UeMulticastMrBsConfirmedToBeModifiedList>,
 }
 
 impl UeContextModificationConfirm {
@@ -8506,6 +11111,11 @@ impl UeContextModificationConfirm {
             ResourceCoordinationTransferInformation,
         > = None;
         let mut sl_drbs_modified_conf_list: Option<SlDrbsModifiedConfList> = None;
+        let mut uu_rlc_channel_modified_list: Option<UuRlcChannelModifiedList> = None;
+        let mut pc5rlc_channel_modified_list: Option<Pc5rlcChannelModifiedList> = None;
+        let mut ue_multicast_mr_bs_confirmed_to_be_modified_list: Option<
+            UeMulticastMrBsConfirmedToBeModifiedList,
+        > = None;
 
         for _ in 0..num_ies {
             let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
@@ -8527,6 +11137,14 @@ impl UeContextModificationConfirm {
                         Some(ResourceCoordinationTransferInformation::decode(data)?)
                 }
                 337 => sl_drbs_modified_conf_list = Some(SlDrbsModifiedConfList::decode(data)?),
+                604 => uu_rlc_channel_modified_list = Some(UuRlcChannelModifiedList::decode(data)?),
+                616 => {
+                    pc5rlc_channel_modified_list = Some(Pc5rlcChannelModifiedList::decode(data)?)
+                }
+                653 => {
+                    ue_multicast_mr_bs_confirmed_to_be_modified_list =
+                        Some(UeMulticastMrBsConfirmedToBeModifiedList::decode(data)?)
+                }
                 x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
             }
             data.decode_align()?;
@@ -8547,6 +11165,9 @@ impl UeContextModificationConfirm {
             execute_duplication,
             resource_coordination_transfer_information,
             sl_drbs_modified_conf_list,
+            uu_rlc_channel_modified_list,
+            pc5rlc_channel_modified_list,
+            ue_multicast_mr_bs_confirmed_to_be_modified_list,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
@@ -8634,6 +11255,36 @@ impl UeContextModificationConfirm {
             x.encode(ie)?;
             encode::encode_integer(ies, Some(0), Some(65535), false, 337, false)?;
             Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.uu_rlc_channel_modified_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 604, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.pc5rlc_channel_modified_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 616, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.ue_multicast_mr_bs_confirmed_to_be_modified_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 653, false)?;
+            Criticality::Reject.encode(ies)?;
             encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
             ies.append_aligned(ie);
             num_ies += 1;
@@ -8753,6 +11404,58 @@ impl PerCodec for SlDrbsModifiedConfList {
     fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
         self.encode_inner(data).map_err(|mut e: PerCodecError| {
             e.push_context("SlDrbsModifiedConfList");
+            e
+        })
+    }
+}
+// UeMulticastMrBsConfirmedToBeModifiedList
+#[derive(Clone, Debug)]
+pub struct UeMulticastMrBsConfirmedToBeModifiedList(
+    pub NonEmpty<UeMulticastMrBsConfirmedToBeModifiedItem>,
+);
+
+impl UeMulticastMrBsConfirmedToBeModifiedList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(64), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(UeMulticastMrBsConfirmedToBeModifiedItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(64), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 654, false)?;
+            Criticality::Reject.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for UeMulticastMrBsConfirmedToBeModifiedList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        UeMulticastMrBsConfirmedToBeModifiedList::decode_inner(data).map_err(
+            |mut e: PerCodecError| {
+                e.push_context("UeMulticastMrBsConfirmedToBeModifiedList");
+                e
+            },
+        )
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("UeMulticastMrBsConfirmedToBeModifiedList");
             e
         })
     }
@@ -9519,6 +12222,7 @@ pub struct UeInactivityNotification {
     pub gnb_cu_ue_f1ap_id: GnbCuUeF1apId,
     pub gnb_du_ue_f1ap_id: GnbDuUeF1apId,
     pub drb_activity_list: DrbActivityList,
+    pub sdt_termination_request: Option<SdtTerminationRequest>,
 }
 
 impl UeInactivityNotification {
@@ -9529,6 +12233,7 @@ impl UeInactivityNotification {
         let mut gnb_cu_ue_f1ap_id: Option<GnbCuUeF1apId> = None;
         let mut gnb_du_ue_f1ap_id: Option<GnbDuUeF1apId> = None;
         let mut drb_activity_list: Option<DrbActivityList> = None;
+        let mut sdt_termination_request: Option<SdtTerminationRequest> = None;
 
         for _ in 0..num_ies {
             let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
@@ -9538,6 +12243,7 @@ impl UeInactivityNotification {
                 40 => gnb_cu_ue_f1ap_id = Some(GnbCuUeF1apId::decode(data)?),
                 41 => gnb_du_ue_f1ap_id = Some(GnbDuUeF1apId::decode(data)?),
                 100 => drb_activity_list = Some(DrbActivityList::decode(data)?),
+                635 => sdt_termination_request = Some(SdtTerminationRequest::decode(data)?),
                 x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
             }
             data.decode_align()?;
@@ -9555,6 +12261,7 @@ impl UeInactivityNotification {
             gnb_cu_ue_f1ap_id,
             gnb_du_ue_f1ap_id,
             drb_activity_list,
+            sdt_termination_request,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
@@ -9584,6 +12291,16 @@ impl UeInactivityNotification {
         encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
         ies.append_aligned(ie);
         num_ies += 1;
+
+        if let Some(x) = &self.sdt_termination_request {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 635, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
 
         encode::encode_sequence_header(data, true, &BitString::new(), false)?;
         encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
@@ -9664,9 +12381,13 @@ pub struct InitialUlRrcMessageTransfer {
     pub rrc_container: RrcContainer,
     pub du_to_cu_rrc_container: Option<DuToCuRrcContainer>,
     pub sul_access_indication: Option<SulAccessIndication>,
-    pub transaction_id: Option<TransactionId>,
+    pub transaction_id: TransactionId,
     pub ran_ue_id: Option<RanUeId>,
     pub rrc_container_rrc_setup_complete: Option<RrcContainerRrcSetupComplete>,
+    pub nr_red_cap_ue_indication: Option<NrRedCapUeIndication>,
+    pub sdt_information: Option<SdtInformation>,
+    pub sidelink_relay_configuration: Option<SidelinkRelayConfiguration>,
+    pub nr_e_red_cap_ue_indication: Option<NrERedCapUeIndication>,
 }
 
 impl InitialUlRrcMessageTransfer {
@@ -9683,6 +12404,10 @@ impl InitialUlRrcMessageTransfer {
         let mut transaction_id: Option<TransactionId> = None;
         let mut ran_ue_id: Option<RanUeId> = None;
         let mut rrc_container_rrc_setup_complete: Option<RrcContainerRrcSetupComplete> = None;
+        let mut nr_red_cap_ue_indication: Option<NrRedCapUeIndication> = None;
+        let mut sdt_information: Option<SdtInformation> = None;
+        let mut sidelink_relay_configuration: Option<SidelinkRelayConfiguration> = None;
+        let mut nr_e_red_cap_ue_indication: Option<NrERedCapUeIndication> = None;
 
         for _ in 0..num_ies {
             let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
@@ -9701,6 +12426,12 @@ impl InitialUlRrcMessageTransfer {
                     rrc_container_rrc_setup_complete =
                         Some(RrcContainerRrcSetupComplete::decode(data)?)
                 }
+                578 => nr_red_cap_ue_indication = Some(NrRedCapUeIndication::decode(data)?),
+                592 => sdt_information = Some(SdtInformation::decode(data)?),
+                617 => {
+                    sidelink_relay_configuration = Some(SidelinkRelayConfiguration::decode(data)?)
+                }
+                783 => nr_e_red_cap_ue_indication = Some(NrERedCapUeIndication::decode(data)?),
                 x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
             }
             data.decode_align()?;
@@ -9713,6 +12444,9 @@ impl InitialUlRrcMessageTransfer {
         let rrc_container = rrc_container.ok_or(per_codec_error_new(format!(
             "Missing mandatory IE rrc_container"
         )))?;
+        let transaction_id = transaction_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE transaction_id"
+        )))?;
         Ok(Self {
             gnb_du_ue_f1ap_id,
             nr_cgi,
@@ -9723,6 +12457,10 @@ impl InitialUlRrcMessageTransfer {
             transaction_id,
             ran_ue_id,
             rrc_container_rrc_setup_complete,
+            nr_red_cap_ue_indication,
+            sdt_information,
+            sidelink_relay_configuration,
+            nr_e_red_cap_ue_indication,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
@@ -9781,15 +12519,13 @@ impl InitialUlRrcMessageTransfer {
             num_ies += 1;
         }
 
-        if let Some(x) = &self.transaction_id {
-            let ie = &mut Allocator::new_codec_data();
-            x.encode(ie)?;
-            encode::encode_integer(ies, Some(0), Some(65535), false, 78, false)?;
-            Criticality::Ignore.encode(ies)?;
-            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
-            ies.append_aligned(ie);
-            num_ies += 1;
-        }
+        let ie = &mut Allocator::new_codec_data();
+        self.transaction_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 78, false)?;
+        Criticality::Ignore.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
 
         if let Some(x) = &self.ran_ue_id {
             let ie = &mut Allocator::new_codec_data();
@@ -9805,6 +12541,46 @@ impl InitialUlRrcMessageTransfer {
             let ie = &mut Allocator::new_codec_data();
             x.encode(ie)?;
             encode::encode_integer(ies, Some(0), Some(65535), false, 241, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.nr_red_cap_ue_indication {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 578, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.sdt_information {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 592, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.sidelink_relay_configuration {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 617, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.nr_e_red_cap_ue_indication {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 783, false)?;
             Criticality::Ignore.encode(ies)?;
             encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
             ies.append_aligned(ie);
@@ -9849,6 +12625,7 @@ pub struct DlRrcMessageTransfer {
     pub plmn_assistance_info_for_net_shar: Option<PlmnIdentity>,
     pub new_gnb_cu_ue_f1ap_id: Option<GnbCuUeF1apId>,
     pub additional_rrm_priority_index: Option<AdditionalRrmPriorityIndex>,
+    pub srb_mapping_info: Option<UuRlcChannelId>,
 }
 
 impl DlRrcMessageTransfer {
@@ -9869,6 +12646,7 @@ impl DlRrcMessageTransfer {
         let mut plmn_assistance_info_for_net_shar: Option<PlmnIdentity> = None;
         let mut new_gnb_cu_ue_f1ap_id: Option<GnbCuUeF1apId> = None;
         let mut additional_rrm_priority_index: Option<AdditionalRrmPriorityIndex> = None;
+        let mut srb_mapping_info: Option<UuRlcChannelId> = None;
 
         for _ in 0..num_ies {
             let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
@@ -9896,6 +12674,7 @@ impl DlRrcMessageTransfer {
                 248 => {
                     additional_rrm_priority_index = Some(AdditionalRrmPriorityIndex::decode(data)?)
                 }
+                597 => srb_mapping_info = Some(UuRlcChannelId::decode(data)?),
                 x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
             }
             data.decode_align()?;
@@ -9924,6 +12703,7 @@ impl DlRrcMessageTransfer {
             plmn_assistance_info_for_net_shar,
             new_gnb_cu_ue_f1ap_id,
             additional_rrm_priority_index,
+            srb_mapping_info,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
@@ -10046,6 +12826,16 @@ impl DlRrcMessageTransfer {
             let ie = &mut Allocator::new_codec_data();
             x.encode(ie)?;
             encode::encode_integer(ies, Some(0), Some(65535), false, 248, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.srb_mapping_info {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 597, false)?;
             Criticality::Ignore.encode(ies)?;
             encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
             ies.append_aligned(ie);
@@ -10359,6 +13149,18 @@ pub struct Paging {
     pub paging_priority: Option<PagingPriority>,
     pub paging_cell_list: PagingCellList,
     pub paging_origin: Option<PagingOrigin>,
+    pub ran_ue_paging_drx: Option<PagingDrx>,
+    pub cn_ue_paging_drx: Option<PagingDrx>,
+    pub nr_paginge_drx_information: Option<NrPagingeDrxInformation>,
+    pub nr_paginge_drx_informationfor_rrc_inactive: Option<NrPagingeDrxInformationforRrcInactive>,
+    pub paging_cause: Option<PagingCause>,
+    pub peips_assistance_info: Option<PeipsAssistanceInfo>,
+    pub ue_paging_capability: Option<UePagingCapability>,
+    pub extended_ue_identity_index_value: Option<ExtendedUeIdentityIndexValue>,
+    pub hashed_ue_identity_index_value: Option<HashedUeIdentityIndexValue>,
+    pub mt_sdt_information: Option<MtSdtInformation>,
+    pub nr_paginglonge_drx_informationfor_rrc_inactive:
+        Option<NrPaginglongeDrxInformationforRrcInactive>,
 }
 
 impl Paging {
@@ -10372,6 +13174,21 @@ impl Paging {
         let mut paging_priority: Option<PagingPriority> = None;
         let mut paging_cell_list: Option<PagingCellList> = None;
         let mut paging_origin: Option<PagingOrigin> = None;
+        let mut ran_ue_paging_drx: Option<PagingDrx> = None;
+        let mut cn_ue_paging_drx: Option<PagingDrx> = None;
+        let mut nr_paginge_drx_information: Option<NrPagingeDrxInformation> = None;
+        let mut nr_paginge_drx_informationfor_rrc_inactive: Option<
+            NrPagingeDrxInformationforRrcInactive,
+        > = None;
+        let mut paging_cause: Option<PagingCause> = None;
+        let mut peips_assistance_info: Option<PeipsAssistanceInfo> = None;
+        let mut ue_paging_capability: Option<UePagingCapability> = None;
+        let mut extended_ue_identity_index_value: Option<ExtendedUeIdentityIndexValue> = None;
+        let mut hashed_ue_identity_index_value: Option<HashedUeIdentityIndexValue> = None;
+        let mut mt_sdt_information: Option<MtSdtInformation> = None;
+        let mut nr_paginglonge_drx_informationfor_rrc_inactive: Option<
+            NrPaginglongeDrxInformationforRrcInactive,
+        > = None;
 
         for _ in 0..num_ies {
             let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
@@ -10384,6 +13201,28 @@ impl Paging {
                 115 => paging_priority = Some(PagingPriority::decode(data)?),
                 113 => paging_cell_list = Some(PagingCellList::decode(data)?),
                 216 => paging_origin = Some(PagingOrigin::decode(data)?),
+                580 => ran_ue_paging_drx = Some(PagingDrx::decode(data)?),
+                581 => cn_ue_paging_drx = Some(PagingDrx::decode(data)?),
+                582 => nr_paginge_drx_information = Some(NrPagingeDrxInformation::decode(data)?),
+                583 => {
+                    nr_paginge_drx_informationfor_rrc_inactive =
+                        Some(NrPagingeDrxInformationforRrcInactive::decode(data)?)
+                }
+                620 => paging_cause = Some(PagingCause::decode(data)?),
+                622 => peips_assistance_info = Some(PeipsAssistanceInfo::decode(data)?),
+                623 => ue_paging_capability = Some(UePagingCapability::decode(data)?),
+                694 => {
+                    extended_ue_identity_index_value =
+                        Some(ExtendedUeIdentityIndexValue::decode(data)?)
+                }
+                698 => {
+                    hashed_ue_identity_index_value = Some(HashedUeIdentityIndexValue::decode(data)?)
+                }
+                713 => mt_sdt_information = Some(MtSdtInformation::decode(data)?),
+                785 => {
+                    nr_paginglonge_drx_informationfor_rrc_inactive =
+                        Some(NrPaginglongeDrxInformationforRrcInactive::decode(data)?)
+                }
                 x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
             }
             data.decode_align()?;
@@ -10404,6 +13243,17 @@ impl Paging {
             paging_priority,
             paging_cell_list,
             paging_origin,
+            ran_ue_paging_drx,
+            cn_ue_paging_drx,
+            nr_paginge_drx_information,
+            nr_paginge_drx_informationfor_rrc_inactive,
+            paging_cause,
+            peips_assistance_info,
+            ue_paging_capability,
+            extended_ue_identity_index_value,
+            hashed_ue_identity_index_value,
+            mt_sdt_information,
+            nr_paginglonge_drx_informationfor_rrc_inactive,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
@@ -10458,6 +13308,116 @@ impl Paging {
             let ie = &mut Allocator::new_codec_data();
             x.encode(ie)?;
             encode::encode_integer(ies, Some(0), Some(65535), false, 216, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.ran_ue_paging_drx {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 580, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.cn_ue_paging_drx {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 581, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.nr_paginge_drx_information {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 582, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.nr_paginge_drx_informationfor_rrc_inactive {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 583, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.paging_cause {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 620, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.peips_assistance_info {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 622, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.ue_paging_capability {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 623, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.extended_ue_identity_index_value {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 694, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.hashed_ue_identity_index_value {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 698, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.mt_sdt_information {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 713, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.nr_paginglonge_drx_informationfor_rrc_inactive {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 785, false)?;
             Criticality::Ignore.encode(ies)?;
             encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
             ies.append_aligned(ie);
@@ -11013,6 +13973,7 @@ impl PerCodec for PwsFailedNrCgiList {
 pub struct GnbDuStatusIndication {
     pub transaction_id: TransactionId,
     pub gnb_du_overload_information: GnbDuOverloadInformation,
+    pub iab_congestion_indication: Option<IabCongestionIndication>,
 }
 
 impl GnbDuStatusIndication {
@@ -11022,6 +13983,7 @@ impl GnbDuStatusIndication {
 
         let mut transaction_id: Option<TransactionId> = None;
         let mut gnb_du_overload_information: Option<GnbDuOverloadInformation> = None;
+        let mut iab_congestion_indication: Option<IabCongestionIndication> = None;
 
         for _ in 0..num_ies {
             let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
@@ -11030,6 +13992,7 @@ impl GnbDuStatusIndication {
             match id {
                 78 => transaction_id = Some(TransactionId::decode(data)?),
                 172 => gnb_du_overload_information = Some(GnbDuOverloadInformation::decode(data)?),
+                509 => iab_congestion_indication = Some(IabCongestionIndication::decode(data)?),
                 x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
             }
             data.decode_align()?;
@@ -11043,6 +14006,7 @@ impl GnbDuStatusIndication {
         Ok(Self {
             transaction_id,
             gnb_du_overload_information,
+            iab_congestion_indication,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
@@ -11064,6 +14028,16 @@ impl GnbDuStatusIndication {
         encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
         ies.append_aligned(ie);
         num_ies += 1;
+
+        if let Some(x) = &self.iab_congestion_indication {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 509, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
 
         encode::encode_sequence_header(data, true, &BitString::new(), false)?;
         encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
@@ -11916,6 +14890,10 @@ pub struct BapMappingConfiguration {
     pub bh_routing_information_added_list: Option<BhRoutingInformationAddedList>,
     pub bh_routing_information_removed_list: Option<BhRoutingInformationRemovedList>,
     pub traffic_mapping_information: Option<TrafficMappingInfo>,
+    pub buffer_size_thresh: Option<BufferSizeThresh>,
+    pub bap_header_rewriting_added_list: Option<BapHeaderRewritingAddedList>,
+    pub re_routing_enable_indicator: Option<ReRoutingEnableIndicator>,
+    pub bap_header_rewriting_removed_list: Option<BapHeaderRewritingRemovedList>,
 }
 
 impl BapMappingConfiguration {
@@ -11927,6 +14905,10 @@ impl BapMappingConfiguration {
         let mut bh_routing_information_added_list: Option<BhRoutingInformationAddedList> = None;
         let mut bh_routing_information_removed_list: Option<BhRoutingInformationRemovedList> = None;
         let mut traffic_mapping_information: Option<TrafficMappingInfo> = None;
+        let mut buffer_size_thresh: Option<BufferSizeThresh> = None;
+        let mut bap_header_rewriting_added_list: Option<BapHeaderRewritingAddedList> = None;
+        let mut re_routing_enable_indicator: Option<ReRoutingEnableIndicator> = None;
+        let mut bap_header_rewriting_removed_list: Option<BapHeaderRewritingRemovedList> = None;
 
         for _ in 0..num_ies {
             let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
@@ -11943,6 +14925,16 @@ impl BapMappingConfiguration {
                         Some(BhRoutingInformationRemovedList::decode(data)?)
                 }
                 299 => traffic_mapping_information = Some(TrafficMappingInfo::decode(data)?),
+                512 => buffer_size_thresh = Some(BufferSizeThresh::decode(data)?),
+                514 => {
+                    bap_header_rewriting_added_list =
+                        Some(BapHeaderRewritingAddedList::decode(data)?)
+                }
+                516 => re_routing_enable_indicator = Some(ReRoutingEnableIndicator::decode(data)?),
+                641 => {
+                    bap_header_rewriting_removed_list =
+                        Some(BapHeaderRewritingRemovedList::decode(data)?)
+                }
                 x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
             }
             data.decode_align()?;
@@ -11955,6 +14947,10 @@ impl BapMappingConfiguration {
             bh_routing_information_added_list,
             bh_routing_information_removed_list,
             traffic_mapping_information,
+            buffer_size_thresh,
+            bap_header_rewriting_added_list,
+            re_routing_enable_indicator,
+            bap_header_rewriting_removed_list,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
@@ -11993,6 +14989,46 @@ impl BapMappingConfiguration {
             let ie = &mut Allocator::new_codec_data();
             x.encode(ie)?;
             encode::encode_integer(ies, Some(0), Some(65535), false, 299, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.buffer_size_thresh {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 512, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.bap_header_rewriting_added_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 514, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.re_routing_enable_indicator {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 516, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.bap_header_rewriting_removed_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 641, false)?;
             Criticality::Ignore.encode(ies)?;
             encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
             ies.append_aligned(ie);
@@ -12113,6 +15149,102 @@ impl PerCodec for BhRoutingInformationRemovedList {
     fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
         self.encode_inner(data).map_err(|mut e: PerCodecError| {
             e.push_context("BhRoutingInformationRemovedList");
+            e
+        })
+    }
+}
+// BapHeaderRewritingAddedList
+#[derive(Clone, Debug)]
+pub struct BapHeaderRewritingAddedList(pub NonEmpty<BapHeaderRewritingAddedListItem>);
+
+impl BapHeaderRewritingAddedList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(1024), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(BapHeaderRewritingAddedListItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(1024), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 515, false)?;
+            Criticality::Ignore.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for BapHeaderRewritingAddedList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        BapHeaderRewritingAddedList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BapHeaderRewritingAddedList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BapHeaderRewritingAddedList");
+            e
+        })
+    }
+}
+// BapHeaderRewritingRemovedList
+#[derive(Clone, Debug)]
+pub struct BapHeaderRewritingRemovedList(pub NonEmpty<BapHeaderRewritingRemovedListItem>);
+
+impl BapHeaderRewritingRemovedList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(1024), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(BapHeaderRewritingRemovedListItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(1024), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 642, false)?;
+            Criticality::Ignore.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for BapHeaderRewritingRemovedList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        BapHeaderRewritingRemovedList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BapHeaderRewritingRemovedList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BapHeaderRewritingRemovedList");
             e
         })
     }
@@ -12306,6 +15438,8 @@ pub struct GnbDuResourceConfiguration {
     pub transaction_id: TransactionId,
     pub activated_cells_to_be_updated_list: Option<ActivatedCellsToBeUpdatedList>,
     pub child_nodes_list: Option<ChildNodesList>,
+    pub neighbour_node_cells_list: Option<NeighbourNodeCellsList>,
+    pub serving_cells_list: Option<ServingCellsList>,
 }
 
 impl GnbDuResourceConfiguration {
@@ -12316,6 +15450,8 @@ impl GnbDuResourceConfiguration {
         let mut transaction_id: Option<TransactionId> = None;
         let mut activated_cells_to_be_updated_list: Option<ActivatedCellsToBeUpdatedList> = None;
         let mut child_nodes_list: Option<ChildNodesList> = None;
+        let mut neighbour_node_cells_list: Option<NeighbourNodeCellsList> = None;
+        let mut serving_cells_list: Option<ServingCellsList> = None;
 
         for _ in 0..num_ies {
             let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
@@ -12328,6 +15464,8 @@ impl GnbDuResourceConfiguration {
                         Some(ActivatedCellsToBeUpdatedList::decode(data)?)
                 }
                 289 => child_nodes_list = Some(ChildNodesList::decode(data)?),
+                533 => neighbour_node_cells_list = Some(NeighbourNodeCellsList::decode(data)?),
+                534 => serving_cells_list = Some(ServingCellsList::decode(data)?),
                 x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
             }
             data.decode_align()?;
@@ -12339,6 +15477,8 @@ impl GnbDuResourceConfiguration {
             transaction_id,
             activated_cells_to_be_updated_list,
             child_nodes_list,
+            neighbour_node_cells_list,
+            serving_cells_list,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
@@ -12367,6 +15507,26 @@ impl GnbDuResourceConfiguration {
             let ie = &mut Allocator::new_codec_data();
             x.encode(ie)?;
             encode::encode_integer(ies, Some(0), Some(65535), false, 289, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.neighbour_node_cells_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 533, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.serving_cells_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 534, false)?;
             Criticality::Reject.encode(ies)?;
             encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
             ies.append_aligned(ie);
@@ -12585,6 +15745,7 @@ pub struct IabtnlAddressRequest {
     pub ia_bv_4_addresses_requested: Option<IaBv4AddressesRequested>,
     pub iabi_pv_6_request_type: Option<IabiPv6RequestType>,
     pub iab_tnl_addresses_to_remove_list: Option<IabTnlAddressesToRemoveList>,
+    pub iab_tnl_addresses_exception: Option<IabTnlAddressesException>,
 }
 
 impl IabtnlAddressRequest {
@@ -12596,6 +15757,7 @@ impl IabtnlAddressRequest {
         let mut ia_bv_4_addresses_requested: Option<IaBv4AddressesRequested> = None;
         let mut iabi_pv_6_request_type: Option<IabiPv6RequestType> = None;
         let mut iab_tnl_addresses_to_remove_list: Option<IabTnlAddressesToRemoveList> = None;
+        let mut iab_tnl_addresses_exception: Option<IabTnlAddressesException> = None;
 
         for _ in 0..num_ies {
             let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
@@ -12609,6 +15771,7 @@ impl IabtnlAddressRequest {
                     iab_tnl_addresses_to_remove_list =
                         Some(IabTnlAddressesToRemoveList::decode(data)?)
                 }
+                513 => iab_tnl_addresses_exception = Some(IabTnlAddressesException::decode(data)?),
                 x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
             }
             data.decode_align()?;
@@ -12621,6 +15784,7 @@ impl IabtnlAddressRequest {
             ia_bv_4_addresses_requested,
             iabi_pv_6_request_type,
             iab_tnl_addresses_to_remove_list,
+            iab_tnl_addresses_exception,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
@@ -12659,6 +15823,16 @@ impl IabtnlAddressRequest {
             let ie = &mut Allocator::new_codec_data();
             x.encode(ie)?;
             encode::encode_integer(ies, Some(0), Some(65535), false, 292, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.iab_tnl_addresses_exception {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 513, false)?;
             Criticality::Reject.encode(ies)?;
             encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
             ies.append_aligned(ie);
@@ -13412,6 +16586,310 @@ impl PerCodec for IabupConfigurationUpdateFailure {
         })
     }
 }
+// Miabf1SetupTriggering
+#[derive(Clone, Debug)]
+pub struct Miabf1SetupTriggering {
+    pub transaction_id: TransactionId,
+    pub target_gnb_id: GlobalGnbId,
+    pub target_gnb_ip_address: Option<TransportLayerAddress>,
+    pub target_se_gw_ip_address: Option<TransportLayerAddress>,
+}
+
+impl Miabf1SetupTriggering {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut transaction_id: Option<TransactionId> = None;
+        let mut target_gnb_id: Option<GlobalGnbId> = None;
+        let mut target_gnb_ip_address: Option<TransportLayerAddress> = None;
+        let mut target_se_gw_ip_address: Option<TransportLayerAddress> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                78 => transaction_id = Some(TransactionId::decode(data)?),
+                755 => target_gnb_id = Some(GlobalGnbId::decode(data)?),
+                756 => target_gnb_ip_address = Some(TransportLayerAddress::decode(data)?),
+                757 => target_se_gw_ip_address = Some(TransportLayerAddress::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let transaction_id = transaction_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE transaction_id"
+        )))?;
+        let target_gnb_id = target_gnb_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE target_gnb_id"
+        )))?;
+        Ok(Self {
+            transaction_id,
+            target_gnb_id,
+            target_gnb_ip_address,
+            target_se_gw_ip_address,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.transaction_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 78, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.target_gnb_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 755, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.target_gnb_ip_address {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 756, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.target_se_gw_ip_address {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 757, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for Miabf1SetupTriggering {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Miabf1SetupTriggering::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("Miabf1SetupTriggering");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("Miabf1SetupTriggering");
+            e
+        })
+    }
+}
+// Miabf1SetupOutcomeNotification
+#[derive(Clone, Debug)]
+pub struct Miabf1SetupOutcomeNotification {
+    pub transaction_id: TransactionId,
+    pub f1_setup_outcome: F1SetupOutcome,
+    pub activated_cells_mapping_list: Option<ActivatedCellsMappingList>,
+    pub target_f1_terminating_donor_gnb_id: Option<GlobalGnbId>,
+}
+
+impl Miabf1SetupOutcomeNotification {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut transaction_id: Option<TransactionId> = None;
+        let mut f1_setup_outcome: Option<F1SetupOutcome> = None;
+        let mut activated_cells_mapping_list: Option<ActivatedCellsMappingList> = None;
+        let mut target_f1_terminating_donor_gnb_id: Option<GlobalGnbId> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                78 => transaction_id = Some(TransactionId::decode(data)?),
+                760 => f1_setup_outcome = Some(F1SetupOutcome::decode(data)?),
+                758 => {
+                    activated_cells_mapping_list = Some(ActivatedCellsMappingList::decode(data)?)
+                }
+                787 => target_f1_terminating_donor_gnb_id = Some(GlobalGnbId::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let transaction_id = transaction_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE transaction_id"
+        )))?;
+        let f1_setup_outcome = f1_setup_outcome.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE f1_setup_outcome"
+        )))?;
+        Ok(Self {
+            transaction_id,
+            f1_setup_outcome,
+            activated_cells_mapping_list,
+            target_f1_terminating_donor_gnb_id,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.transaction_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 78, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.f1_setup_outcome.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 760, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.activated_cells_mapping_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 758, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.target_f1_terminating_donor_gnb_id {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 787, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for Miabf1SetupOutcomeNotification {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Miabf1SetupOutcomeNotification::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("Miabf1SetupOutcomeNotification");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("Miabf1SetupOutcomeNotification");
+            e
+        })
+    }
+}
+// F1SetupOutcome
+#[derive(Clone, Debug, Copy, TryFromPrimitive)]
+#[repr(u32)]
+pub enum F1SetupOutcome {
+    Success,
+    Failure,
+}
+
+impl F1SetupOutcome {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let (idx, _extended) = decode::decode_enumerated(data, Some(0), Some(1), true)?;
+        Self::try_from(idx as u32).map_err(|_| per_codec_error_new("Unknown enum variant"))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_enumerated(
+            data,
+            Some(0),
+            Some(1),
+            true,
+            *self as i128,
+            (*self as u32) >= 2,
+        )
+    }
+}
+
+impl PerCodec for F1SetupOutcome {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        F1SetupOutcome::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("F1SetupOutcome");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("F1SetupOutcome");
+            e
+        })
+    }
+}
+// ActivatedCellsMappingList
+#[derive(Clone, Debug)]
+pub struct ActivatedCellsMappingList(pub NonEmpty<ActivatedCellsMappingListItem>);
+
+impl ActivatedCellsMappingList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(512), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(ActivatedCellsMappingListItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(512), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 759, false)?;
+            Criticality::Ignore.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for ActivatedCellsMappingList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        ActivatedCellsMappingList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("ActivatedCellsMappingList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("ActivatedCellsMappingList");
+            e
+        })
+    }
+}
 // ResourceStatusRequest
 #[derive(Clone, Debug)]
 pub struct ResourceStatusRequest {
@@ -13933,8 +17411,11 @@ impl PerCodec for ResourceStatusUpdate {
 #[derive(Clone, Debug)]
 pub struct AccessAndMobilityIndication {
     pub transaction_id: TransactionId,
-    pub rach_report_information_list: Option<RachReportInformationList>,
+    pub ra_report_list: Option<RaReportList>,
     pub rlf_report_information_list: Option<RlfReportInformationList>,
+    pub successful_ho_report_information_list: Option<SuccessfulHoReportInformationList>,
+    pub successful_ps_cell_change_report_information_list:
+        Option<SuccessfulPsCellChangeReportInformationList>,
 }
 
 impl AccessAndMobilityIndication {
@@ -13943,8 +17424,13 @@ impl AccessAndMobilityIndication {
         let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
 
         let mut transaction_id: Option<TransactionId> = None;
-        let mut rach_report_information_list: Option<RachReportInformationList> = None;
+        let mut ra_report_list: Option<RaReportList> = None;
         let mut rlf_report_information_list: Option<RlfReportInformationList> = None;
+        let mut successful_ho_report_information_list: Option<SuccessfulHoReportInformationList> =
+            None;
+        let mut successful_ps_cell_change_report_information_list: Option<
+            SuccessfulPsCellChangeReportInformationList,
+        > = None;
 
         for _ in 0..num_ies {
             let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
@@ -13952,10 +17438,16 @@ impl AccessAndMobilityIndication {
             let _ = decode::decode_length_determinent(data, None, None, false)?;
             match id {
                 78 => transaction_id = Some(TransactionId::decode(data)?),
-                359 => {
-                    rach_report_information_list = Some(RachReportInformationList::decode(data)?)
-                }
+                359 => ra_report_list = Some(RaReportList::decode(data)?),
                 360 => rlf_report_information_list = Some(RlfReportInformationList::decode(data)?),
+                443 => {
+                    successful_ho_report_information_list =
+                        Some(SuccessfulHoReportInformationList::decode(data)?)
+                }
+                736 => {
+                    successful_ps_cell_change_report_information_list =
+                        Some(SuccessfulPsCellChangeReportInformationList::decode(data)?)
+                }
                 x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
             }
             data.decode_align()?;
@@ -13965,8 +17457,10 @@ impl AccessAndMobilityIndication {
         )))?;
         Ok(Self {
             transaction_id,
-            rach_report_information_list,
+            ra_report_list,
             rlf_report_information_list,
+            successful_ho_report_information_list,
+            successful_ps_cell_change_report_information_list,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
@@ -13981,7 +17475,7 @@ impl AccessAndMobilityIndication {
         ies.append_aligned(ie);
         num_ies += 1;
 
-        if let Some(x) = &self.rach_report_information_list {
+        if let Some(x) = &self.ra_report_list {
             let ie = &mut Allocator::new_codec_data();
             x.encode(ie)?;
             encode::encode_integer(ies, Some(0), Some(65535), false, 359, false)?;
@@ -13995,6 +17489,26 @@ impl AccessAndMobilityIndication {
             let ie = &mut Allocator::new_codec_data();
             x.encode(ie)?;
             encode::encode_integer(ies, Some(0), Some(65535), false, 360, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.successful_ho_report_information_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 443, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.successful_ps_cell_change_report_information_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 736, false)?;
             Criticality::Ignore.encode(ies)?;
             encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
             ies.append_aligned(ie);
@@ -14539,6 +18053,13 @@ pub struct PositioningMeasurementRequest {
     pub measurement_beam_info_request: Option<MeasurementBeamInfoRequest>,
     pub system_frame_number: Option<SystemFrameNumber>,
     pub slot_number: Option<SlotNumber>,
+    pub pos_measurement_periodicity_extended: Option<MeasurementPeriodicityExtended>,
+    pub response_time: Option<ResponseTime>,
+    pub measurement_characteristics_request_indicator:
+        Option<MeasurementCharacteristicsRequestIndicator>,
+    pub measurement_time_occasion: Option<MeasurementTimeOccasion>,
+    pub pos_measurement_amount: Option<PosMeasurementAmount>,
+    pub time_window_information_measurement_list: Option<TimeWindowInformationMeasurementList>,
 }
 
 impl PositioningMeasurementRequest {
@@ -14558,6 +18079,16 @@ impl PositioningMeasurementRequest {
         let mut measurement_beam_info_request: Option<MeasurementBeamInfoRequest> = None;
         let mut system_frame_number: Option<SystemFrameNumber> = None;
         let mut slot_number: Option<SlotNumber> = None;
+        let mut pos_measurement_periodicity_extended: Option<MeasurementPeriodicityExtended> = None;
+        let mut response_time: Option<ResponseTime> = None;
+        let mut measurement_characteristics_request_indicator: Option<
+            MeasurementCharacteristicsRequestIndicator,
+        > = None;
+        let mut measurement_time_occasion: Option<MeasurementTimeOccasion> = None;
+        let mut pos_measurement_amount: Option<PosMeasurementAmount> = None;
+        let mut time_window_information_measurement_list: Option<
+            TimeWindowInformationMeasurementList,
+        > = None;
 
         for _ in 0..num_ies {
             let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
@@ -14580,6 +18111,21 @@ impl PositioningMeasurementRequest {
                 }
                 420 => system_frame_number = Some(SystemFrameNumber::decode(data)?),
                 421 => slot_number = Some(SlotNumber::decode(data)?),
+                438 => {
+                    pos_measurement_periodicity_extended =
+                        Some(MeasurementPeriodicityExtended::decode(data)?)
+                }
+                555 => response_time = Some(ResponseTime::decode(data)?),
+                574 => {
+                    measurement_characteristics_request_indicator =
+                        Some(MeasurementCharacteristicsRequestIndicator::decode(data)?)
+                }
+                573 => measurement_time_occasion = Some(MeasurementTimeOccasion::decode(data)?),
+                634 => pos_measurement_amount = Some(PosMeasurementAmount::decode(data)?),
+                803 => {
+                    time_window_information_measurement_list =
+                        Some(TimeWindowInformationMeasurementList::decode(data)?)
+                }
                 x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
             }
             data.decode_align()?;
@@ -14615,6 +18161,12 @@ impl PositioningMeasurementRequest {
             measurement_beam_info_request,
             system_frame_number,
             slot_number,
+            pos_measurement_periodicity_extended,
+            response_time,
+            measurement_characteristics_request_indicator,
+            measurement_time_occasion,
+            pos_measurement_amount,
+            time_window_information_measurement_list,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
@@ -14723,6 +18275,66 @@ impl PositioningMeasurementRequest {
             let ie = &mut Allocator::new_codec_data();
             x.encode(ie)?;
             encode::encode_integer(ies, Some(0), Some(65535), false, 421, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.pos_measurement_periodicity_extended {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 438, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.response_time {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 555, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.measurement_characteristics_request_indicator {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 574, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.measurement_time_occasion {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 573, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.pos_measurement_amount {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 634, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.time_window_information_measurement_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 803, false)?;
             Criticality::Ignore.encode(ies)?;
             encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
             ies.append_aligned(ie);
@@ -15313,6 +18925,10 @@ pub struct PositioningMeasurementUpdate {
     pub lmf_measurement_id: LmfMeasurementId,
     pub ran_measurement_id: RanMeasurementId,
     pub srs_configuration: Option<SrsConfiguration>,
+    pub trp_measurement_update_list: Option<TrpMeasurementUpdateList>,
+    pub measurement_characteristics_request_indicator:
+        Option<MeasurementCharacteristicsRequestIndicator>,
+    pub measurement_time_occasion: Option<MeasurementTimeOccasion>,
 }
 
 impl PositioningMeasurementUpdate {
@@ -15324,6 +18940,11 @@ impl PositioningMeasurementUpdate {
         let mut lmf_measurement_id: Option<LmfMeasurementId> = None;
         let mut ran_measurement_id: Option<RanMeasurementId> = None;
         let mut srs_configuration: Option<SrsConfiguration> = None;
+        let mut trp_measurement_update_list: Option<TrpMeasurementUpdateList> = None;
+        let mut measurement_characteristics_request_indicator: Option<
+            MeasurementCharacteristicsRequestIndicator,
+        > = None;
+        let mut measurement_time_occasion: Option<MeasurementTimeOccasion> = None;
 
         for _ in 0..num_ies {
             let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
@@ -15334,6 +18955,12 @@ impl PositioningMeasurementUpdate {
                 402 => lmf_measurement_id = Some(LmfMeasurementId::decode(data)?),
                 411 => ran_measurement_id = Some(RanMeasurementId::decode(data)?),
                 407 => srs_configuration = Some(SrsConfiguration::decode(data)?),
+                553 => trp_measurement_update_list = Some(TrpMeasurementUpdateList::decode(data)?),
+                574 => {
+                    measurement_characteristics_request_indicator =
+                        Some(MeasurementCharacteristicsRequestIndicator::decode(data)?)
+                }
+                573 => measurement_time_occasion = Some(MeasurementTimeOccasion::decode(data)?),
                 x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
             }
             data.decode_align()?;
@@ -15352,6 +18979,9 @@ impl PositioningMeasurementUpdate {
             lmf_measurement_id,
             ran_measurement_id,
             srs_configuration,
+            trp_measurement_update_list,
+            measurement_characteristics_request_indicator,
+            measurement_time_occasion,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
@@ -15386,6 +19016,36 @@ impl PositioningMeasurementUpdate {
             let ie = &mut Allocator::new_codec_data();
             x.encode(ie)?;
             encode::encode_integer(ies, Some(0), Some(65535), false, 407, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.trp_measurement_update_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 553, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.measurement_characteristics_request_indicator {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 574, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.measurement_time_occasion {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 573, false)?;
             Criticality::Ignore.encode(ies)?;
             encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
             ies.append_aligned(ie);
@@ -15800,6 +19460,11 @@ pub struct PositioningInformationRequest {
     pub gnb_cu_ue_f1ap_id: GnbCuUeF1apId,
     pub gnb_du_ue_f1ap_id: GnbDuUeF1apId,
     pub requested_srs_transmission_characteristics: Option<RequestedSrsTransmissionCharacteristics>,
+    pub ue_reporting_information: Option<UeReportingInformation>,
+    pub srs_pos_rrc_inactive_query_indication: Option<SrsPosRrcInactiveQueryIndication>,
+    pub time_window_information_srs_list: Option<TimeWindowInformationSrsList>,
+    pub requested_srs_preconfiguration_characteristics_list:
+        Option<RequestedSrsPreconfigurationCharacteristicsList>,
 }
 
 impl PositioningInformationRequest {
@@ -15812,6 +19477,13 @@ impl PositioningInformationRequest {
         let mut requested_srs_transmission_characteristics: Option<
             RequestedSrsTransmissionCharacteristics,
         > = None;
+        let mut ue_reporting_information: Option<UeReportingInformation> = None;
+        let mut srs_pos_rrc_inactive_query_indication: Option<SrsPosRrcInactiveQueryIndication> =
+            None;
+        let mut time_window_information_srs_list: Option<TimeWindowInformationSrsList> = None;
+        let mut requested_srs_preconfiguration_characteristics_list: Option<
+            RequestedSrsPreconfigurationCharacteristicsList,
+        > = None;
 
         for _ in 0..num_ies {
             let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
@@ -15823,6 +19495,20 @@ impl PositioningInformationRequest {
                 391 => {
                     requested_srs_transmission_characteristics =
                         Some(RequestedSrsTransmissionCharacteristics::decode(data)?)
+                }
+                575 => ue_reporting_information = Some(UeReportingInformation::decode(data)?),
+                689 => {
+                    srs_pos_rrc_inactive_query_indication =
+                        Some(SrsPosRrcInactiveQueryIndication::decode(data)?)
+                }
+                802 => {
+                    time_window_information_srs_list =
+                        Some(TimeWindowInformationSrsList::decode(data)?)
+                }
+                830 => {
+                    requested_srs_preconfiguration_characteristics_list = Some(
+                        RequestedSrsPreconfigurationCharacteristicsList::decode(data)?,
+                    )
                 }
                 x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
             }
@@ -15838,6 +19524,10 @@ impl PositioningInformationRequest {
             gnb_cu_ue_f1ap_id,
             gnb_du_ue_f1ap_id,
             requested_srs_transmission_characteristics,
+            ue_reporting_information,
+            srs_pos_rrc_inactive_query_indication,
+            time_window_information_srs_list,
+            requested_srs_preconfiguration_characteristics_list,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
@@ -15864,6 +19554,46 @@ impl PositioningInformationRequest {
             let ie = &mut Allocator::new_codec_data();
             x.encode(ie)?;
             encode::encode_integer(ies, Some(0), Some(65535), false, 391, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.ue_reporting_information {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 575, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.srs_pos_rrc_inactive_query_indication {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 689, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.time_window_information_srs_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 802, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.requested_srs_preconfiguration_characteristics_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 830, false)?;
             Criticality::Ignore.encode(ies)?;
             encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
             ies.append_aligned(ie);
@@ -15900,6 +19630,9 @@ pub struct PositioningInformationResponse {
     pub srs_configuration: Option<SrsConfiguration>,
     pub sfn_initialisation_time: Option<RelativeTime1900>,
     pub criticality_diagnostics: Option<CriticalityDiagnostics>,
+    pub srs_pos_rrc_inactive_config: Option<SrsPosRrcInactiveConfig>,
+    pub srs_pos_rrc_inactive_validity_area_config: Option<SrsPosRrcInactiveValidityAreaConfig>,
+    pub srs_preconfiguration_list: Option<SrsPreconfigurationList>,
 }
 
 impl PositioningInformationResponse {
@@ -15912,6 +19645,11 @@ impl PositioningInformationResponse {
         let mut srs_configuration: Option<SrsConfiguration> = None;
         let mut sfn_initialisation_time: Option<RelativeTime1900> = None;
         let mut criticality_diagnostics: Option<CriticalityDiagnostics> = None;
+        let mut srs_pos_rrc_inactive_config: Option<SrsPosRrcInactiveConfig> = None;
+        let mut srs_pos_rrc_inactive_validity_area_config: Option<
+            SrsPosRrcInactiveValidityAreaConfig,
+        > = None;
+        let mut srs_preconfiguration_list: Option<SrsPreconfigurationList> = None;
 
         for _ in 0..num_ies {
             let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
@@ -15923,6 +19661,12 @@ impl PositioningInformationResponse {
                 407 => srs_configuration = Some(SrsConfiguration::decode(data)?),
                 419 => sfn_initialisation_time = Some(RelativeTime1900::decode(data)?),
                 7 => criticality_diagnostics = Some(CriticalityDiagnostics::decode(data)?),
+                674 => srs_pos_rrc_inactive_config = Some(SrsPosRrcInactiveConfig::decode(data)?),
+                811 => {
+                    srs_pos_rrc_inactive_validity_area_config =
+                        Some(SrsPosRrcInactiveValidityAreaConfig::decode(data)?)
+                }
+                831 => srs_preconfiguration_list = Some(SrsPreconfigurationList::decode(data)?),
                 x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
             }
             data.decode_align()?;
@@ -15939,6 +19683,9 @@ impl PositioningInformationResponse {
             srs_configuration,
             sfn_initialisation_time,
             criticality_diagnostics,
+            srs_pos_rrc_inactive_config,
+            srs_pos_rrc_inactive_validity_area_config,
+            srs_preconfiguration_list,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
@@ -15985,6 +19732,36 @@ impl PositioningInformationResponse {
             let ie = &mut Allocator::new_codec_data();
             x.encode(ie)?;
             encode::encode_integer(ies, Some(0), Some(65535), false, 7, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.srs_pos_rrc_inactive_config {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 674, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.srs_pos_rrc_inactive_validity_area_config {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 811, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.srs_preconfiguration_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 831, false)?;
             Criticality::Ignore.encode(ies)?;
             encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
             ies.append_aligned(ie);
@@ -16289,6 +20066,8 @@ impl PerCodec for SrsType {
 pub struct SemipersistentSrs {
     pub srs_resource_set_id: SrsResourceSetId,
     pub srs_spatial_relation: Option<SpatialRelationInfo>,
+    pub srs_spatial_relation_per_srs_resource: Option<SpatialRelationPerSrsResource>,
+    pub aggregated_pos_srs_resource_set_list: Option<AggregatedPosSrsResourceSetList>,
 }
 
 impl SemipersistentSrs {
@@ -16302,6 +20081,9 @@ impl SemipersistentSrs {
         };
 
         // Process the extension container
+        let mut srs_spatial_relation_per_srs_resource: Option<SpatialRelationPerSrsResource> = None;
+        let mut aggregated_pos_srs_resource_set_list: Option<AggregatedPosSrsResourceSetList> =
+            None;
 
         if optionals[1] {
             let num_ies = decode::decode_length_determinent(data, Some(1), Some(65535), false)?;
@@ -16310,6 +20092,14 @@ impl SemipersistentSrs {
                 let _criticality = Criticality::decode(data)?;
                 let ie_length = decode::decode_length_determinent(data, None, None, false)?;
                 match id {
+                    435 => {
+                        srs_spatial_relation_per_srs_resource =
+                            Some(SpatialRelationPerSrsResource::decode(data)?)
+                    }
+                    829 => {
+                        aggregated_pos_srs_resource_set_list =
+                            Some(AggregatedPosSrsResourceSetList::decode(data)?)
+                    }
                     _ => data.advance_maybe_err(ie_length, false)?,
                 }
                 data.decode_align()?;
@@ -16318,19 +20108,46 @@ impl SemipersistentSrs {
         Ok(Self {
             srs_resource_set_id,
             srs_spatial_relation,
+            srs_spatial_relation_per_srs_resource,
+            aggregated_pos_srs_resource_set_list,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+        if let Some(x) = &self.srs_spatial_relation_per_srs_resource {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 435, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.aggregated_pos_srs_resource_set_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 829, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
         let mut optionals = BitString::new();
         optionals.push(self.srs_spatial_relation.is_some());
-        optionals.push(false);
+        optionals.push(num_ies != 0);
 
         encode::encode_sequence_header(data, true, &optionals, false)?;
         self.srs_resource_set_id.encode(data)?;
         if let Some(x) = &self.srs_spatial_relation {
             x.encode(data)?;
         }
-
+        if num_ies != 0 {
+            encode::encode_length_determinent(data, Some(1), Some(65535), false, num_ies)?;
+            data.append_aligned(ies);
+        }
         Ok(())
     }
 }
@@ -16355,6 +20172,7 @@ impl PerCodec for SemipersistentSrs {
 pub struct AperiodicSrs {
     pub aperiodic: Aperiodic,
     pub srs_resource_trigger: Option<SrsResourceTrigger>,
+    pub aggregated_pos_srs_resource_set_list: Option<AggregatedPosSrsResourceSetList>,
 }
 
 impl AperiodicSrs {
@@ -16368,6 +20186,8 @@ impl AperiodicSrs {
         };
 
         // Process the extension container
+        let mut aggregated_pos_srs_resource_set_list: Option<AggregatedPosSrsResourceSetList> =
+            None;
 
         if optionals[1] {
             let num_ies = decode::decode_length_determinent(data, Some(1), Some(65535), false)?;
@@ -16376,6 +20196,10 @@ impl AperiodicSrs {
                 let _criticality = Criticality::decode(data)?;
                 let ie_length = decode::decode_length_determinent(data, None, None, false)?;
                 match id {
+                    829 => {
+                        aggregated_pos_srs_resource_set_list =
+                            Some(AggregatedPosSrsResourceSetList::decode(data)?)
+                    }
                     _ => data.advance_maybe_err(ie_length, false)?,
                 }
                 data.decode_align()?;
@@ -16384,19 +20208,35 @@ impl AperiodicSrs {
         Ok(Self {
             aperiodic,
             srs_resource_trigger,
+            aggregated_pos_srs_resource_set_list,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+        if let Some(x) = &self.aggregated_pos_srs_resource_set_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 829, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
         let mut optionals = BitString::new();
         optionals.push(self.srs_resource_trigger.is_some());
-        optionals.push(false);
+        optionals.push(num_ies != 0);
 
         encode::encode_sequence_header(data, true, &optionals, false)?;
         self.aperiodic.encode(data)?;
         if let Some(x) = &self.srs_resource_trigger {
             x.encode(data)?;
         }
-
+        if num_ies != 0 {
+            encode::encode_length_determinent(data, Some(1), Some(65535), false, num_ies)?;
+            data.append_aligned(ies);
+        }
         Ok(())
     }
 }
@@ -16844,6 +20684,121 @@ impl PerCodec for PositioningInformationUpdate {
         })
     }
 }
+// SrsInformationReservationNotification
+#[derive(Clone, Debug)]
+pub struct SrsInformationReservationNotification {
+    pub transaction_id: TransactionId,
+    pub srs_reservation_type: SrsReservationType,
+    pub srs_information: Option<RequestedSrsTransmissionCharacteristics>,
+    pub preconfigured_srs_information: Option<RequestedSrsPreconfigurationCharacteristicsList>,
+}
+
+impl SrsInformationReservationNotification {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut transaction_id: Option<TransactionId> = None;
+        let mut srs_reservation_type: Option<SrsReservationType> = None;
+        let mut srs_information: Option<RequestedSrsTransmissionCharacteristics> = None;
+        let mut preconfigured_srs_information: Option<
+            RequestedSrsPreconfigurationCharacteristicsList,
+        > = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                78 => transaction_id = Some(TransactionId::decode(data)?),
+                813 => srs_reservation_type = Some(SrsReservationType::decode(data)?),
+                832 => {
+                    srs_information = Some(RequestedSrsTransmissionCharacteristics::decode(data)?)
+                }
+                857 => {
+                    preconfigured_srs_information = Some(
+                        RequestedSrsPreconfigurationCharacteristicsList::decode(data)?,
+                    )
+                }
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let transaction_id = transaction_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE transaction_id"
+        )))?;
+        let srs_reservation_type = srs_reservation_type.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE srs_reservation_type"
+        )))?;
+        Ok(Self {
+            transaction_id,
+            srs_reservation_type,
+            srs_information,
+            preconfigured_srs_information,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.transaction_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 78, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.srs_reservation_type.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 813, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.srs_information {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 832, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.preconfigured_srs_information {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 857, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for SrsInformationReservationNotification {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        SrsInformationReservationNotification::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("SrsInformationReservationNotification");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("SrsInformationReservationNotification");
+            e
+        })
+    }
+}
 // ECidMeasurementInitiationRequest
 #[derive(Clone, Debug)]
 pub struct ECidMeasurementInitiationRequest {
@@ -16854,6 +20809,7 @@ pub struct ECidMeasurementInitiationRequest {
     pub e_cid_report_characteristics: ECidReportCharacteristics,
     pub e_cid_measurement_periodicity: Option<MeasurementPeriodicity>,
     pub e_cid_measurement_quantities: ECidMeasurementQuantities,
+    pub pos_measurement_periodicity_nr_ao_a: Option<PosMeasurementPeriodicityNrAoA>,
 }
 
 impl ECidMeasurementInitiationRequest {
@@ -16868,6 +20824,7 @@ impl ECidMeasurementInitiationRequest {
         let mut e_cid_report_characteristics: Option<ECidReportCharacteristics> = None;
         let mut e_cid_measurement_periodicity: Option<MeasurementPeriodicity> = None;
         let mut e_cid_measurement_quantities: Option<ECidMeasurementQuantities> = None;
+        let mut pos_measurement_periodicity_nr_ao_a: Option<PosMeasurementPeriodicityNrAoA> = None;
 
         for _ in 0..num_ies {
             let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
@@ -16884,6 +20841,10 @@ impl ECidMeasurementInitiationRequest {
                 416 => e_cid_measurement_periodicity = Some(MeasurementPeriodicity::decode(data)?),
                 414 => {
                     e_cid_measurement_quantities = Some(ECidMeasurementQuantities::decode(data)?)
+                }
+                672 => {
+                    pos_measurement_periodicity_nr_ao_a =
+                        Some(PosMeasurementPeriodicityNrAoA::decode(data)?)
                 }
                 x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
             }
@@ -16915,6 +20876,7 @@ impl ECidMeasurementInitiationRequest {
             e_cid_report_characteristics,
             e_cid_measurement_periodicity,
             e_cid_measurement_quantities,
+            pos_measurement_periodicity_nr_ao_a,
         })
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
@@ -16978,6 +20940,16 @@ impl ECidMeasurementInitiationRequest {
         encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
         ies.append_aligned(ie);
         num_ies += 1;
+
+        if let Some(x) = &self.pos_measurement_periodicity_nr_ao_a {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 672, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
 
         encode::encode_sequence_header(data, true, &BitString::new(), false)?;
         encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
@@ -17657,23 +21629,7538 @@ impl PerCodec for ECidMeasurementTerminationCommand {
         })
     }
 }
+// BroadcastContextSetupRequest
+#[derive(Clone, Debug)]
+pub struct BroadcastContextSetupRequest {
+    pub gnb_cu_mbs_f1ap_id: GnbCuMbsF1apId,
+    pub mbs_session_id: MbsSessionId,
+    pub mbs_service_area: Option<MbsServiceArea>,
+    pub mbs_cu_to_du_rrc_information: MbsCuToDuRrcInformation,
+    pub snssai: Snssai,
+    pub broadcast_mr_bs_to_be_setup_list: BroadcastMrBsToBeSetupList,
+    pub supported_ue_type_list: Option<SupportedUeTypeList>,
+    pub associated_session_id: Option<AssociatedSessionId>,
+    pub ran_sharing_assistance_information: Option<RanSharingAssistanceInformation>,
+}
+
+impl BroadcastContextSetupRequest {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_mbs_f1ap_id: Option<GnbCuMbsF1apId> = None;
+        let mut mbs_session_id: Option<MbsSessionId> = None;
+        let mut mbs_service_area: Option<MbsServiceArea> = None;
+        let mut mbs_cu_to_du_rrc_information: Option<MbsCuToDuRrcInformation> = None;
+        let mut snssai: Option<Snssai> = None;
+        let mut broadcast_mr_bs_to_be_setup_list: Option<BroadcastMrBsToBeSetupList> = None;
+        let mut supported_ue_type_list: Option<SupportedUeTypeList> = None;
+        let mut associated_session_id: Option<AssociatedSessionId> = None;
+        let mut ran_sharing_assistance_information: Option<RanSharingAssistanceInformation> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                451 => gnb_cu_mbs_f1ap_id = Some(GnbCuMbsF1apId::decode(data)?),
+                455 => mbs_session_id = Some(MbsSessionId::decode(data)?),
+                481 => mbs_service_area = Some(MbsServiceArea::decode(data)?),
+                454 => mbs_cu_to_du_rrc_information = Some(MbsCuToDuRrcInformation::decode(data)?),
+                456 => snssai = Some(Snssai::decode(data)?),
+                474 => {
+                    broadcast_mr_bs_to_be_setup_list =
+                        Some(BroadcastMrBsToBeSetupList::decode(data)?)
+                }
+                717 => supported_ue_type_list = Some(SupportedUeTypeList::decode(data)?),
+                767 => associated_session_id = Some(AssociatedSessionId::decode(data)?),
+                844 => {
+                    ran_sharing_assistance_information =
+                        Some(RanSharingAssistanceInformation::decode(data)?)
+                }
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_mbs_f1ap_id = gnb_cu_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_mbs_f1ap_id"
+        )))?;
+        let mbs_session_id = mbs_session_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE mbs_session_id"
+        )))?;
+        let mbs_cu_to_du_rrc_information = mbs_cu_to_du_rrc_information.ok_or(
+            per_codec_error_new(format!("Missing mandatory IE mbs_cu_to_du_rrc_information")),
+        )?;
+        let snssai = snssai.ok_or(per_codec_error_new(format!("Missing mandatory IE snssai")))?;
+        let broadcast_mr_bs_to_be_setup_list =
+            broadcast_mr_bs_to_be_setup_list.ok_or(per_codec_error_new(format!(
+                "Missing mandatory IE broadcast_mr_bs_to_be_setup_list"
+            )))?;
+        Ok(Self {
+            gnb_cu_mbs_f1ap_id,
+            mbs_session_id,
+            mbs_service_area,
+            mbs_cu_to_du_rrc_information,
+            snssai,
+            broadcast_mr_bs_to_be_setup_list,
+            supported_ue_type_list,
+            associated_session_id,
+            ran_sharing_assistance_information,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 451, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.mbs_session_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 455, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.mbs_service_area {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 481, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        let ie = &mut Allocator::new_codec_data();
+        self.mbs_cu_to_du_rrc_information.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 454, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.snssai.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 456, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.broadcast_mr_bs_to_be_setup_list.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 474, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.supported_ue_type_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 717, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.associated_session_id {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 767, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.ran_sharing_assistance_information {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 844, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for BroadcastContextSetupRequest {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        BroadcastContextSetupRequest::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastContextSetupRequest");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastContextSetupRequest");
+            e
+        })
+    }
+}
+// BroadcastMrBsToBeSetupList
+#[derive(Clone, Debug)]
+pub struct BroadcastMrBsToBeSetupList(pub NonEmpty<BroadcastMrBsToBeSetupItem>);
+
+impl BroadcastMrBsToBeSetupList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(32), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(BroadcastMrBsToBeSetupItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(32), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 475, false)?;
+            Criticality::Reject.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for BroadcastMrBsToBeSetupList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        BroadcastMrBsToBeSetupList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastMrBsToBeSetupList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastMrBsToBeSetupList");
+            e
+        })
+    }
+}
+// BroadcastContextSetupResponse
+#[derive(Clone, Debug)]
+pub struct BroadcastContextSetupResponse {
+    pub gnb_cu_mbs_f1ap_id: GnbCuMbsF1apId,
+    pub gnb_du_mbs_f1ap_id: GnbDuMbsF1apId,
+    pub broadcast_mr_bs_setup_list: BroadcastMrBsSetupList,
+    pub broadcast_mr_bs_failed_to_be_setup_list: Option<BroadcastMrBsFailedToBeSetupList>,
+    pub broadcast_area_scope: Option<BroadcastAreaScope>,
+    pub criticality_diagnostics: Option<CriticalityDiagnostics>,
+}
+
+impl BroadcastContextSetupResponse {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_mbs_f1ap_id: Option<GnbCuMbsF1apId> = None;
+        let mut gnb_du_mbs_f1ap_id: Option<GnbDuMbsF1apId> = None;
+        let mut broadcast_mr_bs_setup_list: Option<BroadcastMrBsSetupList> = None;
+        let mut broadcast_mr_bs_failed_to_be_setup_list: Option<BroadcastMrBsFailedToBeSetupList> =
+            None;
+        let mut broadcast_area_scope: Option<BroadcastAreaScope> = None;
+        let mut criticality_diagnostics: Option<CriticalityDiagnostics> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                451 => gnb_cu_mbs_f1ap_id = Some(GnbCuMbsF1apId::decode(data)?),
+                452 => gnb_du_mbs_f1ap_id = Some(GnbDuMbsF1apId::decode(data)?),
+                466 => broadcast_mr_bs_setup_list = Some(BroadcastMrBsSetupList::decode(data)?),
+                460 => {
+                    broadcast_mr_bs_failed_to_be_setup_list =
+                        Some(BroadcastMrBsFailedToBeSetupList::decode(data)?)
+                }
+                646 => broadcast_area_scope = Some(BroadcastAreaScope::decode(data)?),
+                7 => criticality_diagnostics = Some(CriticalityDiagnostics::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_mbs_f1ap_id = gnb_cu_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_mbs_f1ap_id"
+        )))?;
+        let gnb_du_mbs_f1ap_id = gnb_du_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_mbs_f1ap_id"
+        )))?;
+        let broadcast_mr_bs_setup_list = broadcast_mr_bs_setup_list.ok_or(per_codec_error_new(
+            format!("Missing mandatory IE broadcast_mr_bs_setup_list"),
+        ))?;
+        Ok(Self {
+            gnb_cu_mbs_f1ap_id,
+            gnb_du_mbs_f1ap_id,
+            broadcast_mr_bs_setup_list,
+            broadcast_mr_bs_failed_to_be_setup_list,
+            broadcast_area_scope,
+            criticality_diagnostics,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 451, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 452, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.broadcast_mr_bs_setup_list.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 466, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.broadcast_mr_bs_failed_to_be_setup_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 460, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.broadcast_area_scope {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 646, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.criticality_diagnostics {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 7, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for BroadcastContextSetupResponse {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        BroadcastContextSetupResponse::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastContextSetupResponse");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastContextSetupResponse");
+            e
+        })
+    }
+}
+// BroadcastMrBsSetupList
+#[derive(Clone, Debug)]
+pub struct BroadcastMrBsSetupList(pub NonEmpty<BroadcastMrBsSetupItem>);
+
+impl BroadcastMrBsSetupList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(32), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(BroadcastMrBsSetupItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(32), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 467, false)?;
+            Criticality::Reject.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for BroadcastMrBsSetupList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        BroadcastMrBsSetupList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastMrBsSetupList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastMrBsSetupList");
+            e
+        })
+    }
+}
+// BroadcastMrBsFailedToBeSetupList
+#[derive(Clone, Debug)]
+pub struct BroadcastMrBsFailedToBeSetupList(pub NonEmpty<BroadcastMrBsFailedToBeSetupItem>);
+
+impl BroadcastMrBsFailedToBeSetupList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(32), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(BroadcastMrBsFailedToBeSetupItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(32), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 461, false)?;
+            Criticality::Ignore.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for BroadcastMrBsFailedToBeSetupList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        BroadcastMrBsFailedToBeSetupList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastMrBsFailedToBeSetupList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastMrBsFailedToBeSetupList");
+            e
+        })
+    }
+}
+// BroadcastContextSetupFailure
+#[derive(Clone, Debug)]
+pub struct BroadcastContextSetupFailure {
+    pub gnb_cu_mbs_f1ap_id: GnbCuUeF1apId,
+    pub gnb_du_mbs_f1ap_id: Option<GnbDuUeF1apId>,
+    pub cause: Cause,
+    pub criticality_diagnostics: Option<CriticalityDiagnostics>,
+}
+
+impl BroadcastContextSetupFailure {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_mbs_f1ap_id: Option<GnbCuUeF1apId> = None;
+        let mut gnb_du_mbs_f1ap_id: Option<GnbDuUeF1apId> = None;
+        let mut cause: Option<Cause> = None;
+        let mut criticality_diagnostics: Option<CriticalityDiagnostics> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                451 => gnb_cu_mbs_f1ap_id = Some(GnbCuUeF1apId::decode(data)?),
+                452 => gnb_du_mbs_f1ap_id = Some(GnbDuUeF1apId::decode(data)?),
+                0 => cause = Some(Cause::decode(data)?),
+                7 => criticality_diagnostics = Some(CriticalityDiagnostics::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_mbs_f1ap_id = gnb_cu_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_mbs_f1ap_id"
+        )))?;
+        let cause = cause.ok_or(per_codec_error_new(format!("Missing mandatory IE cause")))?;
+        Ok(Self {
+            gnb_cu_mbs_f1ap_id,
+            gnb_du_mbs_f1ap_id,
+            cause,
+            criticality_diagnostics,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 451, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.gnb_du_mbs_f1ap_id {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 452, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        let ie = &mut Allocator::new_codec_data();
+        self.cause.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 0, false)?;
+        Criticality::Ignore.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.criticality_diagnostics {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 7, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for BroadcastContextSetupFailure {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        BroadcastContextSetupFailure::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastContextSetupFailure");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastContextSetupFailure");
+            e
+        })
+    }
+}
+// BroadcastContextReleaseCommand
+#[derive(Clone, Debug)]
+pub struct BroadcastContextReleaseCommand {
+    pub gnb_cu_mbs_f1ap_id: GnbCuMbsF1apId,
+    pub gnb_du_mbs_f1ap_id: GnbDuMbsF1apId,
+    pub cause: Cause,
+}
+
+impl BroadcastContextReleaseCommand {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_mbs_f1ap_id: Option<GnbCuMbsF1apId> = None;
+        let mut gnb_du_mbs_f1ap_id: Option<GnbDuMbsF1apId> = None;
+        let mut cause: Option<Cause> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                451 => gnb_cu_mbs_f1ap_id = Some(GnbCuMbsF1apId::decode(data)?),
+                452 => gnb_du_mbs_f1ap_id = Some(GnbDuMbsF1apId::decode(data)?),
+                0 => cause = Some(Cause::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_mbs_f1ap_id = gnb_cu_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_mbs_f1ap_id"
+        )))?;
+        let gnb_du_mbs_f1ap_id = gnb_du_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_mbs_f1ap_id"
+        )))?;
+        let cause = cause.ok_or(per_codec_error_new(format!("Missing mandatory IE cause")))?;
+        Ok(Self {
+            gnb_cu_mbs_f1ap_id,
+            gnb_du_mbs_f1ap_id,
+            cause,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 451, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 452, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.cause.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 0, false)?;
+        Criticality::Ignore.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for BroadcastContextReleaseCommand {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        BroadcastContextReleaseCommand::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastContextReleaseCommand");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastContextReleaseCommand");
+            e
+        })
+    }
+}
+// BroadcastContextReleaseComplete
+#[derive(Clone, Debug)]
+pub struct BroadcastContextReleaseComplete {
+    pub gnb_cu_mbs_f1ap_id: GnbCuMbsF1apId,
+    pub gnb_du_mbs_f1ap_id: GnbDuMbsF1apId,
+    pub criticality_diagnostics: Option<CriticalityDiagnostics>,
+}
+
+impl BroadcastContextReleaseComplete {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_mbs_f1ap_id: Option<GnbCuMbsF1apId> = None;
+        let mut gnb_du_mbs_f1ap_id: Option<GnbDuMbsF1apId> = None;
+        let mut criticality_diagnostics: Option<CriticalityDiagnostics> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                451 => gnb_cu_mbs_f1ap_id = Some(GnbCuMbsF1apId::decode(data)?),
+                452 => gnb_du_mbs_f1ap_id = Some(GnbDuMbsF1apId::decode(data)?),
+                7 => criticality_diagnostics = Some(CriticalityDiagnostics::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_mbs_f1ap_id = gnb_cu_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_mbs_f1ap_id"
+        )))?;
+        let gnb_du_mbs_f1ap_id = gnb_du_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_mbs_f1ap_id"
+        )))?;
+        Ok(Self {
+            gnb_cu_mbs_f1ap_id,
+            gnb_du_mbs_f1ap_id,
+            criticality_diagnostics,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 451, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 452, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.criticality_diagnostics {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 7, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for BroadcastContextReleaseComplete {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        BroadcastContextReleaseComplete::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastContextReleaseComplete");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastContextReleaseComplete");
+            e
+        })
+    }
+}
+// BroadcastContextReleaseRequest
+#[derive(Clone, Debug)]
+pub struct BroadcastContextReleaseRequest {
+    pub gnb_cu_mbs_f1ap_id: GnbCuMbsF1apId,
+    pub gnb_du_mbs_f1ap_id: GnbDuMbsF1apId,
+    pub cause: Cause,
+}
+
+impl BroadcastContextReleaseRequest {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_mbs_f1ap_id: Option<GnbCuMbsF1apId> = None;
+        let mut gnb_du_mbs_f1ap_id: Option<GnbDuMbsF1apId> = None;
+        let mut cause: Option<Cause> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                451 => gnb_cu_mbs_f1ap_id = Some(GnbCuMbsF1apId::decode(data)?),
+                452 => gnb_du_mbs_f1ap_id = Some(GnbDuMbsF1apId::decode(data)?),
+                0 => cause = Some(Cause::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_mbs_f1ap_id = gnb_cu_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_mbs_f1ap_id"
+        )))?;
+        let gnb_du_mbs_f1ap_id = gnb_du_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_mbs_f1ap_id"
+        )))?;
+        let cause = cause.ok_or(per_codec_error_new(format!("Missing mandatory IE cause")))?;
+        Ok(Self {
+            gnb_cu_mbs_f1ap_id,
+            gnb_du_mbs_f1ap_id,
+            cause,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 451, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 452, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.cause.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 0, false)?;
+        Criticality::Ignore.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for BroadcastContextReleaseRequest {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        BroadcastContextReleaseRequest::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastContextReleaseRequest");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastContextReleaseRequest");
+            e
+        })
+    }
+}
+// BroadcastContextModificationRequest
+#[derive(Clone, Debug)]
+pub struct BroadcastContextModificationRequest {
+    pub gnb_cu_mbs_f1ap_id: GnbCuMbsF1apId,
+    pub gnb_du_mbs_f1ap_id: GnbDuMbsF1apId,
+    pub mbs_service_area: Option<MbsServiceArea>,
+    pub mbs_cu_to_du_rrc_information: MbsCuToDuRrcInformation,
+    pub broadcast_mr_bs_to_be_setup_mod_list: Option<BroadcastMrBsToBeSetupModList>,
+    pub broadcast_mr_bs_to_be_modified_list: Option<BroadcastMrBsToBeModifiedList>,
+    pub broadcast_mr_bs_to_be_released_list: Option<BroadcastMrBsToBeReleasedList>,
+    pub supported_ue_type_list: Option<SupportedUeTypeList>,
+}
+
+impl BroadcastContextModificationRequest {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_mbs_f1ap_id: Option<GnbCuMbsF1apId> = None;
+        let mut gnb_du_mbs_f1ap_id: Option<GnbDuMbsF1apId> = None;
+        let mut mbs_service_area: Option<MbsServiceArea> = None;
+        let mut mbs_cu_to_du_rrc_information: Option<MbsCuToDuRrcInformation> = None;
+        let mut broadcast_mr_bs_to_be_setup_mod_list: Option<BroadcastMrBsToBeSetupModList> = None;
+        let mut broadcast_mr_bs_to_be_modified_list: Option<BroadcastMrBsToBeModifiedList> = None;
+        let mut broadcast_mr_bs_to_be_released_list: Option<BroadcastMrBsToBeReleasedList> = None;
+        let mut supported_ue_type_list: Option<SupportedUeTypeList> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                451 => gnb_cu_mbs_f1ap_id = Some(GnbCuMbsF1apId::decode(data)?),
+                452 => gnb_du_mbs_f1ap_id = Some(GnbDuMbsF1apId::decode(data)?),
+                481 => mbs_service_area = Some(MbsServiceArea::decode(data)?),
+                454 => mbs_cu_to_du_rrc_information = Some(MbsCuToDuRrcInformation::decode(data)?),
+                476 => {
+                    broadcast_mr_bs_to_be_setup_mod_list =
+                        Some(BroadcastMrBsToBeSetupModList::decode(data)?)
+                }
+                470 => {
+                    broadcast_mr_bs_to_be_modified_list =
+                        Some(BroadcastMrBsToBeModifiedList::decode(data)?)
+                }
+                472 => {
+                    broadcast_mr_bs_to_be_released_list =
+                        Some(BroadcastMrBsToBeReleasedList::decode(data)?)
+                }
+                717 => supported_ue_type_list = Some(SupportedUeTypeList::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_mbs_f1ap_id = gnb_cu_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_mbs_f1ap_id"
+        )))?;
+        let gnb_du_mbs_f1ap_id = gnb_du_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_mbs_f1ap_id"
+        )))?;
+        let mbs_cu_to_du_rrc_information = mbs_cu_to_du_rrc_information.ok_or(
+            per_codec_error_new(format!("Missing mandatory IE mbs_cu_to_du_rrc_information")),
+        )?;
+        Ok(Self {
+            gnb_cu_mbs_f1ap_id,
+            gnb_du_mbs_f1ap_id,
+            mbs_service_area,
+            mbs_cu_to_du_rrc_information,
+            broadcast_mr_bs_to_be_setup_mod_list,
+            broadcast_mr_bs_to_be_modified_list,
+            broadcast_mr_bs_to_be_released_list,
+            supported_ue_type_list,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 451, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 452, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.mbs_service_area {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 481, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        let ie = &mut Allocator::new_codec_data();
+        self.mbs_cu_to_du_rrc_information.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 454, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.broadcast_mr_bs_to_be_setup_mod_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 476, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.broadcast_mr_bs_to_be_modified_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 470, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.broadcast_mr_bs_to_be_released_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 472, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.supported_ue_type_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 717, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for BroadcastContextModificationRequest {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        BroadcastContextModificationRequest::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastContextModificationRequest");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastContextModificationRequest");
+            e
+        })
+    }
+}
+// BroadcastMrBsToBeSetupModList
+#[derive(Clone, Debug)]
+pub struct BroadcastMrBsToBeSetupModList(pub NonEmpty<BroadcastMrBsToBeSetupModItem>);
+
+impl BroadcastMrBsToBeSetupModList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(32), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(BroadcastMrBsToBeSetupModItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(32), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 477, false)?;
+            Criticality::Reject.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for BroadcastMrBsToBeSetupModList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        BroadcastMrBsToBeSetupModList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastMrBsToBeSetupModList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastMrBsToBeSetupModList");
+            e
+        })
+    }
+}
+// BroadcastMrBsToBeModifiedList
+#[derive(Clone, Debug)]
+pub struct BroadcastMrBsToBeModifiedList(pub NonEmpty<BroadcastMrBsToBeModifiedItem>);
+
+impl BroadcastMrBsToBeModifiedList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(32), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(BroadcastMrBsToBeModifiedItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(32), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 471, false)?;
+            Criticality::Reject.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for BroadcastMrBsToBeModifiedList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        BroadcastMrBsToBeModifiedList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastMrBsToBeModifiedList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastMrBsToBeModifiedList");
+            e
+        })
+    }
+}
+// BroadcastMrBsToBeReleasedList
+#[derive(Clone, Debug)]
+pub struct BroadcastMrBsToBeReleasedList(pub NonEmpty<BroadcastMrBsToBeReleasedItem>);
+
+impl BroadcastMrBsToBeReleasedList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(32), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(BroadcastMrBsToBeReleasedItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(32), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 473, false)?;
+            Criticality::Reject.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for BroadcastMrBsToBeReleasedList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        BroadcastMrBsToBeReleasedList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastMrBsToBeReleasedList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastMrBsToBeReleasedList");
+            e
+        })
+    }
+}
+// BroadcastContextModificationResponse
+#[derive(Clone, Debug)]
+pub struct BroadcastContextModificationResponse {
+    pub gnb_cu_mbs_f1ap_id: GnbCuMbsF1apId,
+    pub gnb_du_mbs_f1ap_id: GnbDuMbsF1apId,
+    pub broadcast_mr_bs_setup_mod_list: Option<BroadcastMrBsSetupModList>,
+    pub broadcast_mr_bs_failed_to_be_setup_mod_list: Option<BroadcastMrBsFailedToBeSetupModList>,
+    pub broadcast_mr_bs_modified_list: Option<BroadcastMrBsModifiedList>,
+    pub broadcast_mr_bs_failed_to_be_modified_list: Option<BroadcastMrBsFailedToBeModifiedList>,
+    pub criticality_diagnostics: Option<CriticalityDiagnostics>,
+    pub broadcast_area_scope: Option<BroadcastAreaScope>,
+}
+
+impl BroadcastContextModificationResponse {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_mbs_f1ap_id: Option<GnbCuMbsF1apId> = None;
+        let mut gnb_du_mbs_f1ap_id: Option<GnbDuMbsF1apId> = None;
+        let mut broadcast_mr_bs_setup_mod_list: Option<BroadcastMrBsSetupModList> = None;
+        let mut broadcast_mr_bs_failed_to_be_setup_mod_list: Option<
+            BroadcastMrBsFailedToBeSetupModList,
+        > = None;
+        let mut broadcast_mr_bs_modified_list: Option<BroadcastMrBsModifiedList> = None;
+        let mut broadcast_mr_bs_failed_to_be_modified_list: Option<
+            BroadcastMrBsFailedToBeModifiedList,
+        > = None;
+        let mut criticality_diagnostics: Option<CriticalityDiagnostics> = None;
+        let mut broadcast_area_scope: Option<BroadcastAreaScope> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                451 => gnb_cu_mbs_f1ap_id = Some(GnbCuMbsF1apId::decode(data)?),
+                452 => gnb_du_mbs_f1ap_id = Some(GnbDuMbsF1apId::decode(data)?),
+                468 => {
+                    broadcast_mr_bs_setup_mod_list = Some(BroadcastMrBsSetupModList::decode(data)?)
+                }
+                462 => {
+                    broadcast_mr_bs_failed_to_be_setup_mod_list =
+                        Some(BroadcastMrBsFailedToBeSetupModList::decode(data)?)
+                }
+                464 => {
+                    broadcast_mr_bs_modified_list = Some(BroadcastMrBsModifiedList::decode(data)?)
+                }
+                458 => {
+                    broadcast_mr_bs_failed_to_be_modified_list =
+                        Some(BroadcastMrBsFailedToBeModifiedList::decode(data)?)
+                }
+                7 => criticality_diagnostics = Some(CriticalityDiagnostics::decode(data)?),
+                646 => broadcast_area_scope = Some(BroadcastAreaScope::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_mbs_f1ap_id = gnb_cu_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_mbs_f1ap_id"
+        )))?;
+        let gnb_du_mbs_f1ap_id = gnb_du_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_mbs_f1ap_id"
+        )))?;
+        Ok(Self {
+            gnb_cu_mbs_f1ap_id,
+            gnb_du_mbs_f1ap_id,
+            broadcast_mr_bs_setup_mod_list,
+            broadcast_mr_bs_failed_to_be_setup_mod_list,
+            broadcast_mr_bs_modified_list,
+            broadcast_mr_bs_failed_to_be_modified_list,
+            criticality_diagnostics,
+            broadcast_area_scope,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 451, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 452, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.broadcast_mr_bs_setup_mod_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 468, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.broadcast_mr_bs_failed_to_be_setup_mod_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 462, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.broadcast_mr_bs_modified_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 464, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.broadcast_mr_bs_failed_to_be_modified_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 458, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.criticality_diagnostics {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 7, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.broadcast_area_scope {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 646, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for BroadcastContextModificationResponse {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        BroadcastContextModificationResponse::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastContextModificationResponse");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastContextModificationResponse");
+            e
+        })
+    }
+}
+// BroadcastMrBsSetupModList
+#[derive(Clone, Debug)]
+pub struct BroadcastMrBsSetupModList(pub NonEmpty<BroadcastMrBsSetupModItem>);
+
+impl BroadcastMrBsSetupModList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(32), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(BroadcastMrBsSetupModItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(32), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 469, false)?;
+            Criticality::Reject.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for BroadcastMrBsSetupModList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        BroadcastMrBsSetupModList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastMrBsSetupModList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastMrBsSetupModList");
+            e
+        })
+    }
+}
+// BroadcastMrBsFailedToBeSetupModList
+#[derive(Clone, Debug)]
+pub struct BroadcastMrBsFailedToBeSetupModList(pub NonEmpty<BroadcastMrBsFailedToBeSetupModItem>);
+
+impl BroadcastMrBsFailedToBeSetupModList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(32), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(BroadcastMrBsFailedToBeSetupModItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(32), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 463, false)?;
+            Criticality::Ignore.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for BroadcastMrBsFailedToBeSetupModList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        BroadcastMrBsFailedToBeSetupModList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastMrBsFailedToBeSetupModList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastMrBsFailedToBeSetupModList");
+            e
+        })
+    }
+}
+// BroadcastMrBsModifiedList
+#[derive(Clone, Debug)]
+pub struct BroadcastMrBsModifiedList(pub NonEmpty<BroadcastMrBsModifiedItem>);
+
+impl BroadcastMrBsModifiedList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(32), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(BroadcastMrBsModifiedItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(32), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 465, false)?;
+            Criticality::Reject.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for BroadcastMrBsModifiedList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        BroadcastMrBsModifiedList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastMrBsModifiedList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastMrBsModifiedList");
+            e
+        })
+    }
+}
+// BroadcastMrBsFailedToBeModifiedList
+#[derive(Clone, Debug)]
+pub struct BroadcastMrBsFailedToBeModifiedList(pub NonEmpty<BroadcastMrBsFailedToBeModifiedItem>);
+
+impl BroadcastMrBsFailedToBeModifiedList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(32), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(BroadcastMrBsFailedToBeModifiedItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(32), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 459, false)?;
+            Criticality::Ignore.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for BroadcastMrBsFailedToBeModifiedList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        BroadcastMrBsFailedToBeModifiedList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastMrBsFailedToBeModifiedList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastMrBsFailedToBeModifiedList");
+            e
+        })
+    }
+}
+// BroadcastContextModificationFailure
+#[derive(Clone, Debug)]
+pub struct BroadcastContextModificationFailure {
+    pub gnb_cu_mbs_f1ap_id: GnbCuMbsF1apId,
+    pub gnb_du_mbs_f1ap_id: GnbDuMbsF1apId,
+    pub cause: Cause,
+    pub criticality_diagnostics: Option<CriticalityDiagnostics>,
+}
+
+impl BroadcastContextModificationFailure {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_mbs_f1ap_id: Option<GnbCuMbsF1apId> = None;
+        let mut gnb_du_mbs_f1ap_id: Option<GnbDuMbsF1apId> = None;
+        let mut cause: Option<Cause> = None;
+        let mut criticality_diagnostics: Option<CriticalityDiagnostics> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                451 => gnb_cu_mbs_f1ap_id = Some(GnbCuMbsF1apId::decode(data)?),
+                452 => gnb_du_mbs_f1ap_id = Some(GnbDuMbsF1apId::decode(data)?),
+                0 => cause = Some(Cause::decode(data)?),
+                7 => criticality_diagnostics = Some(CriticalityDiagnostics::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_mbs_f1ap_id = gnb_cu_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_mbs_f1ap_id"
+        )))?;
+        let gnb_du_mbs_f1ap_id = gnb_du_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_mbs_f1ap_id"
+        )))?;
+        let cause = cause.ok_or(per_codec_error_new(format!("Missing mandatory IE cause")))?;
+        Ok(Self {
+            gnb_cu_mbs_f1ap_id,
+            gnb_du_mbs_f1ap_id,
+            cause,
+            criticality_diagnostics,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 451, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 452, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.cause.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 0, false)?;
+        Criticality::Ignore.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.criticality_diagnostics {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 7, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for BroadcastContextModificationFailure {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        BroadcastContextModificationFailure::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastContextModificationFailure");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastContextModificationFailure");
+            e
+        })
+    }
+}
+// BroadcastTransportResourceRequest
+#[derive(Clone, Debug)]
+pub struct BroadcastTransportResourceRequest {
+    pub gnb_cu_mbs_f1ap_id: GnbCuMbsF1apId,
+    pub gnb_du_mbs_f1ap_id: GnbDuMbsF1apId,
+    pub broadcast_mr_bs_transport_request_list: Option<BroadcastMrBsTransportRequestList>,
+    pub f1u_path_failure: Option<F1uPathFailure>,
+}
+
+impl BroadcastTransportResourceRequest {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_mbs_f1ap_id: Option<GnbCuMbsF1apId> = None;
+        let mut gnb_du_mbs_f1ap_id: Option<GnbDuMbsF1apId> = None;
+        let mut broadcast_mr_bs_transport_request_list: Option<BroadcastMrBsTransportRequestList> =
+            None;
+        let mut f1u_path_failure: Option<F1uPathFailure> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                451 => gnb_cu_mbs_f1ap_id = Some(GnbCuMbsF1apId::decode(data)?),
+                452 => gnb_du_mbs_f1ap_id = Some(GnbDuMbsF1apId::decode(data)?),
+                789 => {
+                    broadcast_mr_bs_transport_request_list =
+                        Some(BroadcastMrBsTransportRequestList::decode(data)?)
+                }
+                846 => f1u_path_failure = Some(F1uPathFailure::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_mbs_f1ap_id = gnb_cu_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_mbs_f1ap_id"
+        )))?;
+        let gnb_du_mbs_f1ap_id = gnb_du_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_mbs_f1ap_id"
+        )))?;
+        Ok(Self {
+            gnb_cu_mbs_f1ap_id,
+            gnb_du_mbs_f1ap_id,
+            broadcast_mr_bs_transport_request_list,
+            f1u_path_failure,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 451, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 452, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.broadcast_mr_bs_transport_request_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 789, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.f1u_path_failure {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 846, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for BroadcastTransportResourceRequest {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        BroadcastTransportResourceRequest::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastTransportResourceRequest");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastTransportResourceRequest");
+            e
+        })
+    }
+}
+// BroadcastMrBsTransportRequestList
+#[derive(Clone, Debug)]
+pub struct BroadcastMrBsTransportRequestList(pub NonEmpty<BroadcastMrBsTransportRequestItem>);
+
+impl BroadcastMrBsTransportRequestList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(32), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(BroadcastMrBsTransportRequestItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(32), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 790, false)?;
+            Criticality::Reject.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for BroadcastMrBsTransportRequestList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        BroadcastMrBsTransportRequestList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastMrBsTransportRequestList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("BroadcastMrBsTransportRequestList");
+            e
+        })
+    }
+}
+// MulticastGroupPaging
+#[derive(Clone, Debug)]
+pub struct MulticastGroupPaging {
+    pub mbs_session_id: MbsSessionId,
+    pub ue_identity_list_for_paging_list: Option<UeIdentityListForPagingList>,
+    pub mc_paging_cell_list: Option<McPagingCellList>,
+    pub indication_mc_inactive_reception: Option<IndicationMcInactiveReception>,
+}
+
+impl MulticastGroupPaging {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut mbs_session_id: Option<MbsSessionId> = None;
+        let mut ue_identity_list_for_paging_list: Option<UeIdentityListForPagingList> = None;
+        let mut mc_paging_cell_list: Option<McPagingCellList> = None;
+        let mut indication_mc_inactive_reception: Option<IndicationMcInactiveReception> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                455 => mbs_session_id = Some(MbsSessionId::decode(data)?),
+                479 => {
+                    ue_identity_list_for_paging_list =
+                        Some(UeIdentityListForPagingList::decode(data)?)
+                }
+                687 => mc_paging_cell_list = Some(McPagingCellList::decode(data)?),
+                768 => {
+                    indication_mc_inactive_reception =
+                        Some(IndicationMcInactiveReception::decode(data)?)
+                }
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let mbs_session_id = mbs_session_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE mbs_session_id"
+        )))?;
+        Ok(Self {
+            mbs_session_id,
+            ue_identity_list_for_paging_list,
+            mc_paging_cell_list,
+            indication_mc_inactive_reception,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.mbs_session_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 455, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.ue_identity_list_for_paging_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 479, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.mc_paging_cell_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 687, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.indication_mc_inactive_reception {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 768, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastGroupPaging {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastGroupPaging::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastGroupPaging");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastGroupPaging");
+            e
+        })
+    }
+}
+// UeIdentityListForPagingList
+#[derive(Clone, Debug)]
+pub struct UeIdentityListForPagingList(pub NonEmpty<UeIdentityListForPagingItem>);
+
+impl UeIdentityListForPagingList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(4096), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(UeIdentityListForPagingItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(4096), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 480, false)?;
+            Criticality::Ignore.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for UeIdentityListForPagingList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        UeIdentityListForPagingList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("UeIdentityListForPagingList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("UeIdentityListForPagingList");
+            e
+        })
+    }
+}
+// McPagingCellList
+#[derive(Clone, Debug)]
+pub struct McPagingCellList(pub NonEmpty<McPagingCellItem>);
+
+impl McPagingCellList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(512), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(McPagingCellItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(512), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 688, false)?;
+            Criticality::Ignore.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for McPagingCellList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        McPagingCellList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("McPagingCellList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("McPagingCellList");
+            e
+        })
+    }
+}
+// MulticastContextSetupRequest
+#[derive(Clone, Debug)]
+pub struct MulticastContextSetupRequest {
+    pub gnb_cu_mbs_f1ap_id: GnbCuMbsF1apId,
+    pub mbs_session_id: MbsSessionId,
+    pub mbs_service_area: Option<MbsServiceArea>,
+    pub snssai: Snssai,
+    pub multicast_mr_bs_to_be_setup_list: MulticastMrBsToBeSetupList,
+    pub multicast_cu_2_du_rrc_info: Option<MulticastCu2DuRrcInfo>,
+    pub mbs_multicast_session_reception_state: Option<MbsMulticastSessionReceptionState>,
+}
+
+impl MulticastContextSetupRequest {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_mbs_f1ap_id: Option<GnbCuMbsF1apId> = None;
+        let mut mbs_session_id: Option<MbsSessionId> = None;
+        let mut mbs_service_area: Option<MbsServiceArea> = None;
+        let mut snssai: Option<Snssai> = None;
+        let mut multicast_mr_bs_to_be_setup_list: Option<MulticastMrBsToBeSetupList> = None;
+        let mut multicast_cu_2_du_rrc_info: Option<MulticastCu2DuRrcInfo> = None;
+        let mut mbs_multicast_session_reception_state: Option<MbsMulticastSessionReceptionState> =
+            None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                451 => gnb_cu_mbs_f1ap_id = Some(GnbCuMbsF1apId::decode(data)?),
+                455 => mbs_session_id = Some(MbsSessionId::decode(data)?),
+                481 => mbs_service_area = Some(MbsServiceArea::decode(data)?),
+                456 => snssai = Some(Snssai::decode(data)?),
+                498 => {
+                    multicast_mr_bs_to_be_setup_list =
+                        Some(MulticastMrBsToBeSetupList::decode(data)?)
+                }
+                769 => multicast_cu_2_du_rrc_info = Some(MulticastCu2DuRrcInfo::decode(data)?),
+                770 => {
+                    mbs_multicast_session_reception_state =
+                        Some(MbsMulticastSessionReceptionState::decode(data)?)
+                }
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_mbs_f1ap_id = gnb_cu_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_mbs_f1ap_id"
+        )))?;
+        let mbs_session_id = mbs_session_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE mbs_session_id"
+        )))?;
+        let snssai = snssai.ok_or(per_codec_error_new(format!("Missing mandatory IE snssai")))?;
+        let multicast_mr_bs_to_be_setup_list =
+            multicast_mr_bs_to_be_setup_list.ok_or(per_codec_error_new(format!(
+                "Missing mandatory IE multicast_mr_bs_to_be_setup_list"
+            )))?;
+        Ok(Self {
+            gnb_cu_mbs_f1ap_id,
+            mbs_session_id,
+            mbs_service_area,
+            snssai,
+            multicast_mr_bs_to_be_setup_list,
+            multicast_cu_2_du_rrc_info,
+            mbs_multicast_session_reception_state,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 451, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.mbs_session_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 455, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.mbs_service_area {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 481, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        let ie = &mut Allocator::new_codec_data();
+        self.snssai.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 456, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.multicast_mr_bs_to_be_setup_list.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 498, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.multicast_cu_2_du_rrc_info {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 769, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.mbs_multicast_session_reception_state {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 770, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastContextSetupRequest {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastContextSetupRequest::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastContextSetupRequest");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastContextSetupRequest");
+            e
+        })
+    }
+}
+// MulticastMrBsToBeSetupList
+#[derive(Clone, Debug)]
+pub struct MulticastMrBsToBeSetupList(pub NonEmpty<MulticastMrBsToBeSetupItem>);
+
+impl MulticastMrBsToBeSetupList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(32), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(MulticastMrBsToBeSetupItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(32), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 499, false)?;
+            Criticality::Reject.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastMrBsToBeSetupList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastMrBsToBeSetupList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastMrBsToBeSetupList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastMrBsToBeSetupList");
+            e
+        })
+    }
+}
+// MulticastContextSetupResponse
+#[derive(Clone, Debug)]
+pub struct MulticastContextSetupResponse {
+    pub gnb_cu_mbs_f1ap_id: GnbCuMbsF1apId,
+    pub gnb_du_mbs_f1ap_id: GnbDuMbsF1apId,
+    pub multicast_mr_bs_setup_list: MulticastMrBsSetupList,
+    pub multicast_mr_bs_failed_to_be_setup_list: Option<MulticastMrBsFailedToBeSetupList>,
+    pub criticality_diagnostics: Option<CriticalityDiagnostics>,
+    pub multicast_du_2_cu_rrc_info: Option<MulticastDu2CuRrcInfo>,
+}
+
+impl MulticastContextSetupResponse {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_mbs_f1ap_id: Option<GnbCuMbsF1apId> = None;
+        let mut gnb_du_mbs_f1ap_id: Option<GnbDuMbsF1apId> = None;
+        let mut multicast_mr_bs_setup_list: Option<MulticastMrBsSetupList> = None;
+        let mut multicast_mr_bs_failed_to_be_setup_list: Option<MulticastMrBsFailedToBeSetupList> =
+            None;
+        let mut criticality_diagnostics: Option<CriticalityDiagnostics> = None;
+        let mut multicast_du_2_cu_rrc_info: Option<MulticastDu2CuRrcInfo> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                451 => gnb_cu_mbs_f1ap_id = Some(GnbCuMbsF1apId::decode(data)?),
+                452 => gnb_du_mbs_f1ap_id = Some(GnbDuMbsF1apId::decode(data)?),
+                490 => multicast_mr_bs_setup_list = Some(MulticastMrBsSetupList::decode(data)?),
+                484 => {
+                    multicast_mr_bs_failed_to_be_setup_list =
+                        Some(MulticastMrBsFailedToBeSetupList::decode(data)?)
+                }
+                7 => criticality_diagnostics = Some(CriticalityDiagnostics::decode(data)?),
+                772 => multicast_du_2_cu_rrc_info = Some(MulticastDu2CuRrcInfo::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_mbs_f1ap_id = gnb_cu_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_mbs_f1ap_id"
+        )))?;
+        let gnb_du_mbs_f1ap_id = gnb_du_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_mbs_f1ap_id"
+        )))?;
+        let multicast_mr_bs_setup_list = multicast_mr_bs_setup_list.ok_or(per_codec_error_new(
+            format!("Missing mandatory IE multicast_mr_bs_setup_list"),
+        ))?;
+        Ok(Self {
+            gnb_cu_mbs_f1ap_id,
+            gnb_du_mbs_f1ap_id,
+            multicast_mr_bs_setup_list,
+            multicast_mr_bs_failed_to_be_setup_list,
+            criticality_diagnostics,
+            multicast_du_2_cu_rrc_info,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 451, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 452, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.multicast_mr_bs_setup_list.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 490, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.multicast_mr_bs_failed_to_be_setup_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 484, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.criticality_diagnostics {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 7, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.multicast_du_2_cu_rrc_info {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 772, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastContextSetupResponse {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastContextSetupResponse::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastContextSetupResponse");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastContextSetupResponse");
+            e
+        })
+    }
+}
+// MulticastMrBsSetupList
+#[derive(Clone, Debug)]
+pub struct MulticastMrBsSetupList(pub NonEmpty<MulticastMrBsSetupItem>);
+
+impl MulticastMrBsSetupList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(32), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(MulticastMrBsSetupItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(32), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 491, false)?;
+            Criticality::Reject.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastMrBsSetupList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastMrBsSetupList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastMrBsSetupList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastMrBsSetupList");
+            e
+        })
+    }
+}
+// MulticastMrBsFailedToBeSetupList
+#[derive(Clone, Debug)]
+pub struct MulticastMrBsFailedToBeSetupList(pub NonEmpty<MulticastMrBsFailedToBeSetupItem>);
+
+impl MulticastMrBsFailedToBeSetupList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(32), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(MulticastMrBsFailedToBeSetupItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(32), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 485, false)?;
+            Criticality::Ignore.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastMrBsFailedToBeSetupList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastMrBsFailedToBeSetupList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastMrBsFailedToBeSetupList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastMrBsFailedToBeSetupList");
+            e
+        })
+    }
+}
+// MulticastContextSetupFailure
+#[derive(Clone, Debug)]
+pub struct MulticastContextSetupFailure {
+    pub gnb_cu_mbs_f1ap_id: GnbCuMbsF1apId,
+    pub gnb_du_mbs_f1ap_id: Option<GnbDuMbsF1apId>,
+    pub cause: Cause,
+    pub criticality_diagnostics: Option<CriticalityDiagnostics>,
+}
+
+impl MulticastContextSetupFailure {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_mbs_f1ap_id: Option<GnbCuMbsF1apId> = None;
+        let mut gnb_du_mbs_f1ap_id: Option<GnbDuMbsF1apId> = None;
+        let mut cause: Option<Cause> = None;
+        let mut criticality_diagnostics: Option<CriticalityDiagnostics> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                451 => gnb_cu_mbs_f1ap_id = Some(GnbCuMbsF1apId::decode(data)?),
+                452 => gnb_du_mbs_f1ap_id = Some(GnbDuMbsF1apId::decode(data)?),
+                0 => cause = Some(Cause::decode(data)?),
+                7 => criticality_diagnostics = Some(CriticalityDiagnostics::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_mbs_f1ap_id = gnb_cu_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_mbs_f1ap_id"
+        )))?;
+        let cause = cause.ok_or(per_codec_error_new(format!("Missing mandatory IE cause")))?;
+        Ok(Self {
+            gnb_cu_mbs_f1ap_id,
+            gnb_du_mbs_f1ap_id,
+            cause,
+            criticality_diagnostics,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 451, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.gnb_du_mbs_f1ap_id {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 452, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        let ie = &mut Allocator::new_codec_data();
+        self.cause.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 0, false)?;
+        Criticality::Ignore.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.criticality_diagnostics {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 7, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastContextSetupFailure {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastContextSetupFailure::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastContextSetupFailure");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastContextSetupFailure");
+            e
+        })
+    }
+}
+// MulticastContextReleaseCommand
+#[derive(Clone, Debug)]
+pub struct MulticastContextReleaseCommand {
+    pub gnb_cu_mbs_f1ap_id: GnbCuMbsF1apId,
+    pub gnb_du_mbs_f1ap_id: GnbDuMbsF1apId,
+    pub cause: Cause,
+}
+
+impl MulticastContextReleaseCommand {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_mbs_f1ap_id: Option<GnbCuMbsF1apId> = None;
+        let mut gnb_du_mbs_f1ap_id: Option<GnbDuMbsF1apId> = None;
+        let mut cause: Option<Cause> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                451 => gnb_cu_mbs_f1ap_id = Some(GnbCuMbsF1apId::decode(data)?),
+                452 => gnb_du_mbs_f1ap_id = Some(GnbDuMbsF1apId::decode(data)?),
+                0 => cause = Some(Cause::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_mbs_f1ap_id = gnb_cu_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_mbs_f1ap_id"
+        )))?;
+        let gnb_du_mbs_f1ap_id = gnb_du_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_mbs_f1ap_id"
+        )))?;
+        let cause = cause.ok_or(per_codec_error_new(format!("Missing mandatory IE cause")))?;
+        Ok(Self {
+            gnb_cu_mbs_f1ap_id,
+            gnb_du_mbs_f1ap_id,
+            cause,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 451, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 452, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.cause.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 0, false)?;
+        Criticality::Ignore.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastContextReleaseCommand {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastContextReleaseCommand::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastContextReleaseCommand");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastContextReleaseCommand");
+            e
+        })
+    }
+}
+// MulticastContextReleaseComplete
+#[derive(Clone, Debug)]
+pub struct MulticastContextReleaseComplete {
+    pub gnb_cu_mbs_f1ap_id: GnbCuMbsF1apId,
+    pub gnb_du_mbs_f1ap_id: GnbDuMbsF1apId,
+    pub criticality_diagnostics: Option<CriticalityDiagnostics>,
+}
+
+impl MulticastContextReleaseComplete {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_mbs_f1ap_id: Option<GnbCuMbsF1apId> = None;
+        let mut gnb_du_mbs_f1ap_id: Option<GnbDuMbsF1apId> = None;
+        let mut criticality_diagnostics: Option<CriticalityDiagnostics> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                451 => gnb_cu_mbs_f1ap_id = Some(GnbCuMbsF1apId::decode(data)?),
+                452 => gnb_du_mbs_f1ap_id = Some(GnbDuMbsF1apId::decode(data)?),
+                7 => criticality_diagnostics = Some(CriticalityDiagnostics::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_mbs_f1ap_id = gnb_cu_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_mbs_f1ap_id"
+        )))?;
+        let gnb_du_mbs_f1ap_id = gnb_du_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_mbs_f1ap_id"
+        )))?;
+        Ok(Self {
+            gnb_cu_mbs_f1ap_id,
+            gnb_du_mbs_f1ap_id,
+            criticality_diagnostics,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 451, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 452, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.criticality_diagnostics {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 7, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastContextReleaseComplete {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastContextReleaseComplete::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastContextReleaseComplete");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastContextReleaseComplete");
+            e
+        })
+    }
+}
+// MulticastContextReleaseRequest
+#[derive(Clone, Debug)]
+pub struct MulticastContextReleaseRequest {
+    pub gnb_cu_mbs_f1ap_id: GnbCuMbsF1apId,
+    pub gnb_du_mbs_f1ap_id: GnbDuMbsF1apId,
+    pub cause: Cause,
+}
+
+impl MulticastContextReleaseRequest {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_mbs_f1ap_id: Option<GnbCuMbsF1apId> = None;
+        let mut gnb_du_mbs_f1ap_id: Option<GnbDuMbsF1apId> = None;
+        let mut cause: Option<Cause> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                451 => gnb_cu_mbs_f1ap_id = Some(GnbCuMbsF1apId::decode(data)?),
+                452 => gnb_du_mbs_f1ap_id = Some(GnbDuMbsF1apId::decode(data)?),
+                0 => cause = Some(Cause::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_mbs_f1ap_id = gnb_cu_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_mbs_f1ap_id"
+        )))?;
+        let gnb_du_mbs_f1ap_id = gnb_du_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_mbs_f1ap_id"
+        )))?;
+        let cause = cause.ok_or(per_codec_error_new(format!("Missing mandatory IE cause")))?;
+        Ok(Self {
+            gnb_cu_mbs_f1ap_id,
+            gnb_du_mbs_f1ap_id,
+            cause,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 451, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 452, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.cause.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 0, false)?;
+        Criticality::Ignore.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastContextReleaseRequest {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastContextReleaseRequest::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastContextReleaseRequest");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastContextReleaseRequest");
+            e
+        })
+    }
+}
+// MulticastContextModificationRequest
+#[derive(Clone, Debug)]
+pub struct MulticastContextModificationRequest {
+    pub gnb_cu_mbs_f1ap_id: GnbCuMbsF1apId,
+    pub gnb_du_mbs_f1ap_id: GnbDuMbsF1apId,
+    pub mbs_service_area: Option<MbsServiceArea>,
+    pub multicast_mr_bs_to_be_setup_mod_list: Option<MulticastMrBsToBeSetupModList>,
+    pub multicast_mr_bs_to_be_modified_list: Option<MulticastMrBsToBeModifiedList>,
+    pub multicast_mr_bs_to_be_released_list: Option<MulticastMrBsToBeReleasedList>,
+    pub multicast_cu_2_du_rrc_info: Option<MulticastCu2DuRrcInfo>,
+    pub mbs_multicast_session_reception_state: Option<MbsMulticastSessionReceptionState>,
+}
+
+impl MulticastContextModificationRequest {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_mbs_f1ap_id: Option<GnbCuMbsF1apId> = None;
+        let mut gnb_du_mbs_f1ap_id: Option<GnbDuMbsF1apId> = None;
+        let mut mbs_service_area: Option<MbsServiceArea> = None;
+        let mut multicast_mr_bs_to_be_setup_mod_list: Option<MulticastMrBsToBeSetupModList> = None;
+        let mut multicast_mr_bs_to_be_modified_list: Option<MulticastMrBsToBeModifiedList> = None;
+        let mut multicast_mr_bs_to_be_released_list: Option<MulticastMrBsToBeReleasedList> = None;
+        let mut multicast_cu_2_du_rrc_info: Option<MulticastCu2DuRrcInfo> = None;
+        let mut mbs_multicast_session_reception_state: Option<MbsMulticastSessionReceptionState> =
+            None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                451 => gnb_cu_mbs_f1ap_id = Some(GnbCuMbsF1apId::decode(data)?),
+                452 => gnb_du_mbs_f1ap_id = Some(GnbDuMbsF1apId::decode(data)?),
+                481 => mbs_service_area = Some(MbsServiceArea::decode(data)?),
+                500 => {
+                    multicast_mr_bs_to_be_setup_mod_list =
+                        Some(MulticastMrBsToBeSetupModList::decode(data)?)
+                }
+                494 => {
+                    multicast_mr_bs_to_be_modified_list =
+                        Some(MulticastMrBsToBeModifiedList::decode(data)?)
+                }
+                496 => {
+                    multicast_mr_bs_to_be_released_list =
+                        Some(MulticastMrBsToBeReleasedList::decode(data)?)
+                }
+                769 => multicast_cu_2_du_rrc_info = Some(MulticastCu2DuRrcInfo::decode(data)?),
+                770 => {
+                    mbs_multicast_session_reception_state =
+                        Some(MbsMulticastSessionReceptionState::decode(data)?)
+                }
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_mbs_f1ap_id = gnb_cu_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_mbs_f1ap_id"
+        )))?;
+        let gnb_du_mbs_f1ap_id = gnb_du_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_mbs_f1ap_id"
+        )))?;
+        Ok(Self {
+            gnb_cu_mbs_f1ap_id,
+            gnb_du_mbs_f1ap_id,
+            mbs_service_area,
+            multicast_mr_bs_to_be_setup_mod_list,
+            multicast_mr_bs_to_be_modified_list,
+            multicast_mr_bs_to_be_released_list,
+            multicast_cu_2_du_rrc_info,
+            mbs_multicast_session_reception_state,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 451, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 452, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.mbs_service_area {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 481, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.multicast_mr_bs_to_be_setup_mod_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 500, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.multicast_mr_bs_to_be_modified_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 494, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.multicast_mr_bs_to_be_released_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 496, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.multicast_cu_2_du_rrc_info {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 769, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.mbs_multicast_session_reception_state {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 770, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastContextModificationRequest {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastContextModificationRequest::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastContextModificationRequest");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastContextModificationRequest");
+            e
+        })
+    }
+}
+// MulticastMrBsToBeSetupModList
+#[derive(Clone, Debug)]
+pub struct MulticastMrBsToBeSetupModList(pub NonEmpty<MulticastMrBsToBeSetupModItem>);
+
+impl MulticastMrBsToBeSetupModList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(32), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(MulticastMrBsToBeSetupModItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(32), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 501, false)?;
+            Criticality::Reject.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastMrBsToBeSetupModList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastMrBsToBeSetupModList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastMrBsToBeSetupModList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastMrBsToBeSetupModList");
+            e
+        })
+    }
+}
+// MulticastMrBsToBeModifiedList
+#[derive(Clone, Debug)]
+pub struct MulticastMrBsToBeModifiedList(pub NonEmpty<MulticastMrBsToBeModifiedItem>);
+
+impl MulticastMrBsToBeModifiedList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(32), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(MulticastMrBsToBeModifiedItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(32), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 495, false)?;
+            Criticality::Reject.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastMrBsToBeModifiedList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastMrBsToBeModifiedList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastMrBsToBeModifiedList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastMrBsToBeModifiedList");
+            e
+        })
+    }
+}
+// MulticastMrBsToBeReleasedList
+#[derive(Clone, Debug)]
+pub struct MulticastMrBsToBeReleasedList(pub NonEmpty<MulticastMrBsToBeReleasedItem>);
+
+impl MulticastMrBsToBeReleasedList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(32), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(MulticastMrBsToBeReleasedItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(32), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 497, false)?;
+            Criticality::Reject.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastMrBsToBeReleasedList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastMrBsToBeReleasedList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastMrBsToBeReleasedList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastMrBsToBeReleasedList");
+            e
+        })
+    }
+}
+// MulticastContextModificationResponse
+#[derive(Clone, Debug)]
+pub struct MulticastContextModificationResponse {
+    pub gnb_cu_mbs_f1ap_id: GnbCuMbsF1apId,
+    pub gnb_du_mbs_f1ap_id: GnbDuMbsF1apId,
+    pub multicast_mr_bs_setup_mod_list: Option<MulticastMrBsSetupModList>,
+    pub multicast_mr_bs_failed_to_be_setup_mod_list: Option<MulticastMrBsFailedToBeSetupModList>,
+    pub multicast_mr_bs_modified_list: Option<MulticastMrBsModifiedList>,
+    pub multicast_mr_bs_failed_to_be_modified_list: Option<MulticastMrBsFailedToBeModifiedList>,
+    pub criticality_diagnostics: Option<CriticalityDiagnostics>,
+    pub multicast_du_2_cu_rrc_info: Option<MulticastDu2CuRrcInfo>,
+}
+
+impl MulticastContextModificationResponse {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_mbs_f1ap_id: Option<GnbCuMbsF1apId> = None;
+        let mut gnb_du_mbs_f1ap_id: Option<GnbDuMbsF1apId> = None;
+        let mut multicast_mr_bs_setup_mod_list: Option<MulticastMrBsSetupModList> = None;
+        let mut multicast_mr_bs_failed_to_be_setup_mod_list: Option<
+            MulticastMrBsFailedToBeSetupModList,
+        > = None;
+        let mut multicast_mr_bs_modified_list: Option<MulticastMrBsModifiedList> = None;
+        let mut multicast_mr_bs_failed_to_be_modified_list: Option<
+            MulticastMrBsFailedToBeModifiedList,
+        > = None;
+        let mut criticality_diagnostics: Option<CriticalityDiagnostics> = None;
+        let mut multicast_du_2_cu_rrc_info: Option<MulticastDu2CuRrcInfo> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                451 => gnb_cu_mbs_f1ap_id = Some(GnbCuMbsF1apId::decode(data)?),
+                452 => gnb_du_mbs_f1ap_id = Some(GnbDuMbsF1apId::decode(data)?),
+                492 => {
+                    multicast_mr_bs_setup_mod_list = Some(MulticastMrBsSetupModList::decode(data)?)
+                }
+                486 => {
+                    multicast_mr_bs_failed_to_be_setup_mod_list =
+                        Some(MulticastMrBsFailedToBeSetupModList::decode(data)?)
+                }
+                488 => {
+                    multicast_mr_bs_modified_list = Some(MulticastMrBsModifiedList::decode(data)?)
+                }
+                482 => {
+                    multicast_mr_bs_failed_to_be_modified_list =
+                        Some(MulticastMrBsFailedToBeModifiedList::decode(data)?)
+                }
+                7 => criticality_diagnostics = Some(CriticalityDiagnostics::decode(data)?),
+                772 => multicast_du_2_cu_rrc_info = Some(MulticastDu2CuRrcInfo::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_mbs_f1ap_id = gnb_cu_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_mbs_f1ap_id"
+        )))?;
+        let gnb_du_mbs_f1ap_id = gnb_du_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_mbs_f1ap_id"
+        )))?;
+        Ok(Self {
+            gnb_cu_mbs_f1ap_id,
+            gnb_du_mbs_f1ap_id,
+            multicast_mr_bs_setup_mod_list,
+            multicast_mr_bs_failed_to_be_setup_mod_list,
+            multicast_mr_bs_modified_list,
+            multicast_mr_bs_failed_to_be_modified_list,
+            criticality_diagnostics,
+            multicast_du_2_cu_rrc_info,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 451, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 452, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.multicast_mr_bs_setup_mod_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 492, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.multicast_mr_bs_failed_to_be_setup_mod_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 486, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.multicast_mr_bs_modified_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 488, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.multicast_mr_bs_failed_to_be_modified_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 482, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.criticality_diagnostics {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 7, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.multicast_du_2_cu_rrc_info {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 772, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastContextModificationResponse {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastContextModificationResponse::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastContextModificationResponse");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastContextModificationResponse");
+            e
+        })
+    }
+}
+// MulticastMrBsSetupModList
+#[derive(Clone, Debug)]
+pub struct MulticastMrBsSetupModList(pub NonEmpty<MulticastMrBsSetupModItem>);
+
+impl MulticastMrBsSetupModList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(32), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(MulticastMrBsSetupModItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(32), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 493, false)?;
+            Criticality::Reject.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastMrBsSetupModList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastMrBsSetupModList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastMrBsSetupModList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastMrBsSetupModList");
+            e
+        })
+    }
+}
+// MulticastMrBsFailedToBeSetupModList
+#[derive(Clone, Debug)]
+pub struct MulticastMrBsFailedToBeSetupModList(pub NonEmpty<MulticastMrBsFailedToBeSetupModItem>);
+
+impl MulticastMrBsFailedToBeSetupModList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(32), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(MulticastMrBsFailedToBeSetupModItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(32), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 487, false)?;
+            Criticality::Ignore.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastMrBsFailedToBeSetupModList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastMrBsFailedToBeSetupModList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastMrBsFailedToBeSetupModList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastMrBsFailedToBeSetupModList");
+            e
+        })
+    }
+}
+// MulticastMrBsModifiedList
+#[derive(Clone, Debug)]
+pub struct MulticastMrBsModifiedList(pub NonEmpty<MulticastMrBsModifiedItem>);
+
+impl MulticastMrBsModifiedList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(32), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(MulticastMrBsModifiedItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(32), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 489, false)?;
+            Criticality::Reject.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastMrBsModifiedList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastMrBsModifiedList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastMrBsModifiedList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastMrBsModifiedList");
+            e
+        })
+    }
+}
+// MulticastMrBsFailedToBeModifiedList
+#[derive(Clone, Debug)]
+pub struct MulticastMrBsFailedToBeModifiedList(pub NonEmpty<MulticastMrBsFailedToBeModifiedItem>);
+
+impl MulticastMrBsFailedToBeModifiedList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(32), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(MulticastMrBsFailedToBeModifiedItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(32), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 483, false)?;
+            Criticality::Ignore.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastMrBsFailedToBeModifiedList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastMrBsFailedToBeModifiedList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastMrBsFailedToBeModifiedList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastMrBsFailedToBeModifiedList");
+            e
+        })
+    }
+}
+// MulticastContextModificationFailure
+#[derive(Clone, Debug)]
+pub struct MulticastContextModificationFailure {
+    pub gnb_cu_mbs_f1ap_id: GnbCuMbsF1apId,
+    pub gnb_du_mbs_f1ap_id: GnbDuMbsF1apId,
+    pub cause: Cause,
+    pub criticality_diagnostics: Option<CriticalityDiagnostics>,
+}
+
+impl MulticastContextModificationFailure {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_mbs_f1ap_id: Option<GnbCuMbsF1apId> = None;
+        let mut gnb_du_mbs_f1ap_id: Option<GnbDuMbsF1apId> = None;
+        let mut cause: Option<Cause> = None;
+        let mut criticality_diagnostics: Option<CriticalityDiagnostics> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                451 => gnb_cu_mbs_f1ap_id = Some(GnbCuMbsF1apId::decode(data)?),
+                452 => gnb_du_mbs_f1ap_id = Some(GnbDuMbsF1apId::decode(data)?),
+                0 => cause = Some(Cause::decode(data)?),
+                7 => criticality_diagnostics = Some(CriticalityDiagnostics::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_mbs_f1ap_id = gnb_cu_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_mbs_f1ap_id"
+        )))?;
+        let gnb_du_mbs_f1ap_id = gnb_du_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_mbs_f1ap_id"
+        )))?;
+        let cause = cause.ok_or(per_codec_error_new(format!("Missing mandatory IE cause")))?;
+        Ok(Self {
+            gnb_cu_mbs_f1ap_id,
+            gnb_du_mbs_f1ap_id,
+            cause,
+            criticality_diagnostics,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 451, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 452, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.cause.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 0, false)?;
+        Criticality::Ignore.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.criticality_diagnostics {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 7, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastContextModificationFailure {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastContextModificationFailure::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastContextModificationFailure");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastContextModificationFailure");
+            e
+        })
+    }
+}
+// MulticastContextNotificationIndication
+#[derive(Clone, Debug)]
+pub struct MulticastContextNotificationIndication {
+    pub gnb_cu_mbs_f1ap_id: GnbCuMbsF1apId,
+    pub gnb_du_mbs_f1ap_id: GnbDuMbsF1apId,
+    pub multicast_du_2_cu_rrc_info: Option<MulticastDu2CuRrcInfo>,
+}
+
+impl MulticastContextNotificationIndication {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_mbs_f1ap_id: Option<GnbCuMbsF1apId> = None;
+        let mut gnb_du_mbs_f1ap_id: Option<GnbDuMbsF1apId> = None;
+        let mut multicast_du_2_cu_rrc_info: Option<MulticastDu2CuRrcInfo> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                451 => gnb_cu_mbs_f1ap_id = Some(GnbCuMbsF1apId::decode(data)?),
+                452 => gnb_du_mbs_f1ap_id = Some(GnbDuMbsF1apId::decode(data)?),
+                772 => multicast_du_2_cu_rrc_info = Some(MulticastDu2CuRrcInfo::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_mbs_f1ap_id = gnb_cu_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_mbs_f1ap_id"
+        )))?;
+        let gnb_du_mbs_f1ap_id = gnb_du_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_mbs_f1ap_id"
+        )))?;
+        Ok(Self {
+            gnb_cu_mbs_f1ap_id,
+            gnb_du_mbs_f1ap_id,
+            multicast_du_2_cu_rrc_info,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 451, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 452, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.multicast_du_2_cu_rrc_info {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 772, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastContextNotificationIndication {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastContextNotificationIndication::decode_inner(data).map_err(
+            |mut e: PerCodecError| {
+                e.push_context("MulticastContextNotificationIndication");
+                e
+            },
+        )
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastContextNotificationIndication");
+            e
+        })
+    }
+}
+// MulticastContextNotificationConfirm
+#[derive(Clone, Debug)]
+pub struct MulticastContextNotificationConfirm {
+    pub gnb_cu_mbs_f1ap_id: GnbCuMbsF1apId,
+    pub gnb_du_mbs_f1ap_id: GnbDuMbsF1apId,
+    pub criticality_diagnostics: Option<CriticalityDiagnostics>,
+}
+
+impl MulticastContextNotificationConfirm {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_mbs_f1ap_id: Option<GnbCuMbsF1apId> = None;
+        let mut gnb_du_mbs_f1ap_id: Option<GnbDuMbsF1apId> = None;
+        let mut criticality_diagnostics: Option<CriticalityDiagnostics> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                451 => gnb_cu_mbs_f1ap_id = Some(GnbCuMbsF1apId::decode(data)?),
+                452 => gnb_du_mbs_f1ap_id = Some(GnbDuMbsF1apId::decode(data)?),
+                7 => criticality_diagnostics = Some(CriticalityDiagnostics::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_mbs_f1ap_id = gnb_cu_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_mbs_f1ap_id"
+        )))?;
+        let gnb_du_mbs_f1ap_id = gnb_du_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_mbs_f1ap_id"
+        )))?;
+        Ok(Self {
+            gnb_cu_mbs_f1ap_id,
+            gnb_du_mbs_f1ap_id,
+            criticality_diagnostics,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 451, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 452, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.criticality_diagnostics {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 7, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastContextNotificationConfirm {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastContextNotificationConfirm::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastContextNotificationConfirm");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastContextNotificationConfirm");
+            e
+        })
+    }
+}
+// MulticastContextNotificationRefuse
+#[derive(Clone, Debug)]
+pub struct MulticastContextNotificationRefuse {
+    pub gnb_cu_mbs_f1ap_id: GnbCuMbsF1apId,
+    pub gnb_du_mbs_f1ap_id: GnbDuMbsF1apId,
+    pub criticality_diagnostics: Option<CriticalityDiagnostics>,
+    pub cause: Cause,
+}
+
+impl MulticastContextNotificationRefuse {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_mbs_f1ap_id: Option<GnbCuMbsF1apId> = None;
+        let mut gnb_du_mbs_f1ap_id: Option<GnbDuMbsF1apId> = None;
+        let mut criticality_diagnostics: Option<CriticalityDiagnostics> = None;
+        let mut cause: Option<Cause> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                451 => gnb_cu_mbs_f1ap_id = Some(GnbCuMbsF1apId::decode(data)?),
+                452 => gnb_du_mbs_f1ap_id = Some(GnbDuMbsF1apId::decode(data)?),
+                7 => criticality_diagnostics = Some(CriticalityDiagnostics::decode(data)?),
+                0 => cause = Some(Cause::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_mbs_f1ap_id = gnb_cu_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_mbs_f1ap_id"
+        )))?;
+        let gnb_du_mbs_f1ap_id = gnb_du_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_mbs_f1ap_id"
+        )))?;
+        let cause = cause.ok_or(per_codec_error_new(format!("Missing mandatory IE cause")))?;
+        Ok(Self {
+            gnb_cu_mbs_f1ap_id,
+            gnb_du_mbs_f1ap_id,
+            criticality_diagnostics,
+            cause,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 451, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 452, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.criticality_diagnostics {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 7, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        let ie = &mut Allocator::new_codec_data();
+        self.cause.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 0, false)?;
+        Criticality::Ignore.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastContextNotificationRefuse {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastContextNotificationRefuse::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastContextNotificationRefuse");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastContextNotificationRefuse");
+            e
+        })
+    }
+}
+// MulticastCommonConfigurationRequest
+#[derive(Clone, Debug)]
+pub struct MulticastCommonConfigurationRequest {
+    pub transaction_id: TransactionId,
+    pub multicast_cu_2_du_common_rrc_info: Option<MulticastCu2DuCommonRrcInfo>,
+}
+
+impl MulticastCommonConfigurationRequest {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut transaction_id: Option<TransactionId> = None;
+        let mut multicast_cu_2_du_common_rrc_info: Option<MulticastCu2DuCommonRrcInfo> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                78 => transaction_id = Some(TransactionId::decode(data)?),
+                774 => {
+                    multicast_cu_2_du_common_rrc_info =
+                        Some(MulticastCu2DuCommonRrcInfo::decode(data)?)
+                }
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let transaction_id = transaction_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE transaction_id"
+        )))?;
+        Ok(Self {
+            transaction_id,
+            multicast_cu_2_du_common_rrc_info,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.transaction_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 78, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.multicast_cu_2_du_common_rrc_info {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 774, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastCommonConfigurationRequest {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastCommonConfigurationRequest::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastCommonConfigurationRequest");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastCommonConfigurationRequest");
+            e
+        })
+    }
+}
+// MulticastCommonConfigurationResponse
+#[derive(Clone, Debug)]
+pub struct MulticastCommonConfigurationResponse {
+    pub transaction_id: TransactionId,
+    pub criticality_diagnostics: Option<CriticalityDiagnostics>,
+}
+
+impl MulticastCommonConfigurationResponse {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut transaction_id: Option<TransactionId> = None;
+        let mut criticality_diagnostics: Option<CriticalityDiagnostics> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                78 => transaction_id = Some(TransactionId::decode(data)?),
+                7 => criticality_diagnostics = Some(CriticalityDiagnostics::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let transaction_id = transaction_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE transaction_id"
+        )))?;
+        Ok(Self {
+            transaction_id,
+            criticality_diagnostics,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.transaction_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 78, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.criticality_diagnostics {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 7, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastCommonConfigurationResponse {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastCommonConfigurationResponse::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastCommonConfigurationResponse");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastCommonConfigurationResponse");
+            e
+        })
+    }
+}
+// MulticastCommonConfigurationRefuse
+#[derive(Clone, Debug)]
+pub struct MulticastCommonConfigurationRefuse {
+    pub transaction_id: TransactionId,
+    pub cause: Cause,
+    pub criticality_diagnostics: Option<CriticalityDiagnostics>,
+}
+
+impl MulticastCommonConfigurationRefuse {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut transaction_id: Option<TransactionId> = None;
+        let mut cause: Option<Cause> = None;
+        let mut criticality_diagnostics: Option<CriticalityDiagnostics> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                78 => transaction_id = Some(TransactionId::decode(data)?),
+                0 => cause = Some(Cause::decode(data)?),
+                7 => criticality_diagnostics = Some(CriticalityDiagnostics::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let transaction_id = transaction_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE transaction_id"
+        )))?;
+        let cause = cause.ok_or(per_codec_error_new(format!("Missing mandatory IE cause")))?;
+        Ok(Self {
+            transaction_id,
+            cause,
+            criticality_diagnostics,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.transaction_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 78, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.cause.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 0, false)?;
+        Criticality::Ignore.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.criticality_diagnostics {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 7, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastCommonConfigurationRefuse {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastCommonConfigurationRefuse::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastCommonConfigurationRefuse");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastCommonConfigurationRefuse");
+            e
+        })
+    }
+}
+// MulticastDistributionSetupRequest
+#[derive(Clone, Debug)]
+pub struct MulticastDistributionSetupRequest {
+    pub gnb_cu_mbs_f1ap_id: GnbCuMbsF1apId,
+    pub gnb_du_mbs_f1ap_id: GnbDuMbsF1apId,
+    pub mbs_multicast_f1u_context_descriptor: MbsMulticastF1uContextDescriptor,
+    pub multicast_f1u_context_to_be_setup_list: MulticastF1uContextToBeSetupList,
+}
+
+impl MulticastDistributionSetupRequest {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_mbs_f1ap_id: Option<GnbCuMbsF1apId> = None;
+        let mut gnb_du_mbs_f1ap_id: Option<GnbDuMbsF1apId> = None;
+        let mut mbs_multicast_f1u_context_descriptor: Option<MbsMulticastF1uContextDescriptor> =
+            None;
+        let mut multicast_f1u_context_to_be_setup_list: Option<MulticastF1uContextToBeSetupList> =
+            None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                451 => gnb_cu_mbs_f1ap_id = Some(GnbCuMbsF1apId::decode(data)?),
+                452 => gnb_du_mbs_f1ap_id = Some(GnbDuMbsF1apId::decode(data)?),
+                502 => {
+                    mbs_multicast_f1u_context_descriptor =
+                        Some(MbsMulticastF1uContextDescriptor::decode(data)?)
+                }
+                503 => {
+                    multicast_f1u_context_to_be_setup_list =
+                        Some(MulticastF1uContextToBeSetupList::decode(data)?)
+                }
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_mbs_f1ap_id = gnb_cu_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_mbs_f1ap_id"
+        )))?;
+        let gnb_du_mbs_f1ap_id = gnb_du_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_mbs_f1ap_id"
+        )))?;
+        let mbs_multicast_f1u_context_descriptor =
+            mbs_multicast_f1u_context_descriptor.ok_or(per_codec_error_new(format!(
+                "Missing mandatory IE mbs_multicast_f1u_context_descriptor"
+            )))?;
+        let multicast_f1u_context_to_be_setup_list =
+            multicast_f1u_context_to_be_setup_list.ok_or(per_codec_error_new(format!(
+                "Missing mandatory IE multicast_f1u_context_to_be_setup_list"
+            )))?;
+        Ok(Self {
+            gnb_cu_mbs_f1ap_id,
+            gnb_du_mbs_f1ap_id,
+            mbs_multicast_f1u_context_descriptor,
+            multicast_f1u_context_to_be_setup_list,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 451, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 452, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.mbs_multicast_f1u_context_descriptor.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 502, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.multicast_f1u_context_to_be_setup_list.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 503, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastDistributionSetupRequest {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastDistributionSetupRequest::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastDistributionSetupRequest");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastDistributionSetupRequest");
+            e
+        })
+    }
+}
+// MulticastF1uContextToBeSetupList
+#[derive(Clone, Debug)]
+pub struct MulticastF1uContextToBeSetupList(pub NonEmpty<MulticastF1uContextToBeSetupItem>);
+
+impl MulticastF1uContextToBeSetupList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(32), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(MulticastF1uContextToBeSetupItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(32), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 504, false)?;
+            Criticality::Reject.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastF1uContextToBeSetupList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastF1uContextToBeSetupList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastF1uContextToBeSetupList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastF1uContextToBeSetupList");
+            e
+        })
+    }
+}
+// MulticastDistributionSetupResponse
+#[derive(Clone, Debug)]
+pub struct MulticastDistributionSetupResponse {
+    pub gnb_cu_mbs_f1ap_id: GnbCuMbsF1apId,
+    pub gnb_du_mbs_f1ap_id: GnbDuMbsF1apId,
+    pub mbs_multicast_f1u_context_descriptor: MbsMulticastF1uContextDescriptor,
+    pub multicast_f1u_context_setup_list: MulticastF1uContextSetupList,
+    pub multicast_f1u_context_failed_to_be_setup_list:
+        Option<MulticastF1uContextFailedToBeSetupList>,
+    pub criticality_diagnostics: Option<CriticalityDiagnostics>,
+    pub multicast_f1u_context_reference_cu: MulticastF1uContextReferenceCu,
+}
+
+impl MulticastDistributionSetupResponse {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_mbs_f1ap_id: Option<GnbCuMbsF1apId> = None;
+        let mut gnb_du_mbs_f1ap_id: Option<GnbDuMbsF1apId> = None;
+        let mut mbs_multicast_f1u_context_descriptor: Option<MbsMulticastF1uContextDescriptor> =
+            None;
+        let mut multicast_f1u_context_setup_list: Option<MulticastF1uContextSetupList> = None;
+        let mut multicast_f1u_context_failed_to_be_setup_list: Option<
+            MulticastF1uContextFailedToBeSetupList,
+        > = None;
+        let mut criticality_diagnostics: Option<CriticalityDiagnostics> = None;
+        let mut multicast_f1u_context_reference_cu: Option<MulticastF1uContextReferenceCu> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                451 => gnb_cu_mbs_f1ap_id = Some(GnbCuMbsF1apId::decode(data)?),
+                452 => gnb_du_mbs_f1ap_id = Some(GnbDuMbsF1apId::decode(data)?),
+                502 => {
+                    mbs_multicast_f1u_context_descriptor =
+                        Some(MbsMulticastF1uContextDescriptor::decode(data)?)
+                }
+                505 => {
+                    multicast_f1u_context_setup_list =
+                        Some(MulticastF1uContextSetupList::decode(data)?)
+                }
+                507 => {
+                    multicast_f1u_context_failed_to_be_setup_list =
+                        Some(MulticastF1uContextFailedToBeSetupList::decode(data)?)
+                }
+                7 => criticality_diagnostics = Some(CriticalityDiagnostics::decode(data)?),
+                681 => {
+                    multicast_f1u_context_reference_cu =
+                        Some(MulticastF1uContextReferenceCu::decode(data)?)
+                }
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_mbs_f1ap_id = gnb_cu_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_mbs_f1ap_id"
+        )))?;
+        let gnb_du_mbs_f1ap_id = gnb_du_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_mbs_f1ap_id"
+        )))?;
+        let mbs_multicast_f1u_context_descriptor =
+            mbs_multicast_f1u_context_descriptor.ok_or(per_codec_error_new(format!(
+                "Missing mandatory IE mbs_multicast_f1u_context_descriptor"
+            )))?;
+        let multicast_f1u_context_setup_list =
+            multicast_f1u_context_setup_list.ok_or(per_codec_error_new(format!(
+                "Missing mandatory IE multicast_f1u_context_setup_list"
+            )))?;
+        let multicast_f1u_context_reference_cu =
+            multicast_f1u_context_reference_cu.ok_or(per_codec_error_new(format!(
+                "Missing mandatory IE multicast_f1u_context_reference_cu"
+            )))?;
+        Ok(Self {
+            gnb_cu_mbs_f1ap_id,
+            gnb_du_mbs_f1ap_id,
+            mbs_multicast_f1u_context_descriptor,
+            multicast_f1u_context_setup_list,
+            multicast_f1u_context_failed_to_be_setup_list,
+            criticality_diagnostics,
+            multicast_f1u_context_reference_cu,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 451, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 452, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.mbs_multicast_f1u_context_descriptor.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 502, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.multicast_f1u_context_setup_list.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 505, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.multicast_f1u_context_failed_to_be_setup_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 507, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.criticality_diagnostics {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 7, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        let ie = &mut Allocator::new_codec_data();
+        self.multicast_f1u_context_reference_cu.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 681, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastDistributionSetupResponse {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastDistributionSetupResponse::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastDistributionSetupResponse");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastDistributionSetupResponse");
+            e
+        })
+    }
+}
+// MulticastF1uContextSetupList
+#[derive(Clone, Debug)]
+pub struct MulticastF1uContextSetupList(pub NonEmpty<MulticastF1uContextSetupItem>);
+
+impl MulticastF1uContextSetupList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(32), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(MulticastF1uContextSetupItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(32), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 506, false)?;
+            Criticality::Reject.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastF1uContextSetupList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastF1uContextSetupList::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastF1uContextSetupList");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastF1uContextSetupList");
+            e
+        })
+    }
+}
+// MulticastF1uContextFailedToBeSetupList
+#[derive(Clone, Debug)]
+pub struct MulticastF1uContextFailedToBeSetupList(
+    pub NonEmpty<MulticastF1uContextFailedToBeSetupItem>,
+);
+
+impl MulticastF1uContextFailedToBeSetupList {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self({
+            let length = decode::decode_length_determinent(data, Some(1), Some(32), false)?;
+            let mut items = vec![];
+            for _ in 0..length {
+                let _ = decode::decode_integer(data, Some(0), Some(65535), false)?;
+                let _ = Criticality::decode(data)?;
+                let _ = decode::decode_length_determinent(data, None, None, false)?;
+                items.push(MulticastF1uContextFailedToBeSetupItem::decode(data)?);
+                data.decode_align()?;
+            }
+            NonEmpty::from_vec(items).unwrap()
+        }))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_length_determinent(data, Some(1), Some(32), false, self.0.len())?;
+        for x in &self.0 {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(data, Some(0), Some(65535), false, 508, false)?;
+            Criticality::Ignore.encode(data)?;
+            encode::encode_length_determinent(data, None, None, false, ie.length_in_bytes())?;
+            data.append_aligned(ie);
+        }
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastF1uContextFailedToBeSetupList {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastF1uContextFailedToBeSetupList::decode_inner(data).map_err(
+            |mut e: PerCodecError| {
+                e.push_context("MulticastF1uContextFailedToBeSetupList");
+                e
+            },
+        )
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastF1uContextFailedToBeSetupList");
+            e
+        })
+    }
+}
+// MulticastDistributionSetupFailure
+#[derive(Clone, Debug)]
+pub struct MulticastDistributionSetupFailure {
+    pub gnb_cu_mbs_f1ap_id: GnbCuMbsF1apId,
+    pub gnb_du_mbs_f1ap_id: Option<GnbDuMbsF1apId>,
+    pub mbs_multicast_f1u_context_descriptor: MbsMulticastF1uContextDescriptor,
+    pub cause: Cause,
+    pub criticality_diagnostics: Option<CriticalityDiagnostics>,
+}
+
+impl MulticastDistributionSetupFailure {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_mbs_f1ap_id: Option<GnbCuMbsF1apId> = None;
+        let mut gnb_du_mbs_f1ap_id: Option<GnbDuMbsF1apId> = None;
+        let mut mbs_multicast_f1u_context_descriptor: Option<MbsMulticastF1uContextDescriptor> =
+            None;
+        let mut cause: Option<Cause> = None;
+        let mut criticality_diagnostics: Option<CriticalityDiagnostics> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                451 => gnb_cu_mbs_f1ap_id = Some(GnbCuMbsF1apId::decode(data)?),
+                452 => gnb_du_mbs_f1ap_id = Some(GnbDuMbsF1apId::decode(data)?),
+                502 => {
+                    mbs_multicast_f1u_context_descriptor =
+                        Some(MbsMulticastF1uContextDescriptor::decode(data)?)
+                }
+                0 => cause = Some(Cause::decode(data)?),
+                7 => criticality_diagnostics = Some(CriticalityDiagnostics::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_mbs_f1ap_id = gnb_cu_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_mbs_f1ap_id"
+        )))?;
+        let mbs_multicast_f1u_context_descriptor =
+            mbs_multicast_f1u_context_descriptor.ok_or(per_codec_error_new(format!(
+                "Missing mandatory IE mbs_multicast_f1u_context_descriptor"
+            )))?;
+        let cause = cause.ok_or(per_codec_error_new(format!("Missing mandatory IE cause")))?;
+        Ok(Self {
+            gnb_cu_mbs_f1ap_id,
+            gnb_du_mbs_f1ap_id,
+            mbs_multicast_f1u_context_descriptor,
+            cause,
+            criticality_diagnostics,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 451, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.gnb_du_mbs_f1ap_id {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 452, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        let ie = &mut Allocator::new_codec_data();
+        self.mbs_multicast_f1u_context_descriptor.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 502, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.cause.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 0, false)?;
+        Criticality::Ignore.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.criticality_diagnostics {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 7, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastDistributionSetupFailure {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastDistributionSetupFailure::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastDistributionSetupFailure");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastDistributionSetupFailure");
+            e
+        })
+    }
+}
+// MulticastDistributionReleaseCommand
+#[derive(Clone, Debug)]
+pub struct MulticastDistributionReleaseCommand {
+    pub gnb_cu_mbs_f1ap_id: GnbCuMbsF1apId,
+    pub gnb_du_mbs_f1ap_id: GnbDuMbsF1apId,
+    pub mbs_multicast_f1u_context_descriptor: MbsMulticastF1uContextDescriptor,
+    pub cause: Cause,
+}
+
+impl MulticastDistributionReleaseCommand {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_mbs_f1ap_id: Option<GnbCuMbsF1apId> = None;
+        let mut gnb_du_mbs_f1ap_id: Option<GnbDuMbsF1apId> = None;
+        let mut mbs_multicast_f1u_context_descriptor: Option<MbsMulticastF1uContextDescriptor> =
+            None;
+        let mut cause: Option<Cause> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                451 => gnb_cu_mbs_f1ap_id = Some(GnbCuMbsF1apId::decode(data)?),
+                452 => gnb_du_mbs_f1ap_id = Some(GnbDuMbsF1apId::decode(data)?),
+                502 => {
+                    mbs_multicast_f1u_context_descriptor =
+                        Some(MbsMulticastF1uContextDescriptor::decode(data)?)
+                }
+                0 => cause = Some(Cause::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_mbs_f1ap_id = gnb_cu_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_mbs_f1ap_id"
+        )))?;
+        let gnb_du_mbs_f1ap_id = gnb_du_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_mbs_f1ap_id"
+        )))?;
+        let mbs_multicast_f1u_context_descriptor =
+            mbs_multicast_f1u_context_descriptor.ok_or(per_codec_error_new(format!(
+                "Missing mandatory IE mbs_multicast_f1u_context_descriptor"
+            )))?;
+        let cause = cause.ok_or(per_codec_error_new(format!("Missing mandatory IE cause")))?;
+        Ok(Self {
+            gnb_cu_mbs_f1ap_id,
+            gnb_du_mbs_f1ap_id,
+            mbs_multicast_f1u_context_descriptor,
+            cause,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 451, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 452, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.mbs_multicast_f1u_context_descriptor.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 502, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.cause.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 0, false)?;
+        Criticality::Ignore.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastDistributionReleaseCommand {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastDistributionReleaseCommand::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastDistributionReleaseCommand");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastDistributionReleaseCommand");
+            e
+        })
+    }
+}
+// MulticastDistributionReleaseComplete
+#[derive(Clone, Debug)]
+pub struct MulticastDistributionReleaseComplete {
+    pub gnb_cu_mbs_f1ap_id: GnbCuMbsF1apId,
+    pub gnb_du_mbs_f1ap_id: GnbDuMbsF1apId,
+    pub mbs_multicast_f1u_context_descriptor: MbsMulticastF1uContextDescriptor,
+    pub criticality_diagnostics: Option<CriticalityDiagnostics>,
+}
+
+impl MulticastDistributionReleaseComplete {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_mbs_f1ap_id: Option<GnbCuMbsF1apId> = None;
+        let mut gnb_du_mbs_f1ap_id: Option<GnbDuMbsF1apId> = None;
+        let mut mbs_multicast_f1u_context_descriptor: Option<MbsMulticastF1uContextDescriptor> =
+            None;
+        let mut criticality_diagnostics: Option<CriticalityDiagnostics> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                451 => gnb_cu_mbs_f1ap_id = Some(GnbCuMbsF1apId::decode(data)?),
+                452 => gnb_du_mbs_f1ap_id = Some(GnbDuMbsF1apId::decode(data)?),
+                502 => {
+                    mbs_multicast_f1u_context_descriptor =
+                        Some(MbsMulticastF1uContextDescriptor::decode(data)?)
+                }
+                7 => criticality_diagnostics = Some(CriticalityDiagnostics::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_mbs_f1ap_id = gnb_cu_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_mbs_f1ap_id"
+        )))?;
+        let gnb_du_mbs_f1ap_id = gnb_du_mbs_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_mbs_f1ap_id"
+        )))?;
+        let mbs_multicast_f1u_context_descriptor =
+            mbs_multicast_f1u_context_descriptor.ok_or(per_codec_error_new(format!(
+                "Missing mandatory IE mbs_multicast_f1u_context_descriptor"
+            )))?;
+        Ok(Self {
+            gnb_cu_mbs_f1ap_id,
+            gnb_du_mbs_f1ap_id,
+            mbs_multicast_f1u_context_descriptor,
+            criticality_diagnostics,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 451, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_mbs_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 452, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.mbs_multicast_f1u_context_descriptor.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 502, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.criticality_diagnostics {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 7, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for MulticastDistributionReleaseComplete {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MulticastDistributionReleaseComplete::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastDistributionReleaseComplete");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MulticastDistributionReleaseComplete");
+            e
+        })
+    }
+}
+// PdcMeasurementInitiationRequest
+#[derive(Clone, Debug)]
+pub struct PdcMeasurementInitiationRequest {
+    pub gnb_cu_ue_f1ap_id: GnbCuUeF1apId,
+    pub gnb_du_ue_f1ap_id: GnbDuUeF1apId,
+    pub ran_ue_pdc_meas_id: RanUePdcMeasId,
+    pub pdc_report_type: PdcReportType,
+    pub pdc_measurement_periodicity: Option<PdcMeasurementPeriodicity>,
+    pub pdc_measurement_quantities: PdcMeasurementQuantities,
+}
+
+impl PdcMeasurementInitiationRequest {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_ue_f1ap_id: Option<GnbCuUeF1apId> = None;
+        let mut gnb_du_ue_f1ap_id: Option<GnbDuUeF1apId> = None;
+        let mut ran_ue_pdc_meas_id: Option<RanUePdcMeasId> = None;
+        let mut pdc_report_type: Option<PdcReportType> = None;
+        let mut pdc_measurement_periodicity: Option<PdcMeasurementPeriodicity> = None;
+        let mut pdc_measurement_quantities: Option<PdcMeasurementQuantities> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                40 => gnb_cu_ue_f1ap_id = Some(GnbCuUeF1apId::decode(data)?),
+                41 => gnb_du_ue_f1ap_id = Some(GnbDuUeF1apId::decode(data)?),
+                546 => ran_ue_pdc_meas_id = Some(RanUePdcMeasId::decode(data)?),
+                545 => pdc_report_type = Some(PdcReportType::decode(data)?),
+                541 => pdc_measurement_periodicity = Some(PdcMeasurementPeriodicity::decode(data)?),
+                542 => pdc_measurement_quantities = Some(PdcMeasurementQuantities::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_ue_f1ap_id = gnb_cu_ue_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_ue_f1ap_id"
+        )))?;
+        let gnb_du_ue_f1ap_id = gnb_du_ue_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_ue_f1ap_id"
+        )))?;
+        let ran_ue_pdc_meas_id = ran_ue_pdc_meas_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE ran_ue_pdc_meas_id"
+        )))?;
+        let pdc_report_type = pdc_report_type.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE pdc_report_type"
+        )))?;
+        let pdc_measurement_quantities = pdc_measurement_quantities.ok_or(per_codec_error_new(
+            format!("Missing mandatory IE pdc_measurement_quantities"),
+        ))?;
+        Ok(Self {
+            gnb_cu_ue_f1ap_id,
+            gnb_du_ue_f1ap_id,
+            ran_ue_pdc_meas_id,
+            pdc_report_type,
+            pdc_measurement_periodicity,
+            pdc_measurement_quantities,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_ue_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 40, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_ue_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 41, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.ran_ue_pdc_meas_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 546, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.pdc_report_type.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 545, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.pdc_measurement_periodicity {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 541, false)?;
+            Criticality::Reject.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        let ie = &mut Allocator::new_codec_data();
+        self.pdc_measurement_quantities.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 542, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for PdcMeasurementInitiationRequest {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        PdcMeasurementInitiationRequest::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("PdcMeasurementInitiationRequest");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("PdcMeasurementInitiationRequest");
+            e
+        })
+    }
+}
+// PdcMeasurementInitiationResponse
+#[derive(Clone, Debug)]
+pub struct PdcMeasurementInitiationResponse {
+    pub gnb_cu_ue_f1ap_id: GnbCuUeF1apId,
+    pub gnb_du_ue_f1ap_id: GnbDuUeF1apId,
+    pub ran_ue_pdc_meas_id: RanUePdcMeasId,
+    pub pdc_measurement_result: Option<PdcMeasurementResult>,
+    pub criticality_diagnostics: Option<CriticalityDiagnostics>,
+}
+
+impl PdcMeasurementInitiationResponse {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_ue_f1ap_id: Option<GnbCuUeF1apId> = None;
+        let mut gnb_du_ue_f1ap_id: Option<GnbDuUeF1apId> = None;
+        let mut ran_ue_pdc_meas_id: Option<RanUePdcMeasId> = None;
+        let mut pdc_measurement_result: Option<PdcMeasurementResult> = None;
+        let mut criticality_diagnostics: Option<CriticalityDiagnostics> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                40 => gnb_cu_ue_f1ap_id = Some(GnbCuUeF1apId::decode(data)?),
+                41 => gnb_du_ue_f1ap_id = Some(GnbDuUeF1apId::decode(data)?),
+                546 => ran_ue_pdc_meas_id = Some(RanUePdcMeasId::decode(data)?),
+                544 => pdc_measurement_result = Some(PdcMeasurementResult::decode(data)?),
+                7 => criticality_diagnostics = Some(CriticalityDiagnostics::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_ue_f1ap_id = gnb_cu_ue_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_ue_f1ap_id"
+        )))?;
+        let gnb_du_ue_f1ap_id = gnb_du_ue_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_ue_f1ap_id"
+        )))?;
+        let ran_ue_pdc_meas_id = ran_ue_pdc_meas_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE ran_ue_pdc_meas_id"
+        )))?;
+        Ok(Self {
+            gnb_cu_ue_f1ap_id,
+            gnb_du_ue_f1ap_id,
+            ran_ue_pdc_meas_id,
+            pdc_measurement_result,
+            criticality_diagnostics,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_ue_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 40, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_ue_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 41, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.ran_ue_pdc_meas_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 546, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.pdc_measurement_result {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 544, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.criticality_diagnostics {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 7, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for PdcMeasurementInitiationResponse {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        PdcMeasurementInitiationResponse::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("PdcMeasurementInitiationResponse");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("PdcMeasurementInitiationResponse");
+            e
+        })
+    }
+}
+// PdcMeasurementInitiationFailure
+#[derive(Clone, Debug)]
+pub struct PdcMeasurementInitiationFailure {
+    pub gnb_cu_ue_f1ap_id: GnbCuUeF1apId,
+    pub gnb_du_ue_f1ap_id: GnbDuUeF1apId,
+    pub ran_ue_pdc_meas_id: RanUePdcMeasId,
+    pub cause: Cause,
+    pub criticality_diagnostics: Option<CriticalityDiagnostics>,
+}
+
+impl PdcMeasurementInitiationFailure {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_ue_f1ap_id: Option<GnbCuUeF1apId> = None;
+        let mut gnb_du_ue_f1ap_id: Option<GnbDuUeF1apId> = None;
+        let mut ran_ue_pdc_meas_id: Option<RanUePdcMeasId> = None;
+        let mut cause: Option<Cause> = None;
+        let mut criticality_diagnostics: Option<CriticalityDiagnostics> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                40 => gnb_cu_ue_f1ap_id = Some(GnbCuUeF1apId::decode(data)?),
+                41 => gnb_du_ue_f1ap_id = Some(GnbDuUeF1apId::decode(data)?),
+                546 => ran_ue_pdc_meas_id = Some(RanUePdcMeasId::decode(data)?),
+                0 => cause = Some(Cause::decode(data)?),
+                7 => criticality_diagnostics = Some(CriticalityDiagnostics::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_ue_f1ap_id = gnb_cu_ue_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_ue_f1ap_id"
+        )))?;
+        let gnb_du_ue_f1ap_id = gnb_du_ue_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_ue_f1ap_id"
+        )))?;
+        let ran_ue_pdc_meas_id = ran_ue_pdc_meas_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE ran_ue_pdc_meas_id"
+        )))?;
+        let cause = cause.ok_or(per_codec_error_new(format!("Missing mandatory IE cause")))?;
+        Ok(Self {
+            gnb_cu_ue_f1ap_id,
+            gnb_du_ue_f1ap_id,
+            ran_ue_pdc_meas_id,
+            cause,
+            criticality_diagnostics,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_ue_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 40, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_ue_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 41, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.ran_ue_pdc_meas_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 546, false)?;
+        Criticality::Ignore.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.cause.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 0, false)?;
+        Criticality::Ignore.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.criticality_diagnostics {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 7, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for PdcMeasurementInitiationFailure {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        PdcMeasurementInitiationFailure::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("PdcMeasurementInitiationFailure");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("PdcMeasurementInitiationFailure");
+            e
+        })
+    }
+}
+// PdcMeasurementReport
+#[derive(Clone, Debug)]
+pub struct PdcMeasurementReport {
+    pub gnb_cu_ue_f1ap_id: GnbCuUeF1apId,
+    pub gnb_du_ue_f1ap_id: GnbDuUeF1apId,
+    pub ran_ue_pdc_meas_id: RanUePdcMeasId,
+    pub pdc_measurement_result: PdcMeasurementResult,
+}
+
+impl PdcMeasurementReport {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_ue_f1ap_id: Option<GnbCuUeF1apId> = None;
+        let mut gnb_du_ue_f1ap_id: Option<GnbDuUeF1apId> = None;
+        let mut ran_ue_pdc_meas_id: Option<RanUePdcMeasId> = None;
+        let mut pdc_measurement_result: Option<PdcMeasurementResult> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                40 => gnb_cu_ue_f1ap_id = Some(GnbCuUeF1apId::decode(data)?),
+                41 => gnb_du_ue_f1ap_id = Some(GnbDuUeF1apId::decode(data)?),
+                546 => ran_ue_pdc_meas_id = Some(RanUePdcMeasId::decode(data)?),
+                544 => pdc_measurement_result = Some(PdcMeasurementResult::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_ue_f1ap_id = gnb_cu_ue_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_ue_f1ap_id"
+        )))?;
+        let gnb_du_ue_f1ap_id = gnb_du_ue_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_ue_f1ap_id"
+        )))?;
+        let ran_ue_pdc_meas_id = ran_ue_pdc_meas_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE ran_ue_pdc_meas_id"
+        )))?;
+        let pdc_measurement_result = pdc_measurement_result.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE pdc_measurement_result"
+        )))?;
+        Ok(Self {
+            gnb_cu_ue_f1ap_id,
+            gnb_du_ue_f1ap_id,
+            ran_ue_pdc_meas_id,
+            pdc_measurement_result,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_ue_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 40, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_ue_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 41, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.ran_ue_pdc_meas_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 546, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.pdc_measurement_result.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 544, false)?;
+        Criticality::Ignore.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for PdcMeasurementReport {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        PdcMeasurementReport::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("PdcMeasurementReport");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("PdcMeasurementReport");
+            e
+        })
+    }
+}
+// PdcMeasurementTerminationCommand
+#[derive(Clone, Debug)]
+pub struct PdcMeasurementTerminationCommand {
+    pub gnb_cu_ue_f1ap_id: GnbCuUeF1apId,
+    pub gnb_du_ue_f1ap_id: GnbDuUeF1apId,
+    pub ran_ue_pdc_meas_id: RanUePdcMeasId,
+}
+
+impl PdcMeasurementTerminationCommand {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_ue_f1ap_id: Option<GnbCuUeF1apId> = None;
+        let mut gnb_du_ue_f1ap_id: Option<GnbDuUeF1apId> = None;
+        let mut ran_ue_pdc_meas_id: Option<RanUePdcMeasId> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                40 => gnb_cu_ue_f1ap_id = Some(GnbCuUeF1apId::decode(data)?),
+                41 => gnb_du_ue_f1ap_id = Some(GnbDuUeF1apId::decode(data)?),
+                546 => ran_ue_pdc_meas_id = Some(RanUePdcMeasId::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_ue_f1ap_id = gnb_cu_ue_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_ue_f1ap_id"
+        )))?;
+        let gnb_du_ue_f1ap_id = gnb_du_ue_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_ue_f1ap_id"
+        )))?;
+        let ran_ue_pdc_meas_id = ran_ue_pdc_meas_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE ran_ue_pdc_meas_id"
+        )))?;
+        Ok(Self {
+            gnb_cu_ue_f1ap_id,
+            gnb_du_ue_f1ap_id,
+            ran_ue_pdc_meas_id,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_ue_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 40, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_ue_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 41, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.ran_ue_pdc_meas_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 546, false)?;
+        Criticality::Ignore.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for PdcMeasurementTerminationCommand {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        PdcMeasurementTerminationCommand::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("PdcMeasurementTerminationCommand");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("PdcMeasurementTerminationCommand");
+            e
+        })
+    }
+}
+// PdcMeasurementFailureIndication
+#[derive(Clone, Debug)]
+pub struct PdcMeasurementFailureIndication {
+    pub gnb_cu_ue_f1ap_id: GnbCuUeF1apId,
+    pub gnb_du_ue_f1ap_id: GnbDuUeF1apId,
+    pub ran_ue_pdc_meas_id: RanUePdcMeasId,
+    pub cause: Cause,
+}
+
+impl PdcMeasurementFailureIndication {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_ue_f1ap_id: Option<GnbCuUeF1apId> = None;
+        let mut gnb_du_ue_f1ap_id: Option<GnbDuUeF1apId> = None;
+        let mut ran_ue_pdc_meas_id: Option<RanUePdcMeasId> = None;
+        let mut cause: Option<Cause> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                40 => gnb_cu_ue_f1ap_id = Some(GnbCuUeF1apId::decode(data)?),
+                41 => gnb_du_ue_f1ap_id = Some(GnbDuUeF1apId::decode(data)?),
+                546 => ran_ue_pdc_meas_id = Some(RanUePdcMeasId::decode(data)?),
+                0 => cause = Some(Cause::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_ue_f1ap_id = gnb_cu_ue_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_ue_f1ap_id"
+        )))?;
+        let gnb_du_ue_f1ap_id = gnb_du_ue_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_ue_f1ap_id"
+        )))?;
+        let ran_ue_pdc_meas_id = ran_ue_pdc_meas_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE ran_ue_pdc_meas_id"
+        )))?;
+        let cause = cause.ok_or(per_codec_error_new(format!("Missing mandatory IE cause")))?;
+        Ok(Self {
+            gnb_cu_ue_f1ap_id,
+            gnb_du_ue_f1ap_id,
+            ran_ue_pdc_meas_id,
+            cause,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_ue_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 40, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_ue_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 41, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.ran_ue_pdc_meas_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 546, false)?;
+        Criticality::Ignore.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.cause.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 0, false)?;
+        Criticality::Ignore.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for PdcMeasurementFailureIndication {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        PdcMeasurementFailureIndication::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("PdcMeasurementFailureIndication");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("PdcMeasurementFailureIndication");
+            e
+        })
+    }
+}
+// PrsConfigurationRequest
+#[derive(Clone, Debug)]
+pub struct PrsConfigurationRequest {
+    pub transaction_id: TransactionId,
+    pub prs_config_request_type: PrsConfigRequestType,
+    pub prstrp_list: PrstrpList,
+}
+
+impl PrsConfigurationRequest {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut transaction_id: Option<TransactionId> = None;
+        let mut prs_config_request_type: Option<PrsConfigRequestType> = None;
+        let mut prstrp_list: Option<PrstrpList> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                78 => transaction_id = Some(TransactionId::decode(data)?),
+                571 => prs_config_request_type = Some(PrsConfigRequestType::decode(data)?),
+                549 => prstrp_list = Some(PrstrpList::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let transaction_id = transaction_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE transaction_id"
+        )))?;
+        let prs_config_request_type = prs_config_request_type.ok_or(per_codec_error_new(
+            format!("Missing mandatory IE prs_config_request_type"),
+        ))?;
+        let prstrp_list = prstrp_list.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE prstrp_list"
+        )))?;
+        Ok(Self {
+            transaction_id,
+            prs_config_request_type,
+            prstrp_list,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.transaction_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 78, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.prs_config_request_type.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 571, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.prstrp_list.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 549, false)?;
+        Criticality::Ignore.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for PrsConfigurationRequest {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        PrsConfigurationRequest::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("PrsConfigurationRequest");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("PrsConfigurationRequest");
+            e
+        })
+    }
+}
+// PrsConfigurationResponse
+#[derive(Clone, Debug)]
+pub struct PrsConfigurationResponse {
+    pub transaction_id: TransactionId,
+    pub prs_transmission_trp_list: Option<PrsTransmissionTrpList>,
+    pub criticality_diagnostics: Option<CriticalityDiagnostics>,
+}
+
+impl PrsConfigurationResponse {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut transaction_id: Option<TransactionId> = None;
+        let mut prs_transmission_trp_list: Option<PrsTransmissionTrpList> = None;
+        let mut criticality_diagnostics: Option<CriticalityDiagnostics> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                78 => transaction_id = Some(TransactionId::decode(data)?),
+                550 => prs_transmission_trp_list = Some(PrsTransmissionTrpList::decode(data)?),
+                7 => criticality_diagnostics = Some(CriticalityDiagnostics::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let transaction_id = transaction_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE transaction_id"
+        )))?;
+        Ok(Self {
+            transaction_id,
+            prs_transmission_trp_list,
+            criticality_diagnostics,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.transaction_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 78, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.prs_transmission_trp_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 550, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.criticality_diagnostics {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 7, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for PrsConfigurationResponse {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        PrsConfigurationResponse::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("PrsConfigurationResponse");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("PrsConfigurationResponse");
+            e
+        })
+    }
+}
+// PrsConfigurationFailure
+#[derive(Clone, Debug)]
+pub struct PrsConfigurationFailure {
+    pub transaction_id: TransactionId,
+    pub cause: Cause,
+    pub criticality_diagnostics: Option<CriticalityDiagnostics>,
+}
+
+impl PrsConfigurationFailure {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut transaction_id: Option<TransactionId> = None;
+        let mut cause: Option<Cause> = None;
+        let mut criticality_diagnostics: Option<CriticalityDiagnostics> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                78 => transaction_id = Some(TransactionId::decode(data)?),
+                0 => cause = Some(Cause::decode(data)?),
+                7 => criticality_diagnostics = Some(CriticalityDiagnostics::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let transaction_id = transaction_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE transaction_id"
+        )))?;
+        let cause = cause.ok_or(per_codec_error_new(format!("Missing mandatory IE cause")))?;
+        Ok(Self {
+            transaction_id,
+            cause,
+            criticality_diagnostics,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.transaction_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 78, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.cause.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 0, false)?;
+        Criticality::Ignore.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.criticality_diagnostics {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 7, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for PrsConfigurationFailure {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        PrsConfigurationFailure::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("PrsConfigurationFailure");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("PrsConfigurationFailure");
+            e
+        })
+    }
+}
+// MeasurementPreconfigurationRequired
+#[derive(Clone, Debug)]
+pub struct MeasurementPreconfigurationRequired {
+    pub gnb_cu_ue_f1ap_id: GnbCuUeF1apId,
+    pub gnb_du_ue_f1ap_id: GnbDuUeF1apId,
+    pub trp_prs_info_list: TrpPrsInfoList,
+}
+
+impl MeasurementPreconfigurationRequired {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_ue_f1ap_id: Option<GnbCuUeF1apId> = None;
+        let mut gnb_du_ue_f1ap_id: Option<GnbDuUeF1apId> = None;
+        let mut trp_prs_info_list: Option<TrpPrsInfoList> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                40 => gnb_cu_ue_f1ap_id = Some(GnbCuUeF1apId::decode(data)?),
+                41 => gnb_du_ue_f1ap_id = Some(GnbDuUeF1apId::decode(data)?),
+                569 => trp_prs_info_list = Some(TrpPrsInfoList::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_ue_f1ap_id = gnb_cu_ue_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_ue_f1ap_id"
+        )))?;
+        let gnb_du_ue_f1ap_id = gnb_du_ue_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_ue_f1ap_id"
+        )))?;
+        let trp_prs_info_list = trp_prs_info_list.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE trp_prs_info_list"
+        )))?;
+        Ok(Self {
+            gnb_cu_ue_f1ap_id,
+            gnb_du_ue_f1ap_id,
+            trp_prs_info_list,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_ue_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 40, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_ue_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 41, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.trp_prs_info_list.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 569, false)?;
+        Criticality::Ignore.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for MeasurementPreconfigurationRequired {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MeasurementPreconfigurationRequired::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MeasurementPreconfigurationRequired");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MeasurementPreconfigurationRequired");
+            e
+        })
+    }
+}
+// MeasurementPreconfigurationConfirm
+#[derive(Clone, Debug)]
+pub struct MeasurementPreconfigurationConfirm {
+    pub gnb_cu_ue_f1ap_id: GnbCuUeF1apId,
+    pub gnb_du_ue_f1ap_id: GnbDuUeF1apId,
+    pub pos_meas_gap_pre_config_list: Option<PosMeasGapPreConfigList>,
+    pub criticality_diagnostics: Option<CriticalityDiagnostics>,
+}
+
+impl MeasurementPreconfigurationConfirm {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_ue_f1ap_id: Option<GnbCuUeF1apId> = None;
+        let mut gnb_du_ue_f1ap_id: Option<GnbDuUeF1apId> = None;
+        let mut pos_meas_gap_pre_config_list: Option<PosMeasGapPreConfigList> = None;
+        let mut criticality_diagnostics: Option<CriticalityDiagnostics> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                40 => gnb_cu_ue_f1ap_id = Some(GnbCuUeF1apId::decode(data)?),
+                41 => gnb_du_ue_f1ap_id = Some(GnbDuUeF1apId::decode(data)?),
+                650 => pos_meas_gap_pre_config_list = Some(PosMeasGapPreConfigList::decode(data)?),
+                7 => criticality_diagnostics = Some(CriticalityDiagnostics::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_ue_f1ap_id = gnb_cu_ue_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_ue_f1ap_id"
+        )))?;
+        let gnb_du_ue_f1ap_id = gnb_du_ue_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_ue_f1ap_id"
+        )))?;
+        Ok(Self {
+            gnb_cu_ue_f1ap_id,
+            gnb_du_ue_f1ap_id,
+            pos_meas_gap_pre_config_list,
+            criticality_diagnostics,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_ue_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 40, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_ue_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 41, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.pos_meas_gap_pre_config_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 650, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.criticality_diagnostics {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 7, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for MeasurementPreconfigurationConfirm {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MeasurementPreconfigurationConfirm::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MeasurementPreconfigurationConfirm");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MeasurementPreconfigurationConfirm");
+            e
+        })
+    }
+}
+// MeasurementPreconfigurationRefuse
+#[derive(Clone, Debug)]
+pub struct MeasurementPreconfigurationRefuse {
+    pub gnb_cu_ue_f1ap_id: GnbCuUeF1apId,
+    pub gnb_du_ue_f1ap_id: GnbDuUeF1apId,
+    pub cause: Cause,
+    pub criticality_diagnostics: Option<CriticalityDiagnostics>,
+}
+
+impl MeasurementPreconfigurationRefuse {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_ue_f1ap_id: Option<GnbCuUeF1apId> = None;
+        let mut gnb_du_ue_f1ap_id: Option<GnbDuUeF1apId> = None;
+        let mut cause: Option<Cause> = None;
+        let mut criticality_diagnostics: Option<CriticalityDiagnostics> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                40 => gnb_cu_ue_f1ap_id = Some(GnbCuUeF1apId::decode(data)?),
+                41 => gnb_du_ue_f1ap_id = Some(GnbDuUeF1apId::decode(data)?),
+                0 => cause = Some(Cause::decode(data)?),
+                7 => criticality_diagnostics = Some(CriticalityDiagnostics::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_ue_f1ap_id = gnb_cu_ue_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_ue_f1ap_id"
+        )))?;
+        let gnb_du_ue_f1ap_id = gnb_du_ue_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_ue_f1ap_id"
+        )))?;
+        let cause = cause.ok_or(per_codec_error_new(format!("Missing mandatory IE cause")))?;
+        Ok(Self {
+            gnb_cu_ue_f1ap_id,
+            gnb_du_ue_f1ap_id,
+            cause,
+            criticality_diagnostics,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_ue_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 40, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_ue_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 41, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.cause.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 0, false)?;
+        Criticality::Ignore.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.criticality_diagnostics {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 7, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for MeasurementPreconfigurationRefuse {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MeasurementPreconfigurationRefuse::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MeasurementPreconfigurationRefuse");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MeasurementPreconfigurationRefuse");
+            e
+        })
+    }
+}
+// MeasurementActivation
+#[derive(Clone, Debug)]
+pub struct MeasurementActivation {
+    pub gnb_cu_ue_f1ap_id: GnbCuUeF1apId,
+    pub gnb_du_ue_f1ap_id: GnbDuUeF1apId,
+    pub activation_request_type: ActivationRequestType,
+    pub prs_measurement_info_list: Option<PrsMeasurementInfoList>,
+}
+
+impl MeasurementActivation {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_ue_f1ap_id: Option<GnbCuUeF1apId> = None;
+        let mut gnb_du_ue_f1ap_id: Option<GnbDuUeF1apId> = None;
+        let mut activation_request_type: Option<ActivationRequestType> = None;
+        let mut prs_measurement_info_list: Option<PrsMeasurementInfoList> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                40 => gnb_cu_ue_f1ap_id = Some(GnbCuUeF1apId::decode(data)?),
+                41 => gnb_du_ue_f1ap_id = Some(GnbDuUeF1apId::decode(data)?),
+                649 => activation_request_type = Some(ActivationRequestType::decode(data)?),
+                570 => prs_measurement_info_list = Some(PrsMeasurementInfoList::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_ue_f1ap_id = gnb_cu_ue_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_ue_f1ap_id"
+        )))?;
+        let gnb_du_ue_f1ap_id = gnb_du_ue_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_ue_f1ap_id"
+        )))?;
+        let activation_request_type = activation_request_type.ok_or(per_codec_error_new(
+            format!("Missing mandatory IE activation_request_type"),
+        ))?;
+        Ok(Self {
+            gnb_cu_ue_f1ap_id,
+            gnb_du_ue_f1ap_id,
+            activation_request_type,
+            prs_measurement_info_list,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_ue_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 40, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_ue_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 41, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.activation_request_type.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 649, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.prs_measurement_info_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 570, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for MeasurementActivation {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        MeasurementActivation::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MeasurementActivation");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("MeasurementActivation");
+            e
+        })
+    }
+}
+// QoEInformationTransfer
+#[derive(Clone, Debug)]
+pub struct QoEInformationTransfer {
+    pub gnb_cu_ue_f1ap_id: GnbCuUeF1apId,
+    pub gnb_du_ue_f1ap_id: GnbDuUeF1apId,
+    pub qo_e_information: Option<QoEInformation>,
+}
+
+impl QoEInformationTransfer {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_ue_f1ap_id: Option<GnbCuUeF1apId> = None;
+        let mut gnb_du_ue_f1ap_id: Option<GnbDuUeF1apId> = None;
+        let mut qo_e_information: Option<QoEInformation> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                40 => gnb_cu_ue_f1ap_id = Some(GnbCuUeF1apId::decode(data)?),
+                41 => gnb_du_ue_f1ap_id = Some(GnbDuUeF1apId::decode(data)?),
+                585 => qo_e_information = Some(QoEInformation::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_ue_f1ap_id = gnb_cu_ue_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_ue_f1ap_id"
+        )))?;
+        let gnb_du_ue_f1ap_id = gnb_du_ue_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_ue_f1ap_id"
+        )))?;
+        Ok(Self {
+            gnb_cu_ue_f1ap_id,
+            gnb_du_ue_f1ap_id,
+            qo_e_information,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_ue_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 40, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_ue_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 41, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.qo_e_information {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 585, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for QoEInformationTransfer {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        QoEInformationTransfer::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("QoEInformationTransfer");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("QoEInformationTransfer");
+            e
+        })
+    }
+}
+// PosSystemInformationDeliveryCommand
+#[derive(Clone, Debug)]
+pub struct PosSystemInformationDeliveryCommand {
+    pub transaction_id: TransactionId,
+    pub nr_cgi: NrCgi,
+    pub pos_si_type_list: PosSiTypeList,
+    pub confirmed_ue_id: GnbDuUeF1apId,
+}
+
+impl PosSystemInformationDeliveryCommand {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut transaction_id: Option<TransactionId> = None;
+        let mut nr_cgi: Option<NrCgi> = None;
+        let mut pos_si_type_list: Option<PosSiTypeList> = None;
+        let mut confirmed_ue_id: Option<GnbDuUeF1apId> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                78 => transaction_id = Some(TransactionId::decode(data)?),
+                111 => nr_cgi = Some(NrCgi::decode(data)?),
+                682 => pos_si_type_list = Some(PosSiTypeList::decode(data)?),
+                156 => confirmed_ue_id = Some(GnbDuUeF1apId::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let transaction_id = transaction_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE transaction_id"
+        )))?;
+        let nr_cgi = nr_cgi.ok_or(per_codec_error_new(format!("Missing mandatory IE nr_cgi")))?;
+        let pos_si_type_list = pos_si_type_list.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE pos_si_type_list"
+        )))?;
+        let confirmed_ue_id = confirmed_ue_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE confirmed_ue_id"
+        )))?;
+        Ok(Self {
+            transaction_id,
+            nr_cgi,
+            pos_si_type_list,
+            confirmed_ue_id,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.transaction_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 78, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.nr_cgi.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 111, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.pos_si_type_list.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 682, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.confirmed_ue_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 156, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for PosSystemInformationDeliveryCommand {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        PosSystemInformationDeliveryCommand::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("PosSystemInformationDeliveryCommand");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("PosSystemInformationDeliveryCommand");
+            e
+        })
+    }
+}
+// DuCuCellSwitchNotification
+#[derive(Clone, Debug)]
+pub struct DuCuCellSwitchNotification {
+    pub gnb_cu_ue_f1ap_id: GnbCuUeF1apId,
+    pub gnb_du_ue_f1ap_id: GnbDuUeF1apId,
+    pub nr_cgi: NrCgi,
+    pub ltm_cell_switch_information: Option<LtmCellSwitchInformation>,
+    pub ta_information_list: Option<TaInformationList>,
+}
+
+impl DuCuCellSwitchNotification {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_ue_f1ap_id: Option<GnbCuUeF1apId> = None;
+        let mut gnb_du_ue_f1ap_id: Option<GnbDuUeF1apId> = None;
+        let mut nr_cgi: Option<NrCgi> = None;
+        let mut ltm_cell_switch_information: Option<LtmCellSwitchInformation> = None;
+        let mut ta_information_list: Option<TaInformationList> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                40 => gnb_cu_ue_f1ap_id = Some(GnbCuUeF1apId::decode(data)?),
+                41 => gnb_du_ue_f1ap_id = Some(GnbDuUeF1apId::decode(data)?),
+                111 => nr_cgi = Some(NrCgi::decode(data)?),
+                729 => ltm_cell_switch_information = Some(LtmCellSwitchInformation::decode(data)?),
+                837 => ta_information_list = Some(TaInformationList::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_ue_f1ap_id = gnb_cu_ue_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_ue_f1ap_id"
+        )))?;
+        let gnb_du_ue_f1ap_id = gnb_du_ue_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_ue_f1ap_id"
+        )))?;
+        let nr_cgi = nr_cgi.ok_or(per_codec_error_new(format!("Missing mandatory IE nr_cgi")))?;
+        Ok(Self {
+            gnb_cu_ue_f1ap_id,
+            gnb_du_ue_f1ap_id,
+            nr_cgi,
+            ltm_cell_switch_information,
+            ta_information_list,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_ue_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 40, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_ue_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 41, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.nr_cgi.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 111, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.ltm_cell_switch_information {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 729, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.ta_information_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 837, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for DuCuCellSwitchNotification {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        DuCuCellSwitchNotification::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("DuCuCellSwitchNotification");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("DuCuCellSwitchNotification");
+            e
+        })
+    }
+}
+// CuDuCellSwitchNotification
+#[derive(Clone, Debug)]
+pub struct CuDuCellSwitchNotification {
+    pub gnb_cu_ue_f1ap_id: GnbCuUeF1apId,
+    pub gnb_du_ue_f1ap_id: GnbDuUeF1apId,
+    pub nr_cgi: NrCgi,
+    pub ltm_cell_switch_information: Option<LtmCellSwitchInformation>,
+    pub ta_information_list: Option<TaInformationList>,
+}
+
+impl CuDuCellSwitchNotification {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut gnb_cu_ue_f1ap_id: Option<GnbCuUeF1apId> = None;
+        let mut gnb_du_ue_f1ap_id: Option<GnbDuUeF1apId> = None;
+        let mut nr_cgi: Option<NrCgi> = None;
+        let mut ltm_cell_switch_information: Option<LtmCellSwitchInformation> = None;
+        let mut ta_information_list: Option<TaInformationList> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                40 => gnb_cu_ue_f1ap_id = Some(GnbCuUeF1apId::decode(data)?),
+                41 => gnb_du_ue_f1ap_id = Some(GnbDuUeF1apId::decode(data)?),
+                111 => nr_cgi = Some(NrCgi::decode(data)?),
+                729 => ltm_cell_switch_information = Some(LtmCellSwitchInformation::decode(data)?),
+                837 => ta_information_list = Some(TaInformationList::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let gnb_cu_ue_f1ap_id = gnb_cu_ue_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_cu_ue_f1ap_id"
+        )))?;
+        let gnb_du_ue_f1ap_id = gnb_du_ue_f1ap_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE gnb_du_ue_f1ap_id"
+        )))?;
+        let nr_cgi = nr_cgi.ok_or(per_codec_error_new(format!("Missing mandatory IE nr_cgi")))?;
+        Ok(Self {
+            gnb_cu_ue_f1ap_id,
+            gnb_du_ue_f1ap_id,
+            nr_cgi,
+            ltm_cell_switch_information,
+            ta_information_list,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_cu_ue_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 40, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.gnb_du_ue_f1ap_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 41, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.nr_cgi.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 111, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.ltm_cell_switch_information {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 729, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        if let Some(x) = &self.ta_information_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 837, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for CuDuCellSwitchNotification {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        CuDuCellSwitchNotification::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("CuDuCellSwitchNotification");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("CuDuCellSwitchNotification");
+            e
+        })
+    }
+}
+// DuCuTaInformationTransfer
+#[derive(Clone, Debug)]
+pub struct DuCuTaInformationTransfer {
+    pub transaction_id: TransactionId,
+    pub du_to_cu_ta_information_list: DuToCuTaInformationList,
+}
+
+impl DuCuTaInformationTransfer {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut transaction_id: Option<TransactionId> = None;
+        let mut du_to_cu_ta_information_list: Option<DuToCuTaInformationList> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                78 => transaction_id = Some(TransactionId::decode(data)?),
+                730 => du_to_cu_ta_information_list = Some(DuToCuTaInformationList::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let transaction_id = transaction_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE transaction_id"
+        )))?;
+        let du_to_cu_ta_information_list = du_to_cu_ta_information_list.ok_or(
+            per_codec_error_new(format!("Missing mandatory IE du_to_cu_ta_information_list")),
+        )?;
+        Ok(Self {
+            transaction_id,
+            du_to_cu_ta_information_list,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.transaction_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 78, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.du_to_cu_ta_information_list.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 730, false)?;
+        Criticality::Ignore.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for DuCuTaInformationTransfer {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        DuCuTaInformationTransfer::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("DuCuTaInformationTransfer");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("DuCuTaInformationTransfer");
+            e
+        })
+    }
+}
+// CuDuTaInformationTransfer
+#[derive(Clone, Debug)]
+pub struct CuDuTaInformationTransfer {
+    pub transaction_id: TransactionId,
+    pub cu_to_du_ta_information_list: CuToDuTaInformationList,
+}
+
+impl CuDuTaInformationTransfer {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut transaction_id: Option<TransactionId> = None;
+        let mut cu_to_du_ta_information_list: Option<CuToDuTaInformationList> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                78 => transaction_id = Some(TransactionId::decode(data)?),
+                798 => cu_to_du_ta_information_list = Some(CuToDuTaInformationList::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let transaction_id = transaction_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE transaction_id"
+        )))?;
+        let cu_to_du_ta_information_list = cu_to_du_ta_information_list.ok_or(
+            per_codec_error_new(format!("Missing mandatory IE cu_to_du_ta_information_list")),
+        )?;
+        Ok(Self {
+            transaction_id,
+            cu_to_du_ta_information_list,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.transaction_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 78, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.cu_to_du_ta_information_list.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 798, false)?;
+        Criticality::Ignore.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for CuDuTaInformationTransfer {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        CuDuTaInformationTransfer::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("CuDuTaInformationTransfer");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("CuDuTaInformationTransfer");
+            e
+        })
+    }
+}
+// QoEInformationTransferControl
+#[derive(Clone, Debug)]
+pub struct QoEInformationTransferControl {
+    pub transaction_id: TransactionId,
+    pub deactivation_indication: Option<DeactivationIndication>,
+}
+
+impl QoEInformationTransferControl {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut transaction_id: Option<TransactionId> = None;
+        let mut deactivation_indication: Option<DeactivationIndication> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                78 => transaction_id = Some(TransactionId::decode(data)?),
+                733 => deactivation_indication = Some(DeactivationIndication::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let transaction_id = transaction_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE transaction_id"
+        )))?;
+        Ok(Self {
+            transaction_id,
+            deactivation_indication,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.transaction_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 78, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.deactivation_indication {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 733, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for QoEInformationTransferControl {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        QoEInformationTransferControl::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("QoEInformationTransferControl");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("QoEInformationTransferControl");
+            e
+        })
+    }
+}
+// RachIndication
+#[derive(Clone, Debug)]
+pub struct RachIndication {
+    pub transaction_id: TransactionId,
+    pub ra_report_indication_list: RaReportIndicationList,
+}
+
+impl RachIndication {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut transaction_id: Option<TransactionId> = None;
+        let mut ra_report_indication_list: Option<RaReportIndicationList> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                78 => transaction_id = Some(TransactionId::decode(data)?),
+                734 => ra_report_indication_list = Some(RaReportIndicationList::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let transaction_id = transaction_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE transaction_id"
+        )))?;
+        let ra_report_indication_list = ra_report_indication_list.ok_or(per_codec_error_new(
+            format!("Missing mandatory IE ra_report_indication_list"),
+        ))?;
+        Ok(Self {
+            transaction_id,
+            ra_report_indication_list,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.transaction_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 78, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.ra_report_indication_list.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 734, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for RachIndication {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        RachIndication::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("RachIndication");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("RachIndication");
+            e
+        })
+    }
+}
+// TimingSynchronisationStatusRequest
+#[derive(Clone, Debug)]
+pub struct TimingSynchronisationStatusRequest {
+    pub transaction_id: TransactionId,
+    pub rantss_request_type: RantssRequestType,
+}
+
+impl TimingSynchronisationStatusRequest {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut transaction_id: Option<TransactionId> = None;
+        let mut rantss_request_type: Option<RantssRequestType> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                78 => transaction_id = Some(TransactionId::decode(data)?),
+                749 => rantss_request_type = Some(RantssRequestType::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let transaction_id = transaction_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE transaction_id"
+        )))?;
+        let rantss_request_type = rantss_request_type.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE rantss_request_type"
+        )))?;
+        Ok(Self {
+            transaction_id,
+            rantss_request_type,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.transaction_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 78, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.rantss_request_type.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 749, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for TimingSynchronisationStatusRequest {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        TimingSynchronisationStatusRequest::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("TimingSynchronisationStatusRequest");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("TimingSynchronisationStatusRequest");
+            e
+        })
+    }
+}
+// TimingSynchronisationStatusResponse
+#[derive(Clone, Debug)]
+pub struct TimingSynchronisationStatusResponse {
+    pub transaction_id: TransactionId,
+    pub criticality_diagnostics: Option<CriticalityDiagnostics>,
+}
+
+impl TimingSynchronisationStatusResponse {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut transaction_id: Option<TransactionId> = None;
+        let mut criticality_diagnostics: Option<CriticalityDiagnostics> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                78 => transaction_id = Some(TransactionId::decode(data)?),
+                7 => criticality_diagnostics = Some(CriticalityDiagnostics::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let transaction_id = transaction_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE transaction_id"
+        )))?;
+        Ok(Self {
+            transaction_id,
+            criticality_diagnostics,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.transaction_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 78, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.criticality_diagnostics {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 7, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for TimingSynchronisationStatusResponse {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        TimingSynchronisationStatusResponse::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("TimingSynchronisationStatusResponse");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("TimingSynchronisationStatusResponse");
+            e
+        })
+    }
+}
+// TimingSynchronisationStatusFailure
+#[derive(Clone, Debug)]
+pub struct TimingSynchronisationStatusFailure {
+    pub transaction_id: TransactionId,
+    pub cause: Cause,
+    pub criticality_diagnostics: Option<CriticalityDiagnostics>,
+}
+
+impl TimingSynchronisationStatusFailure {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut transaction_id: Option<TransactionId> = None;
+        let mut cause: Option<Cause> = None;
+        let mut criticality_diagnostics: Option<CriticalityDiagnostics> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                78 => transaction_id = Some(TransactionId::decode(data)?),
+                0 => cause = Some(Cause::decode(data)?),
+                7 => criticality_diagnostics = Some(CriticalityDiagnostics::decode(data)?),
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let transaction_id = transaction_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE transaction_id"
+        )))?;
+        let cause = cause.ok_or(per_codec_error_new(format!("Missing mandatory IE cause")))?;
+        Ok(Self {
+            transaction_id,
+            cause,
+            criticality_diagnostics,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.transaction_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 78, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.cause.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 0, false)?;
+        Criticality::Ignore.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.criticality_diagnostics {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 7, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for TimingSynchronisationStatusFailure {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        TimingSynchronisationStatusFailure::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("TimingSynchronisationStatusFailure");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("TimingSynchronisationStatusFailure");
+            e
+        })
+    }
+}
+// TimingSynchronisationStatusReport
+#[derive(Clone, Debug)]
+pub struct TimingSynchronisationStatusReport {
+    pub transaction_id: TransactionId,
+    pub ran_timing_synchronisation_status_info: RanTimingSynchronisationStatusInfo,
+}
+
+impl TimingSynchronisationStatusReport {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut transaction_id: Option<TransactionId> = None;
+        let mut ran_timing_synchronisation_status_info: Option<RanTimingSynchronisationStatusInfo> =
+            None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                78 => transaction_id = Some(TransactionId::decode(data)?),
+                750 => {
+                    ran_timing_synchronisation_status_info =
+                        Some(RanTimingSynchronisationStatusInfo::decode(data)?)
+                }
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let transaction_id = transaction_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE transaction_id"
+        )))?;
+        let ran_timing_synchronisation_status_info =
+            ran_timing_synchronisation_status_info.ok_or(per_codec_error_new(format!(
+                "Missing mandatory IE ran_timing_synchronisation_status_info"
+            )))?;
+        Ok(Self {
+            transaction_id,
+            ran_timing_synchronisation_status_info,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.transaction_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 78, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        let ie = &mut Allocator::new_codec_data();
+        self.ran_timing_synchronisation_status_info.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 750, false)?;
+        Criticality::Ignore.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for TimingSynchronisationStatusReport {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        TimingSynchronisationStatusReport::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("TimingSynchronisationStatusReport");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("TimingSynchronisationStatusReport");
+            e
+        })
+    }
+}
+// DuCuAccessAndMobilityIndication
+#[derive(Clone, Debug)]
+pub struct DuCuAccessAndMobilityIndication {
+    pub transaction_id: TransactionId,
+    pub dllbt_failure_information_list: Option<DllbtFailureInformationList>,
+}
+
+impl DuCuAccessAndMobilityIndication {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        let _ = decode::decode_sequence_header(data, true, 0)?;
+        let num_ies = decode::decode_length_determinent(data, Some(0), Some(65535), false)?;
+
+        let mut transaction_id: Option<TransactionId> = None;
+        let mut dllbt_failure_information_list: Option<DllbtFailureInformationList> = None;
+
+        for _ in 0..num_ies {
+            let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
+            let _ = Criticality::decode(data)?;
+            let _ = decode::decode_length_determinent(data, None, None, false)?;
+            match id {
+                78 => transaction_id = Some(TransactionId::decode(data)?),
+                795 => {
+                    dllbt_failure_information_list =
+                        Some(DllbtFailureInformationList::decode(data)?)
+                }
+                x => return Err(per_codec_error_new(format!("Unrecognised IE type {}", x))),
+            }
+            data.decode_align()?;
+        }
+        let transaction_id = transaction_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE transaction_id"
+        )))?;
+        Ok(Self {
+            transaction_id,
+            dllbt_failure_information_list,
+        })
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        let mut num_ies = 0;
+        let ies = &mut Allocator::new_codec_data();
+
+        let ie = &mut Allocator::new_codec_data();
+        self.transaction_id.encode(ie)?;
+        encode::encode_integer(ies, Some(0), Some(65535), false, 78, false)?;
+        Criticality::Reject.encode(ies)?;
+        encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+        ies.append_aligned(ie);
+        num_ies += 1;
+
+        if let Some(x) = &self.dllbt_failure_information_list {
+            let ie = &mut Allocator::new_codec_data();
+            x.encode(ie)?;
+            encode::encode_integer(ies, Some(0), Some(65535), false, 795, false)?;
+            Criticality::Ignore.encode(ies)?;
+            encode::encode_length_determinent(ies, None, None, false, ie.length_in_bytes())?;
+            ies.append_aligned(ie);
+            num_ies += 1;
+        }
+
+        encode::encode_sequence_header(data, true, &BitString::new(), false)?;
+        encode::encode_length_determinent(data, Some(0), Some(65535), false, num_ies)?;
+        data.append_aligned(ies);
+        Ok(())
+    }
+}
+
+impl PerCodec for DuCuAccessAndMobilityIndication {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        DuCuAccessAndMobilityIndication::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("DuCuAccessAndMobilityIndication");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("DuCuAccessAndMobilityIndication");
+            e
+        })
+    }
+}
 // Aperiodic
 #[derive(Clone, Debug, Copy, TryFromPrimitive)]
-#[repr(u8)]
+#[repr(u32)]
 pub enum Aperiodic {
     True,
 }
 
 impl Aperiodic {
     fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
-        let (idx, extended) = decode::decode_enumerated(data, Some(0), Some(0), true)?;
-        if extended {
-            return Err(per_codec_error_new("Extended enum not implemented"));
-        }
-        Self::try_from(idx as u8).map_err(|_| per_codec_error_new("Unknown enum variant"))
+        let (idx, _extended) = decode::decode_enumerated(data, Some(0), Some(0), true)?;
+        Self::try_from(idx as u32).map_err(|_| per_codec_error_new("Unknown enum variant"))
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
-        encode::encode_enumerated(data, Some(0), Some(0), true, *self as i128, false)
+        encode::encode_enumerated(
+            data,
+            Some(0),
+            Some(0),
+            true,
+            *self as i128,
+            (*self as u32) >= 1,
+        )
     }
 }
 

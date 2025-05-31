@@ -52,7 +52,8 @@ fn test_f1_response_encode_decode() -> Result<(), PerCodecError> {
         transport_layer_address_info: None,
         ul_bh_non_up_traffic_mapping: None,
         bap_address: Some(BapAddress(bitvec![u8, Msb0;0, 0,0,0,0,0,0,0,0,0])),
-        extended_gnb_du_name: None,
+        ncgi_to_be_updated_list: None,
+        extended_gnb_cu_name: None,
     };
 
     let bytes = f1_setup_reponse.into_bytes()?;

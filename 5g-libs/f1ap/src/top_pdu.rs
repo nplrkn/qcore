@@ -4,9 +4,9 @@ use super::pdu::*;
 use crate::common::Criticality;
 use anyhow::Result;
 use asn1_per::{aper::*, *};
-use xxap::*;
 use async_trait::async_trait;
 use slog::Logger;
+use xxap::*;
 
 // F1apPdu
 #[derive(Clone, Debug)]
@@ -1840,6 +1840,1162 @@ impl Indication for PositioningInformationUpdateProcedure {
     }
 }
 
+pub struct BroadcastContextSetupProcedure {}
+
+#[async_trait]
+impl Procedure for BroadcastContextSetupProcedure {
+    type TopPdu = F1apPdu;
+    type Request = BroadcastContextSetupRequest;
+    type Success = BroadcastContextSetupResponse;
+    type Failure = BroadcastContextSetupFailure;
+    const CODE: u8 = 59;
+
+    async fn call_provider<T: RequestProvider<Self>>(
+        provider: &T,
+        req: BroadcastContextSetupRequest,
+        logger: &Logger,
+    ) -> Option<ResponseAction<F1apPdu>> {
+        match <T as RequestProvider<BroadcastContextSetupProcedure>>::request(provider, req, logger)
+            .await
+        {
+            Ok((r, f)) => Some((
+                F1apPdu::SuccessfulOutcome(SuccessfulOutcome::BroadcastContextSetupResponse(r)),
+                f,
+            )),
+            Err(_) => todo!(),
+        }
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::BroadcastContextSetupRequest(r)).into_bytes()
+    }
+
+    fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
+        let response_pdu = Self::TopPdu::from_bytes(bytes)?;
+        match response_pdu {
+            F1apPdu::SuccessfulOutcome(SuccessfulOutcome::BroadcastContextSetupResponse(x)) => {
+                Ok(x)
+            }
+            F1apPdu::UnsuccessfulOutcome(UnsuccessfulOutcome::BroadcastContextSetupFailure(x)) => {
+                Err(RequestError::UnsuccessfulOutcome(x))
+            }
+            _ => Err(RequestError::Other("Unexpected pdu contents".to_string())),
+        }
+    }
+}
+
+pub struct BroadcastContextReleaseProcedure {}
+
+#[async_trait]
+impl Procedure for BroadcastContextReleaseProcedure {
+    type TopPdu = F1apPdu;
+    type Request = BroadcastContextReleaseCommand;
+    type Success = BroadcastContextReleaseComplete;
+    type Failure = ();
+    const CODE: u8 = 60;
+
+    async fn call_provider<T: RequestProvider<Self>>(
+        provider: &T,
+        req: BroadcastContextReleaseCommand,
+        logger: &Logger,
+    ) -> Option<ResponseAction<F1apPdu>> {
+        match <T as RequestProvider<BroadcastContextReleaseProcedure>>::request(
+            provider, req, logger,
+        )
+        .await
+        {
+            Ok((r, f)) => Some((
+                F1apPdu::SuccessfulOutcome(SuccessfulOutcome::BroadcastContextReleaseComplete(r)),
+                f,
+            )),
+            Err(_) => todo!(),
+        }
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::BroadcastContextReleaseCommand(r))
+            .into_bytes()
+    }
+
+    fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
+        let response_pdu = Self::TopPdu::from_bytes(bytes)?;
+        match response_pdu {
+            F1apPdu::SuccessfulOutcome(SuccessfulOutcome::BroadcastContextReleaseComplete(x)) => {
+                Ok(x)
+            }
+
+            _ => Err(RequestError::Other("Unexpected pdu contents".to_string())),
+        }
+    }
+}
+
+pub struct BroadcastContextReleaseRequestProcedure {}
+
+#[async_trait]
+impl Indication for BroadcastContextReleaseRequestProcedure {
+    type TopPdu = F1apPdu;
+    type Request = BroadcastContextReleaseRequest;
+    const CODE: u8 = 61;
+
+    async fn call_provider<T: IndicationHandler<Self>>(
+        provider: &T,
+        req: BroadcastContextReleaseRequest,
+        logger: &Logger,
+    ) {
+        <T as IndicationHandler<BroadcastContextReleaseRequestProcedure>>::handle(
+            provider, req, logger,
+        )
+        .await;
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::BroadcastContextReleaseRequest(r))
+            .into_bytes()
+    }
+}
+
+pub struct BroadcastContextModificationProcedure {}
+
+#[async_trait]
+impl Procedure for BroadcastContextModificationProcedure {
+    type TopPdu = F1apPdu;
+    type Request = BroadcastContextModificationRequest;
+    type Success = BroadcastContextModificationResponse;
+    type Failure = BroadcastContextModificationFailure;
+    const CODE: u8 = 62;
+
+    async fn call_provider<T: RequestProvider<Self>>(
+        provider: &T,
+        req: BroadcastContextModificationRequest,
+        logger: &Logger,
+    ) -> Option<ResponseAction<F1apPdu>> {
+        match <T as RequestProvider<BroadcastContextModificationProcedure>>::request(
+            provider, req, logger,
+        )
+        .await
+        {
+            Ok((r, f)) => Some((
+                F1apPdu::SuccessfulOutcome(
+                    SuccessfulOutcome::BroadcastContextModificationResponse(r),
+                ),
+                f,
+            )),
+            Err(_) => todo!(),
+        }
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::BroadcastContextModificationRequest(r))
+            .into_bytes()
+    }
+
+    fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
+        let response_pdu = Self::TopPdu::from_bytes(bytes)?;
+        match response_pdu {
+            F1apPdu::SuccessfulOutcome(
+                SuccessfulOutcome::BroadcastContextModificationResponse(x),
+            ) => Ok(x),
+            F1apPdu::UnsuccessfulOutcome(
+                UnsuccessfulOutcome::BroadcastContextModificationFailure(x),
+            ) => Err(RequestError::UnsuccessfulOutcome(x)),
+            _ => Err(RequestError::Other("Unexpected pdu contents".to_string())),
+        }
+    }
+}
+
+pub struct MulticastGroupPagingProcedure {}
+
+#[async_trait]
+impl Indication for MulticastGroupPagingProcedure {
+    type TopPdu = F1apPdu;
+    type Request = MulticastGroupPaging;
+    const CODE: u8 = 63;
+
+    async fn call_provider<T: IndicationHandler<Self>>(
+        provider: &T,
+        req: MulticastGroupPaging,
+        logger: &Logger,
+    ) {
+        <T as IndicationHandler<MulticastGroupPagingProcedure>>::handle(provider, req, logger)
+            .await;
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::MulticastGroupPaging(r)).into_bytes()
+    }
+}
+
+pub struct MulticastContextSetupProcedure {}
+
+#[async_trait]
+impl Procedure for MulticastContextSetupProcedure {
+    type TopPdu = F1apPdu;
+    type Request = MulticastContextSetupRequest;
+    type Success = MulticastContextSetupResponse;
+    type Failure = MulticastContextSetupFailure;
+    const CODE: u8 = 64;
+
+    async fn call_provider<T: RequestProvider<Self>>(
+        provider: &T,
+        req: MulticastContextSetupRequest,
+        logger: &Logger,
+    ) -> Option<ResponseAction<F1apPdu>> {
+        match <T as RequestProvider<MulticastContextSetupProcedure>>::request(provider, req, logger)
+            .await
+        {
+            Ok((r, f)) => Some((
+                F1apPdu::SuccessfulOutcome(SuccessfulOutcome::MulticastContextSetupResponse(r)),
+                f,
+            )),
+            Err(_) => todo!(),
+        }
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::MulticastContextSetupRequest(r)).into_bytes()
+    }
+
+    fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
+        let response_pdu = Self::TopPdu::from_bytes(bytes)?;
+        match response_pdu {
+            F1apPdu::SuccessfulOutcome(SuccessfulOutcome::MulticastContextSetupResponse(x)) => {
+                Ok(x)
+            }
+            F1apPdu::UnsuccessfulOutcome(UnsuccessfulOutcome::MulticastContextSetupFailure(x)) => {
+                Err(RequestError::UnsuccessfulOutcome(x))
+            }
+            _ => Err(RequestError::Other("Unexpected pdu contents".to_string())),
+        }
+    }
+}
+
+pub struct MulticastContextReleaseProcedure {}
+
+#[async_trait]
+impl Procedure for MulticastContextReleaseProcedure {
+    type TopPdu = F1apPdu;
+    type Request = MulticastContextReleaseCommand;
+    type Success = MulticastContextReleaseComplete;
+    type Failure = ();
+    const CODE: u8 = 65;
+
+    async fn call_provider<T: RequestProvider<Self>>(
+        provider: &T,
+        req: MulticastContextReleaseCommand,
+        logger: &Logger,
+    ) -> Option<ResponseAction<F1apPdu>> {
+        match <T as RequestProvider<MulticastContextReleaseProcedure>>::request(
+            provider, req, logger,
+        )
+        .await
+        {
+            Ok((r, f)) => Some((
+                F1apPdu::SuccessfulOutcome(SuccessfulOutcome::MulticastContextReleaseComplete(r)),
+                f,
+            )),
+            Err(_) => todo!(),
+        }
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::MulticastContextReleaseCommand(r))
+            .into_bytes()
+    }
+
+    fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
+        let response_pdu = Self::TopPdu::from_bytes(bytes)?;
+        match response_pdu {
+            F1apPdu::SuccessfulOutcome(SuccessfulOutcome::MulticastContextReleaseComplete(x)) => {
+                Ok(x)
+            }
+
+            _ => Err(RequestError::Other("Unexpected pdu contents".to_string())),
+        }
+    }
+}
+
+pub struct MulticastContextReleaseRequestProcedure {}
+
+#[async_trait]
+impl Indication for MulticastContextReleaseRequestProcedure {
+    type TopPdu = F1apPdu;
+    type Request = MulticastContextReleaseRequest;
+    const CODE: u8 = 66;
+
+    async fn call_provider<T: IndicationHandler<Self>>(
+        provider: &T,
+        req: MulticastContextReleaseRequest,
+        logger: &Logger,
+    ) {
+        <T as IndicationHandler<MulticastContextReleaseRequestProcedure>>::handle(
+            provider, req, logger,
+        )
+        .await;
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::MulticastContextReleaseRequest(r))
+            .into_bytes()
+    }
+}
+
+pub struct MulticastContextModificationProcedure {}
+
+#[async_trait]
+impl Procedure for MulticastContextModificationProcedure {
+    type TopPdu = F1apPdu;
+    type Request = MulticastContextModificationRequest;
+    type Success = MulticastContextModificationResponse;
+    type Failure = MulticastContextModificationFailure;
+    const CODE: u8 = 67;
+
+    async fn call_provider<T: RequestProvider<Self>>(
+        provider: &T,
+        req: MulticastContextModificationRequest,
+        logger: &Logger,
+    ) -> Option<ResponseAction<F1apPdu>> {
+        match <T as RequestProvider<MulticastContextModificationProcedure>>::request(
+            provider, req, logger,
+        )
+        .await
+        {
+            Ok((r, f)) => Some((
+                F1apPdu::SuccessfulOutcome(
+                    SuccessfulOutcome::MulticastContextModificationResponse(r),
+                ),
+                f,
+            )),
+            Err(_) => todo!(),
+        }
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::MulticastContextModificationRequest(r))
+            .into_bytes()
+    }
+
+    fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
+        let response_pdu = Self::TopPdu::from_bytes(bytes)?;
+        match response_pdu {
+            F1apPdu::SuccessfulOutcome(
+                SuccessfulOutcome::MulticastContextModificationResponse(x),
+            ) => Ok(x),
+            F1apPdu::UnsuccessfulOutcome(
+                UnsuccessfulOutcome::MulticastContextModificationFailure(x),
+            ) => Err(RequestError::UnsuccessfulOutcome(x)),
+            _ => Err(RequestError::Other("Unexpected pdu contents".to_string())),
+        }
+    }
+}
+
+pub struct MulticastDistributionSetupProcedure {}
+
+#[async_trait]
+impl Procedure for MulticastDistributionSetupProcedure {
+    type TopPdu = F1apPdu;
+    type Request = MulticastDistributionSetupRequest;
+    type Success = MulticastDistributionSetupResponse;
+    type Failure = MulticastDistributionSetupFailure;
+    const CODE: u8 = 68;
+
+    async fn call_provider<T: RequestProvider<Self>>(
+        provider: &T,
+        req: MulticastDistributionSetupRequest,
+        logger: &Logger,
+    ) -> Option<ResponseAction<F1apPdu>> {
+        match <T as RequestProvider<MulticastDistributionSetupProcedure>>::request(
+            provider, req, logger,
+        )
+        .await
+        {
+            Ok((r, f)) => Some((
+                F1apPdu::SuccessfulOutcome(SuccessfulOutcome::MulticastDistributionSetupResponse(
+                    r,
+                )),
+                f,
+            )),
+            Err(_) => todo!(),
+        }
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::MulticastDistributionSetupRequest(r))
+            .into_bytes()
+    }
+
+    fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
+        let response_pdu = Self::TopPdu::from_bytes(bytes)?;
+        match response_pdu {
+            F1apPdu::SuccessfulOutcome(SuccessfulOutcome::MulticastDistributionSetupResponse(
+                x,
+            )) => Ok(x),
+            F1apPdu::UnsuccessfulOutcome(
+                UnsuccessfulOutcome::MulticastDistributionSetupFailure(x),
+            ) => Err(RequestError::UnsuccessfulOutcome(x)),
+            _ => Err(RequestError::Other("Unexpected pdu contents".to_string())),
+        }
+    }
+}
+
+pub struct MulticastDistributionReleaseProcedure {}
+
+#[async_trait]
+impl Procedure for MulticastDistributionReleaseProcedure {
+    type TopPdu = F1apPdu;
+    type Request = MulticastDistributionReleaseCommand;
+    type Success = MulticastDistributionReleaseComplete;
+    type Failure = ();
+    const CODE: u8 = 69;
+
+    async fn call_provider<T: RequestProvider<Self>>(
+        provider: &T,
+        req: MulticastDistributionReleaseCommand,
+        logger: &Logger,
+    ) -> Option<ResponseAction<F1apPdu>> {
+        match <T as RequestProvider<MulticastDistributionReleaseProcedure>>::request(
+            provider, req, logger,
+        )
+        .await
+        {
+            Ok((r, f)) => Some((
+                F1apPdu::SuccessfulOutcome(
+                    SuccessfulOutcome::MulticastDistributionReleaseComplete(r),
+                ),
+                f,
+            )),
+            Err(_) => todo!(),
+        }
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::MulticastDistributionReleaseCommand(r))
+            .into_bytes()
+    }
+
+    fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
+        let response_pdu = Self::TopPdu::from_bytes(bytes)?;
+        match response_pdu {
+            F1apPdu::SuccessfulOutcome(
+                SuccessfulOutcome::MulticastDistributionReleaseComplete(x),
+            ) => Ok(x),
+
+            _ => Err(RequestError::Other("Unexpected pdu contents".to_string())),
+        }
+    }
+}
+
+pub struct PdcMeasurementInitiationProcedure {}
+
+#[async_trait]
+impl Procedure for PdcMeasurementInitiationProcedure {
+    type TopPdu = F1apPdu;
+    type Request = PdcMeasurementInitiationRequest;
+    type Success = PdcMeasurementInitiationResponse;
+    type Failure = PdcMeasurementInitiationFailure;
+    const CODE: u8 = 70;
+
+    async fn call_provider<T: RequestProvider<Self>>(
+        provider: &T,
+        req: PdcMeasurementInitiationRequest,
+        logger: &Logger,
+    ) -> Option<ResponseAction<F1apPdu>> {
+        match <T as RequestProvider<PdcMeasurementInitiationProcedure>>::request(
+            provider, req, logger,
+        )
+        .await
+        {
+            Ok((r, f)) => Some((
+                F1apPdu::SuccessfulOutcome(SuccessfulOutcome::PdcMeasurementInitiationResponse(r)),
+                f,
+            )),
+            Err(_) => todo!(),
+        }
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::PdcMeasurementInitiationRequest(r))
+            .into_bytes()
+    }
+
+    fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
+        let response_pdu = Self::TopPdu::from_bytes(bytes)?;
+        match response_pdu {
+            F1apPdu::SuccessfulOutcome(SuccessfulOutcome::PdcMeasurementInitiationResponse(x)) => {
+                Ok(x)
+            }
+            F1apPdu::UnsuccessfulOutcome(UnsuccessfulOutcome::PdcMeasurementInitiationFailure(
+                x,
+            )) => Err(RequestError::UnsuccessfulOutcome(x)),
+            _ => Err(RequestError::Other("Unexpected pdu contents".to_string())),
+        }
+    }
+}
+
+pub struct PdcMeasurementReportProcedure {}
+
+#[async_trait]
+impl Indication for PdcMeasurementReportProcedure {
+    type TopPdu = F1apPdu;
+    type Request = PdcMeasurementReport;
+    const CODE: u8 = 71;
+
+    async fn call_provider<T: IndicationHandler<Self>>(
+        provider: &T,
+        req: PdcMeasurementReport,
+        logger: &Logger,
+    ) {
+        <T as IndicationHandler<PdcMeasurementReportProcedure>>::handle(provider, req, logger)
+            .await;
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::PdcMeasurementReport(r)).into_bytes()
+    }
+}
+
+pub struct PdcMeasurementTerminationCommandProcedure {}
+
+#[async_trait]
+impl Indication for PdcMeasurementTerminationCommandProcedure {
+    type TopPdu = F1apPdu;
+    type Request = PdcMeasurementTerminationCommand;
+    const CODE: u8 = 79;
+
+    async fn call_provider<T: IndicationHandler<Self>>(
+        provider: &T,
+        req: PdcMeasurementTerminationCommand,
+        logger: &Logger,
+    ) {
+        <T as IndicationHandler<PdcMeasurementTerminationCommandProcedure>>::handle(
+            provider, req, logger,
+        )
+        .await;
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::PdcMeasurementTerminationCommand(r))
+            .into_bytes()
+    }
+}
+
+pub struct PdcMeasurementFailureIndicationProcedure {}
+
+#[async_trait]
+impl Indication for PdcMeasurementFailureIndicationProcedure {
+    type TopPdu = F1apPdu;
+    type Request = PdcMeasurementFailureIndication;
+    const CODE: u8 = 80;
+
+    async fn call_provider<T: IndicationHandler<Self>>(
+        provider: &T,
+        req: PdcMeasurementFailureIndication,
+        logger: &Logger,
+    ) {
+        <T as IndicationHandler<PdcMeasurementFailureIndicationProcedure>>::handle(
+            provider, req, logger,
+        )
+        .await;
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::PdcMeasurementFailureIndication(r))
+            .into_bytes()
+    }
+}
+
+pub struct PrsConfigurationExchangeProcedure {}
+
+#[async_trait]
+impl Procedure for PrsConfigurationExchangeProcedure {
+    type TopPdu = F1apPdu;
+    type Request = PrsConfigurationRequest;
+    type Success = PrsConfigurationResponse;
+    type Failure = PrsConfigurationFailure;
+    const CODE: u8 = 75;
+
+    async fn call_provider<T: RequestProvider<Self>>(
+        provider: &T,
+        req: PrsConfigurationRequest,
+        logger: &Logger,
+    ) -> Option<ResponseAction<F1apPdu>> {
+        match <T as RequestProvider<PrsConfigurationExchangeProcedure>>::request(
+            provider, req, logger,
+        )
+        .await
+        {
+            Ok((r, f)) => Some((
+                F1apPdu::SuccessfulOutcome(SuccessfulOutcome::PrsConfigurationResponse(r)),
+                f,
+            )),
+            Err(_) => todo!(),
+        }
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::PrsConfigurationRequest(r)).into_bytes()
+    }
+
+    fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
+        let response_pdu = Self::TopPdu::from_bytes(bytes)?;
+        match response_pdu {
+            F1apPdu::SuccessfulOutcome(SuccessfulOutcome::PrsConfigurationResponse(x)) => Ok(x),
+            F1apPdu::UnsuccessfulOutcome(UnsuccessfulOutcome::PrsConfigurationFailure(x)) => {
+                Err(RequestError::UnsuccessfulOutcome(x))
+            }
+            _ => Err(RequestError::Other("Unexpected pdu contents".to_string())),
+        }
+    }
+}
+
+pub struct MeasurementPreconfigurationProcedure {}
+
+#[async_trait]
+impl Procedure for MeasurementPreconfigurationProcedure {
+    type TopPdu = F1apPdu;
+    type Request = MeasurementPreconfigurationRequired;
+    type Success = MeasurementPreconfigurationConfirm;
+    type Failure = MeasurementPreconfigurationRefuse;
+    const CODE: u8 = 76;
+
+    async fn call_provider<T: RequestProvider<Self>>(
+        provider: &T,
+        req: MeasurementPreconfigurationRequired,
+        logger: &Logger,
+    ) -> Option<ResponseAction<F1apPdu>> {
+        match <T as RequestProvider<MeasurementPreconfigurationProcedure>>::request(
+            provider, req, logger,
+        )
+        .await
+        {
+            Ok((r, f)) => Some((
+                F1apPdu::SuccessfulOutcome(SuccessfulOutcome::MeasurementPreconfigurationConfirm(
+                    r,
+                )),
+                f,
+            )),
+            Err(_) => todo!(),
+        }
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::MeasurementPreconfigurationRequired(r))
+            .into_bytes()
+    }
+
+    fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
+        let response_pdu = Self::TopPdu::from_bytes(bytes)?;
+        match response_pdu {
+            F1apPdu::SuccessfulOutcome(SuccessfulOutcome::MeasurementPreconfigurationConfirm(
+                x,
+            )) => Ok(x),
+            F1apPdu::UnsuccessfulOutcome(
+                UnsuccessfulOutcome::MeasurementPreconfigurationRefuse(x),
+            ) => Err(RequestError::UnsuccessfulOutcome(x)),
+            _ => Err(RequestError::Other("Unexpected pdu contents".to_string())),
+        }
+    }
+}
+
+pub struct MeasurementActivationProcedure {}
+
+#[async_trait]
+impl Indication for MeasurementActivationProcedure {
+    type TopPdu = F1apPdu;
+    type Request = MeasurementActivation;
+    const CODE: u8 = 77;
+
+    async fn call_provider<T: IndicationHandler<Self>>(
+        provider: &T,
+        req: MeasurementActivation,
+        logger: &Logger,
+    ) {
+        <T as IndicationHandler<MeasurementActivationProcedure>>::handle(provider, req, logger)
+            .await;
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::MeasurementActivation(r)).into_bytes()
+    }
+}
+
+pub struct QoEInformationTransferProcedure {}
+
+#[async_trait]
+impl Indication for QoEInformationTransferProcedure {
+    type TopPdu = F1apPdu;
+    type Request = QoEInformationTransfer;
+    const CODE: u8 = 78;
+
+    async fn call_provider<T: IndicationHandler<Self>>(
+        provider: &T,
+        req: QoEInformationTransfer,
+        logger: &Logger,
+    ) {
+        <T as IndicationHandler<QoEInformationTransferProcedure>>::handle(provider, req, logger)
+            .await;
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::QoEInformationTransfer(r)).into_bytes()
+    }
+}
+
+pub struct PosSystemInformationDeliveryProcedure {}
+
+#[async_trait]
+impl Indication for PosSystemInformationDeliveryProcedure {
+    type TopPdu = F1apPdu;
+    type Request = PosSystemInformationDeliveryCommand;
+    const CODE: u8 = 81;
+
+    async fn call_provider<T: IndicationHandler<Self>>(
+        provider: &T,
+        req: PosSystemInformationDeliveryCommand,
+        logger: &Logger,
+    ) {
+        <T as IndicationHandler<PosSystemInformationDeliveryProcedure>>::handle(
+            provider, req, logger,
+        )
+        .await;
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::PosSystemInformationDeliveryCommand(r))
+            .into_bytes()
+    }
+}
+
+pub struct DuCuCellSwitchNotificationProcedure {}
+
+#[async_trait]
+impl Indication for DuCuCellSwitchNotificationProcedure {
+    type TopPdu = F1apPdu;
+    type Request = DuCuCellSwitchNotification;
+    const CODE: u8 = 82;
+
+    async fn call_provider<T: IndicationHandler<Self>>(
+        provider: &T,
+        req: DuCuCellSwitchNotification,
+        logger: &Logger,
+    ) {
+        <T as IndicationHandler<DuCuCellSwitchNotificationProcedure>>::handle(
+            provider, req, logger,
+        )
+        .await;
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::DuCuCellSwitchNotification(r)).into_bytes()
+    }
+}
+
+pub struct CuDuCellSwitchNotificationProcedure {}
+
+#[async_trait]
+impl Indication for CuDuCellSwitchNotificationProcedure {
+    type TopPdu = F1apPdu;
+    type Request = CuDuCellSwitchNotification;
+    const CODE: u8 = 83;
+
+    async fn call_provider<T: IndicationHandler<Self>>(
+        provider: &T,
+        req: CuDuCellSwitchNotification,
+        logger: &Logger,
+    ) {
+        <T as IndicationHandler<CuDuCellSwitchNotificationProcedure>>::handle(
+            provider, req, logger,
+        )
+        .await;
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::CuDuCellSwitchNotification(r)).into_bytes()
+    }
+}
+
+pub struct DuCuTaInformationTransferProcedure {}
+
+#[async_trait]
+impl Indication for DuCuTaInformationTransferProcedure {
+    type TopPdu = F1apPdu;
+    type Request = DuCuTaInformationTransfer;
+    const CODE: u8 = 84;
+
+    async fn call_provider<T: IndicationHandler<Self>>(
+        provider: &T,
+        req: DuCuTaInformationTransfer,
+        logger: &Logger,
+    ) {
+        <T as IndicationHandler<DuCuTaInformationTransferProcedure>>::handle(provider, req, logger)
+            .await;
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::DuCuTaInformationTransfer(r)).into_bytes()
+    }
+}
+
+pub struct CuDuTaInformationTransferProcedure {}
+
+#[async_trait]
+impl Indication for CuDuTaInformationTransferProcedure {
+    type TopPdu = F1apPdu;
+    type Request = CuDuTaInformationTransfer;
+    const CODE: u8 = 85;
+
+    async fn call_provider<T: IndicationHandler<Self>>(
+        provider: &T,
+        req: CuDuTaInformationTransfer,
+        logger: &Logger,
+    ) {
+        <T as IndicationHandler<CuDuTaInformationTransferProcedure>>::handle(provider, req, logger)
+            .await;
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::CuDuTaInformationTransfer(r)).into_bytes()
+    }
+}
+
+pub struct QoEInformationTransferControlProcedure {}
+
+#[async_trait]
+impl Indication for QoEInformationTransferControlProcedure {
+    type TopPdu = F1apPdu;
+    type Request = QoEInformationTransferControl;
+    const CODE: u8 = 86;
+
+    async fn call_provider<T: IndicationHandler<Self>>(
+        provider: &T,
+        req: QoEInformationTransferControl,
+        logger: &Logger,
+    ) {
+        <T as IndicationHandler<QoEInformationTransferControlProcedure>>::handle(
+            provider, req, logger,
+        )
+        .await;
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::QoEInformationTransferControl(r)).into_bytes()
+    }
+}
+
+pub struct RachIndicationProcedure {}
+
+#[async_trait]
+impl Indication for RachIndicationProcedure {
+    type TopPdu = F1apPdu;
+    type Request = RachIndication;
+    const CODE: u8 = 87;
+
+    async fn call_provider<T: IndicationHandler<Self>>(
+        provider: &T,
+        req: RachIndication,
+        logger: &Logger,
+    ) {
+        <T as IndicationHandler<RachIndicationProcedure>>::handle(provider, req, logger).await;
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::RachIndication(r)).into_bytes()
+    }
+}
+
+pub struct TimingSynchronisationStatusProcedure {}
+
+#[async_trait]
+impl Procedure for TimingSynchronisationStatusProcedure {
+    type TopPdu = F1apPdu;
+    type Request = TimingSynchronisationStatusRequest;
+    type Success = TimingSynchronisationStatusResponse;
+    type Failure = TimingSynchronisationStatusFailure;
+    const CODE: u8 = 88;
+
+    async fn call_provider<T: RequestProvider<Self>>(
+        provider: &T,
+        req: TimingSynchronisationStatusRequest,
+        logger: &Logger,
+    ) -> Option<ResponseAction<F1apPdu>> {
+        match <T as RequestProvider<TimingSynchronisationStatusProcedure>>::request(
+            provider, req, logger,
+        )
+        .await
+        {
+            Ok((r, f)) => Some((
+                F1apPdu::SuccessfulOutcome(SuccessfulOutcome::TimingSynchronisationStatusResponse(
+                    r,
+                )),
+                f,
+            )),
+            Err(_) => todo!(),
+        }
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::TimingSynchronisationStatusRequest(r))
+            .into_bytes()
+    }
+
+    fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
+        let response_pdu = Self::TopPdu::from_bytes(bytes)?;
+        match response_pdu {
+            F1apPdu::SuccessfulOutcome(SuccessfulOutcome::TimingSynchronisationStatusResponse(
+                x,
+            )) => Ok(x),
+            F1apPdu::UnsuccessfulOutcome(
+                UnsuccessfulOutcome::TimingSynchronisationStatusFailure(x),
+            ) => Err(RequestError::UnsuccessfulOutcome(x)),
+            _ => Err(RequestError::Other("Unexpected pdu contents".to_string())),
+        }
+    }
+}
+
+pub struct TimingSynchronisationStatusReportProcedure {}
+
+#[async_trait]
+impl Indication for TimingSynchronisationStatusReportProcedure {
+    type TopPdu = F1apPdu;
+    type Request = TimingSynchronisationStatusReport;
+    const CODE: u8 = 89;
+
+    async fn call_provider<T: IndicationHandler<Self>>(
+        provider: &T,
+        req: TimingSynchronisationStatusReport,
+        logger: &Logger,
+    ) {
+        <T as IndicationHandler<TimingSynchronisationStatusReportProcedure>>::handle(
+            provider, req, logger,
+        )
+        .await;
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::TimingSynchronisationStatusReport(r))
+            .into_bytes()
+    }
+}
+
+pub struct Miabf1SetupTriggeringProcedure {}
+
+#[async_trait]
+impl Indication for Miabf1SetupTriggeringProcedure {
+    type TopPdu = F1apPdu;
+    type Request = Miabf1SetupTriggering;
+    const CODE: u8 = 90;
+
+    async fn call_provider<T: IndicationHandler<Self>>(
+        provider: &T,
+        req: Miabf1SetupTriggering,
+        logger: &Logger,
+    ) {
+        <T as IndicationHandler<Miabf1SetupTriggeringProcedure>>::handle(provider, req, logger)
+            .await;
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::Miabf1SetupTriggering(r)).into_bytes()
+    }
+}
+
+pub struct Miabf1SetupOutcomeNotificationProcedure {}
+
+#[async_trait]
+impl Indication for Miabf1SetupOutcomeNotificationProcedure {
+    type TopPdu = F1apPdu;
+    type Request = Miabf1SetupOutcomeNotification;
+    const CODE: u8 = 91;
+
+    async fn call_provider<T: IndicationHandler<Self>>(
+        provider: &T,
+        req: Miabf1SetupOutcomeNotification,
+        logger: &Logger,
+    ) {
+        <T as IndicationHandler<Miabf1SetupOutcomeNotificationProcedure>>::handle(
+            provider, req, logger,
+        )
+        .await;
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::Miabf1SetupOutcomeNotification(r))
+            .into_bytes()
+    }
+}
+
+pub struct MulticastContextNotificationProcedure {}
+
+#[async_trait]
+impl Procedure for MulticastContextNotificationProcedure {
+    type TopPdu = F1apPdu;
+    type Request = MulticastContextNotificationIndication;
+    type Success = MulticastContextNotificationConfirm;
+    type Failure = MulticastContextNotificationRefuse;
+    const CODE: u8 = 92;
+
+    async fn call_provider<T: RequestProvider<Self>>(
+        provider: &T,
+        req: MulticastContextNotificationIndication,
+        logger: &Logger,
+    ) -> Option<ResponseAction<F1apPdu>> {
+        match <T as RequestProvider<MulticastContextNotificationProcedure>>::request(
+            provider, req, logger,
+        )
+        .await
+        {
+            Ok((r, f)) => Some((
+                F1apPdu::SuccessfulOutcome(SuccessfulOutcome::MulticastContextNotificationConfirm(
+                    r,
+                )),
+                f,
+            )),
+            Err(_) => todo!(),
+        }
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::MulticastContextNotificationIndication(r))
+            .into_bytes()
+    }
+
+    fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
+        let response_pdu = Self::TopPdu::from_bytes(bytes)?;
+        match response_pdu {
+            F1apPdu::SuccessfulOutcome(SuccessfulOutcome::MulticastContextNotificationConfirm(
+                x,
+            )) => Ok(x),
+            F1apPdu::UnsuccessfulOutcome(
+                UnsuccessfulOutcome::MulticastContextNotificationRefuse(x),
+            ) => Err(RequestError::UnsuccessfulOutcome(x)),
+            _ => Err(RequestError::Other("Unexpected pdu contents".to_string())),
+        }
+    }
+}
+
+pub struct MulticastCommonConfigurationProcedure {}
+
+#[async_trait]
+impl Procedure for MulticastCommonConfigurationProcedure {
+    type TopPdu = F1apPdu;
+    type Request = MulticastCommonConfigurationRequest;
+    type Success = MulticastCommonConfigurationResponse;
+    type Failure = MulticastCommonConfigurationRefuse;
+    const CODE: u8 = 93;
+
+    async fn call_provider<T: RequestProvider<Self>>(
+        provider: &T,
+        req: MulticastCommonConfigurationRequest,
+        logger: &Logger,
+    ) -> Option<ResponseAction<F1apPdu>> {
+        match <T as RequestProvider<MulticastCommonConfigurationProcedure>>::request(
+            provider, req, logger,
+        )
+        .await
+        {
+            Ok((r, f)) => Some((
+                F1apPdu::SuccessfulOutcome(
+                    SuccessfulOutcome::MulticastCommonConfigurationResponse(r),
+                ),
+                f,
+            )),
+            Err(_) => todo!(),
+        }
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::MulticastCommonConfigurationRequest(r))
+            .into_bytes()
+    }
+
+    fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
+        let response_pdu = Self::TopPdu::from_bytes(bytes)?;
+        match response_pdu {
+            F1apPdu::SuccessfulOutcome(
+                SuccessfulOutcome::MulticastCommonConfigurationResponse(x),
+            ) => Ok(x),
+            F1apPdu::UnsuccessfulOutcome(
+                UnsuccessfulOutcome::MulticastCommonConfigurationRefuse(x),
+            ) => Err(RequestError::UnsuccessfulOutcome(x)),
+            _ => Err(RequestError::Other("Unexpected pdu contents".to_string())),
+        }
+    }
+}
+
+pub struct BroadcastTransportResourceRequestProcedure {}
+
+#[async_trait]
+impl Indication for BroadcastTransportResourceRequestProcedure {
+    type TopPdu = F1apPdu;
+    type Request = BroadcastTransportResourceRequest;
+    const CODE: u8 = 94;
+
+    async fn call_provider<T: IndicationHandler<Self>>(
+        provider: &T,
+        req: BroadcastTransportResourceRequest,
+        logger: &Logger,
+    ) {
+        <T as IndicationHandler<BroadcastTransportResourceRequestProcedure>>::handle(
+            provider, req, logger,
+        )
+        .await;
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::BroadcastTransportResourceRequest(r))
+            .into_bytes()
+    }
+}
+
+pub struct DuCuAccessAndMobilityIndicationProcedure {}
+
+#[async_trait]
+impl Indication for DuCuAccessAndMobilityIndicationProcedure {
+    type TopPdu = F1apPdu;
+    type Request = DuCuAccessAndMobilityIndication;
+    const CODE: u8 = 95;
+
+    async fn call_provider<T: IndicationHandler<Self>>(
+        provider: &T,
+        req: DuCuAccessAndMobilityIndication,
+        logger: &Logger,
+    ) {
+        <T as IndicationHandler<DuCuAccessAndMobilityIndicationProcedure>>::handle(
+            provider, req, logger,
+        )
+        .await;
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::DuCuAccessAndMobilityIndication(r))
+            .into_bytes()
+    }
+}
+
+pub struct SrsInformationReservationNotificationProcedure {}
+
+#[async_trait]
+impl Indication for SrsInformationReservationNotificationProcedure {
+    type TopPdu = F1apPdu;
+    type Request = SrsInformationReservationNotification;
+    const CODE: u8 = 96;
+
+    async fn call_provider<T: IndicationHandler<Self>>(
+        provider: &T,
+        req: SrsInformationReservationNotification,
+        logger: &Logger,
+    ) {
+        <T as IndicationHandler<SrsInformationReservationNotificationProcedure>>::handle(
+            provider, req, logger,
+        )
+        .await;
+    }
+
+    fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
+        F1apPdu::InitiatingMessage(InitiatingMessage::SrsInformationReservationNotification(r))
+            .into_bytes()
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum InitiatingMessage {
     Reset(Reset),
@@ -1899,6 +3055,41 @@ pub enum InitiatingMessage {
     ECidMeasurementReport(ECidMeasurementReport),
     ECidMeasurementTerminationCommand(ECidMeasurementTerminationCommand),
     PositioningInformationUpdate(PositioningInformationUpdate),
+    BroadcastContextSetupRequest(BroadcastContextSetupRequest),
+    BroadcastContextReleaseCommand(BroadcastContextReleaseCommand),
+    BroadcastContextReleaseRequest(BroadcastContextReleaseRequest),
+    BroadcastContextModificationRequest(BroadcastContextModificationRequest),
+    MulticastGroupPaging(MulticastGroupPaging),
+    MulticastContextSetupRequest(MulticastContextSetupRequest),
+    MulticastContextReleaseCommand(MulticastContextReleaseCommand),
+    MulticastContextReleaseRequest(MulticastContextReleaseRequest),
+    MulticastContextModificationRequest(MulticastContextModificationRequest),
+    MulticastDistributionSetupRequest(MulticastDistributionSetupRequest),
+    MulticastDistributionReleaseCommand(MulticastDistributionReleaseCommand),
+    PdcMeasurementInitiationRequest(PdcMeasurementInitiationRequest),
+    PdcMeasurementReport(PdcMeasurementReport),
+    PdcMeasurementTerminationCommand(PdcMeasurementTerminationCommand),
+    PdcMeasurementFailureIndication(PdcMeasurementFailureIndication),
+    PrsConfigurationRequest(PrsConfigurationRequest),
+    MeasurementPreconfigurationRequired(MeasurementPreconfigurationRequired),
+    MeasurementActivation(MeasurementActivation),
+    QoEInformationTransfer(QoEInformationTransfer),
+    PosSystemInformationDeliveryCommand(PosSystemInformationDeliveryCommand),
+    DuCuCellSwitchNotification(DuCuCellSwitchNotification),
+    CuDuCellSwitchNotification(CuDuCellSwitchNotification),
+    DuCuTaInformationTransfer(DuCuTaInformationTransfer),
+    CuDuTaInformationTransfer(CuDuTaInformationTransfer),
+    QoEInformationTransferControl(QoEInformationTransferControl),
+    RachIndication(RachIndication),
+    TimingSynchronisationStatusRequest(TimingSynchronisationStatusRequest),
+    TimingSynchronisationStatusReport(TimingSynchronisationStatusReport),
+    Miabf1SetupTriggering(Miabf1SetupTriggering),
+    Miabf1SetupOutcomeNotification(Miabf1SetupOutcomeNotification),
+    MulticastContextNotificationIndication(MulticastContextNotificationIndication),
+    MulticastCommonConfigurationRequest(MulticastCommonConfigurationRequest),
+    BroadcastTransportResourceRequest(BroadcastTransportResourceRequest),
+    DuCuAccessAndMobilityIndication(DuCuAccessAndMobilityIndication),
+    SrsInformationReservationNotification(SrsInformationReservationNotification),
 }
 
 impl InitiatingMessage {
@@ -2053,6 +3244,109 @@ impl InitiatingMessage {
             )),
             56 => Ok(Self::PositioningInformationUpdate(
                 PositioningInformationUpdate::decode(data)?,
+            )),
+            59 => Ok(Self::BroadcastContextSetupRequest(
+                BroadcastContextSetupRequest::decode(data)?,
+            )),
+            60 => Ok(Self::BroadcastContextReleaseCommand(
+                BroadcastContextReleaseCommand::decode(data)?,
+            )),
+            61 => Ok(Self::BroadcastContextReleaseRequest(
+                BroadcastContextReleaseRequest::decode(data)?,
+            )),
+            62 => Ok(Self::BroadcastContextModificationRequest(
+                BroadcastContextModificationRequest::decode(data)?,
+            )),
+            63 => Ok(Self::MulticastGroupPaging(MulticastGroupPaging::decode(
+                data,
+            )?)),
+            64 => Ok(Self::MulticastContextSetupRequest(
+                MulticastContextSetupRequest::decode(data)?,
+            )),
+            65 => Ok(Self::MulticastContextReleaseCommand(
+                MulticastContextReleaseCommand::decode(data)?,
+            )),
+            66 => Ok(Self::MulticastContextReleaseRequest(
+                MulticastContextReleaseRequest::decode(data)?,
+            )),
+            67 => Ok(Self::MulticastContextModificationRequest(
+                MulticastContextModificationRequest::decode(data)?,
+            )),
+            68 => Ok(Self::MulticastDistributionSetupRequest(
+                MulticastDistributionSetupRequest::decode(data)?,
+            )),
+            69 => Ok(Self::MulticastDistributionReleaseCommand(
+                MulticastDistributionReleaseCommand::decode(data)?,
+            )),
+            70 => Ok(Self::PdcMeasurementInitiationRequest(
+                PdcMeasurementInitiationRequest::decode(data)?,
+            )),
+            71 => Ok(Self::PdcMeasurementReport(PdcMeasurementReport::decode(
+                data,
+            )?)),
+            79 => Ok(Self::PdcMeasurementTerminationCommand(
+                PdcMeasurementTerminationCommand::decode(data)?,
+            )),
+            80 => Ok(Self::PdcMeasurementFailureIndication(
+                PdcMeasurementFailureIndication::decode(data)?,
+            )),
+            75 => Ok(Self::PrsConfigurationRequest(
+                PrsConfigurationRequest::decode(data)?,
+            )),
+            76 => Ok(Self::MeasurementPreconfigurationRequired(
+                MeasurementPreconfigurationRequired::decode(data)?,
+            )),
+            77 => Ok(Self::MeasurementActivation(MeasurementActivation::decode(
+                data,
+            )?)),
+            78 => Ok(Self::QoEInformationTransfer(
+                QoEInformationTransfer::decode(data)?,
+            )),
+            81 => Ok(Self::PosSystemInformationDeliveryCommand(
+                PosSystemInformationDeliveryCommand::decode(data)?,
+            )),
+            82 => Ok(Self::DuCuCellSwitchNotification(
+                DuCuCellSwitchNotification::decode(data)?,
+            )),
+            83 => Ok(Self::CuDuCellSwitchNotification(
+                CuDuCellSwitchNotification::decode(data)?,
+            )),
+            84 => Ok(Self::DuCuTaInformationTransfer(
+                DuCuTaInformationTransfer::decode(data)?,
+            )),
+            85 => Ok(Self::CuDuTaInformationTransfer(
+                CuDuTaInformationTransfer::decode(data)?,
+            )),
+            86 => Ok(Self::QoEInformationTransferControl(
+                QoEInformationTransferControl::decode(data)?,
+            )),
+            87 => Ok(Self::RachIndication(RachIndication::decode(data)?)),
+            88 => Ok(Self::TimingSynchronisationStatusRequest(
+                TimingSynchronisationStatusRequest::decode(data)?,
+            )),
+            89 => Ok(Self::TimingSynchronisationStatusReport(
+                TimingSynchronisationStatusReport::decode(data)?,
+            )),
+            90 => Ok(Self::Miabf1SetupTriggering(Miabf1SetupTriggering::decode(
+                data,
+            )?)),
+            91 => Ok(Self::Miabf1SetupOutcomeNotification(
+                Miabf1SetupOutcomeNotification::decode(data)?,
+            )),
+            92 => Ok(Self::MulticastContextNotificationIndication(
+                MulticastContextNotificationIndication::decode(data)?,
+            )),
+            93 => Ok(Self::MulticastCommonConfigurationRequest(
+                MulticastCommonConfigurationRequest::decode(data)?,
+            )),
+            94 => Ok(Self::BroadcastTransportResourceRequest(
+                BroadcastTransportResourceRequest::decode(data)?,
+            )),
+            95 => Ok(Self::DuCuAccessAndMobilityIndication(
+                DuCuAccessAndMobilityIndication::decode(data)?,
+            )),
+            96 => Ok(Self::SrsInformationReservationNotification(
+                SrsInformationReservationNotification::decode(data)?,
             )),
             x => {
                 return Err(per_codec_error_new(format!(
@@ -2862,6 +4156,496 @@ impl InitiatingMessage {
                 )?;
                 data.append_aligned(container);
             }
+            Self::BroadcastContextSetupRequest(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 59, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::BroadcastContextReleaseCommand(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 60, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::BroadcastContextReleaseRequest(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 61, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::BroadcastContextModificationRequest(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 62, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::MulticastGroupPaging(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 63, false)?;
+                Criticality::Ignore.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::MulticastContextSetupRequest(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 64, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::MulticastContextReleaseCommand(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 65, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::MulticastContextReleaseRequest(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 66, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::MulticastContextModificationRequest(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 67, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::MulticastDistributionSetupRequest(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 68, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::MulticastDistributionReleaseCommand(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 69, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::PdcMeasurementInitiationRequest(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 70, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::PdcMeasurementReport(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 71, false)?;
+                Criticality::Ignore.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::PdcMeasurementTerminationCommand(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 79, false)?;
+                Criticality::Ignore.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::PdcMeasurementFailureIndication(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 80, false)?;
+                Criticality::Ignore.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::PrsConfigurationRequest(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 75, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::MeasurementPreconfigurationRequired(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 76, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::MeasurementActivation(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 77, false)?;
+                Criticality::Ignore.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::QoEInformationTransfer(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 78, false)?;
+                Criticality::Ignore.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::PosSystemInformationDeliveryCommand(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 81, false)?;
+                Criticality::Ignore.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::DuCuCellSwitchNotification(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 82, false)?;
+                Criticality::Ignore.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::CuDuCellSwitchNotification(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 83, false)?;
+                Criticality::Ignore.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::DuCuTaInformationTransfer(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 84, false)?;
+                Criticality::Ignore.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::CuDuTaInformationTransfer(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 85, false)?;
+                Criticality::Ignore.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::QoEInformationTransferControl(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 86, false)?;
+                Criticality::Ignore.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::RachIndication(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 87, false)?;
+                Criticality::Ignore.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::TimingSynchronisationStatusRequest(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 88, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::TimingSynchronisationStatusReport(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 89, false)?;
+                Criticality::Ignore.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::Miabf1SetupTriggering(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 90, false)?;
+                Criticality::Ignore.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::Miabf1SetupOutcomeNotification(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 91, false)?;
+                Criticality::Ignore.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::MulticastContextNotificationIndication(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 92, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::MulticastCommonConfigurationRequest(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 93, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::BroadcastTransportResourceRequest(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 94, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::DuCuAccessAndMobilityIndication(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 95, false)?;
+                Criticality::Ignore.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::SrsInformationReservationNotification(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 96, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
         }
         Ok(())
     }
@@ -2907,6 +4691,20 @@ pub enum SuccessfulOutcome {
     PositioningInformationResponse(PositioningInformationResponse),
     PositioningActivationResponse(PositioningActivationResponse),
     ECidMeasurementInitiationResponse(ECidMeasurementInitiationResponse),
+    BroadcastContextSetupResponse(BroadcastContextSetupResponse),
+    BroadcastContextReleaseComplete(BroadcastContextReleaseComplete),
+    BroadcastContextModificationResponse(BroadcastContextModificationResponse),
+    MulticastContextSetupResponse(MulticastContextSetupResponse),
+    MulticastContextReleaseComplete(MulticastContextReleaseComplete),
+    MulticastContextModificationResponse(MulticastContextModificationResponse),
+    MulticastDistributionSetupResponse(MulticastDistributionSetupResponse),
+    MulticastDistributionReleaseComplete(MulticastDistributionReleaseComplete),
+    PdcMeasurementInitiationResponse(PdcMeasurementInitiationResponse),
+    PrsConfigurationResponse(PrsConfigurationResponse),
+    MeasurementPreconfigurationConfirm(MeasurementPreconfigurationConfirm),
+    TimingSynchronisationStatusResponse(TimingSynchronisationStatusResponse),
+    MulticastContextNotificationConfirm(MulticastContextNotificationConfirm),
+    MulticastCommonConfigurationResponse(MulticastCommonConfigurationResponse),
 }
 
 impl SuccessfulOutcome {
@@ -2972,6 +4770,48 @@ impl SuccessfulOutcome {
             )),
             52 => Ok(Self::ECidMeasurementInitiationResponse(
                 ECidMeasurementInitiationResponse::decode(data)?,
+            )),
+            59 => Ok(Self::BroadcastContextSetupResponse(
+                BroadcastContextSetupResponse::decode(data)?,
+            )),
+            60 => Ok(Self::BroadcastContextReleaseComplete(
+                BroadcastContextReleaseComplete::decode(data)?,
+            )),
+            62 => Ok(Self::BroadcastContextModificationResponse(
+                BroadcastContextModificationResponse::decode(data)?,
+            )),
+            64 => Ok(Self::MulticastContextSetupResponse(
+                MulticastContextSetupResponse::decode(data)?,
+            )),
+            65 => Ok(Self::MulticastContextReleaseComplete(
+                MulticastContextReleaseComplete::decode(data)?,
+            )),
+            67 => Ok(Self::MulticastContextModificationResponse(
+                MulticastContextModificationResponse::decode(data)?,
+            )),
+            68 => Ok(Self::MulticastDistributionSetupResponse(
+                MulticastDistributionSetupResponse::decode(data)?,
+            )),
+            69 => Ok(Self::MulticastDistributionReleaseComplete(
+                MulticastDistributionReleaseComplete::decode(data)?,
+            )),
+            70 => Ok(Self::PdcMeasurementInitiationResponse(
+                PdcMeasurementInitiationResponse::decode(data)?,
+            )),
+            75 => Ok(Self::PrsConfigurationResponse(
+                PrsConfigurationResponse::decode(data)?,
+            )),
+            76 => Ok(Self::MeasurementPreconfigurationConfirm(
+                MeasurementPreconfigurationConfirm::decode(data)?,
+            )),
+            88 => Ok(Self::TimingSynchronisationStatusResponse(
+                TimingSynchronisationStatusResponse::decode(data)?,
+            )),
+            92 => Ok(Self::MulticastContextNotificationConfirm(
+                MulticastContextNotificationConfirm::decode(data)?,
+            )),
+            93 => Ok(Self::MulticastCommonConfigurationResponse(
+                MulticastCommonConfigurationResponse::decode(data)?,
             )),
             x => {
                 return Err(per_codec_error_new(format!(
@@ -3291,6 +5131,202 @@ impl SuccessfulOutcome {
                 )?;
                 data.append_aligned(container);
             }
+            Self::BroadcastContextSetupResponse(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 59, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::BroadcastContextReleaseComplete(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 60, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::BroadcastContextModificationResponse(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 62, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::MulticastContextSetupResponse(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 64, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::MulticastContextReleaseComplete(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 65, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::MulticastContextModificationResponse(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 67, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::MulticastDistributionSetupResponse(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 68, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::MulticastDistributionReleaseComplete(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 69, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::PdcMeasurementInitiationResponse(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 70, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::PrsConfigurationResponse(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 75, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::MeasurementPreconfigurationConfirm(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 76, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::TimingSynchronisationStatusResponse(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 88, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::MulticastContextNotificationConfirm(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 92, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::MulticastCommonConfigurationResponse(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 93, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
         }
         Ok(())
     }
@@ -3331,6 +5367,17 @@ pub enum UnsuccessfulOutcome {
     PositioningInformationFailure(PositioningInformationFailure),
     PositioningActivationFailure(PositioningActivationFailure),
     ECidMeasurementInitiationFailure(ECidMeasurementInitiationFailure),
+    BroadcastContextSetupFailure(BroadcastContextSetupFailure),
+    BroadcastContextModificationFailure(BroadcastContextModificationFailure),
+    MulticastContextSetupFailure(MulticastContextSetupFailure),
+    MulticastContextModificationFailure(MulticastContextModificationFailure),
+    MulticastDistributionSetupFailure(MulticastDistributionSetupFailure),
+    PdcMeasurementInitiationFailure(PdcMeasurementInitiationFailure),
+    PrsConfigurationFailure(PrsConfigurationFailure),
+    MeasurementPreconfigurationRefuse(MeasurementPreconfigurationRefuse),
+    TimingSynchronisationStatusFailure(TimingSynchronisationStatusFailure),
+    MulticastContextNotificationRefuse(MulticastContextNotificationRefuse),
+    MulticastCommonConfigurationRefuse(MulticastCommonConfigurationRefuse),
 }
 
 impl UnsuccessfulOutcome {
@@ -3385,6 +5432,39 @@ impl UnsuccessfulOutcome {
             )),
             52 => Ok(Self::ECidMeasurementInitiationFailure(
                 ECidMeasurementInitiationFailure::decode(data)?,
+            )),
+            59 => Ok(Self::BroadcastContextSetupFailure(
+                BroadcastContextSetupFailure::decode(data)?,
+            )),
+            62 => Ok(Self::BroadcastContextModificationFailure(
+                BroadcastContextModificationFailure::decode(data)?,
+            )),
+            64 => Ok(Self::MulticastContextSetupFailure(
+                MulticastContextSetupFailure::decode(data)?,
+            )),
+            67 => Ok(Self::MulticastContextModificationFailure(
+                MulticastContextModificationFailure::decode(data)?,
+            )),
+            68 => Ok(Self::MulticastDistributionSetupFailure(
+                MulticastDistributionSetupFailure::decode(data)?,
+            )),
+            70 => Ok(Self::PdcMeasurementInitiationFailure(
+                PdcMeasurementInitiationFailure::decode(data)?,
+            )),
+            75 => Ok(Self::PrsConfigurationFailure(
+                PrsConfigurationFailure::decode(data)?,
+            )),
+            76 => Ok(Self::MeasurementPreconfigurationRefuse(
+                MeasurementPreconfigurationRefuse::decode(data)?,
+            )),
+            88 => Ok(Self::TimingSynchronisationStatusFailure(
+                TimingSynchronisationStatusFailure::decode(data)?,
+            )),
+            92 => Ok(Self::MulticastContextNotificationRefuse(
+                MulticastContextNotificationRefuse::decode(data)?,
+            )),
+            93 => Ok(Self::MulticastCommonConfigurationRefuse(
+                MulticastCommonConfigurationRefuse::decode(data)?,
             )),
             x => {
                 return Err(per_codec_error_new(format!(
@@ -3622,6 +5702,160 @@ impl UnsuccessfulOutcome {
             }
             Self::ECidMeasurementInitiationFailure(x) => {
                 encode::encode_integer(data, Some(0), Some(255), false, 52, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::BroadcastContextSetupFailure(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 59, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::BroadcastContextModificationFailure(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 62, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::MulticastContextSetupFailure(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 64, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::MulticastContextModificationFailure(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 67, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::MulticastDistributionSetupFailure(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 68, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::PdcMeasurementInitiationFailure(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 70, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::PrsConfigurationFailure(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 75, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::MeasurementPreconfigurationRefuse(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 76, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::TimingSynchronisationStatusFailure(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 88, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::MulticastContextNotificationRefuse(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 92, false)?;
+                Criticality::Reject.encode(data)?;
+                let container = &mut Allocator::new_codec_data();
+                x.encode(container)?;
+                encode::encode_length_determinent(
+                    data,
+                    None,
+                    None,
+                    false,
+                    container.length_in_bytes(),
+                )?;
+                data.append_aligned(container);
+            }
+            Self::MulticastCommonConfigurationRefuse(x) => {
+                encode::encode_integer(data, Some(0), Some(255), false, 93, false)?;
                 Criticality::Reject.encode(data)?;
                 let container = &mut Allocator::new_codec_data();
                 x.encode(container)?;

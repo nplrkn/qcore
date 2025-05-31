@@ -1,5 +1,5 @@
-pub use asn1_codecs::{PerCodecData, PerCodecError};
 use asn1_codecs::PerCodecErrorCause;
+pub use asn1_codecs::{PerCodecData, PerCodecError};
 pub use bitvec::prelude::*;
 pub type BitString = BitVec<u8, Msb0>;
 pub use nonempty::*;
@@ -16,12 +16,12 @@ pub trait PerCodec: Sized {
 }
 
 pub trait SerDes: Sized {
-    fn into_bytes(self) -> Result<Vec<u8>, PerCodecError>;
+    fn into_bytes(&self) -> Result<Vec<u8>, PerCodecError>;
     fn from_bytes(bytes: &[u8]) -> Result<Self, PerCodecError>;
 }
 
 impl<T: PerCodec> SerDes for T {
-    fn into_bytes(self) -> Result<Vec<u8>, PerCodecError> {
+    fn into_bytes(&self) -> Result<Vec<u8>, PerCodecError> {
         let mut d = T::Allocator::new_codec_data();
         self.encode(&mut d)?;
         Ok(d.into_bytes())

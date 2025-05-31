@@ -4,7 +4,7 @@ use asn1_per::{aper::*, *};
 
 // Criticality
 #[derive(Clone, Debug, Copy, TryFromPrimitive)]
-#[repr(u8)]
+#[repr(u32)]
 pub enum Criticality {
     Reject,
     Ignore,
@@ -13,14 +13,18 @@ pub enum Criticality {
 
 impl Criticality {
     fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
-        let (idx, extended) = decode::decode_enumerated(data, Some(0), Some(2), false)?;
-        if extended {
-            return Err(per_codec_error_new("Extended enum not implemented"));
-        }
-        Self::try_from(idx as u8).map_err(|_| per_codec_error_new("Unknown enum variant"))
+        let (idx, _extended) = decode::decode_enumerated(data, Some(0), Some(2), false)?;
+        Self::try_from(idx as u32).map_err(|_| per_codec_error_new("Unknown enum variant"))
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
-        encode::encode_enumerated(data, Some(0), Some(2), false, *self as i128, false)
+        encode::encode_enumerated(
+            data,
+            Some(0),
+            Some(2),
+            false,
+            *self as i128,
+            (*self as u32) >= 3,
+        )
     }
 }
 
@@ -41,7 +45,7 @@ impl PerCodec for Criticality {
 }
 // Presence
 #[derive(Clone, Debug, Copy, TryFromPrimitive)]
-#[repr(u8)]
+#[repr(u32)]
 pub enum Presence {
     Optional,
     Conditional,
@@ -50,14 +54,18 @@ pub enum Presence {
 
 impl Presence {
     fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
-        let (idx, extended) = decode::decode_enumerated(data, Some(0), Some(2), false)?;
-        if extended {
-            return Err(per_codec_error_new("Extended enum not implemented"));
-        }
-        Self::try_from(idx as u8).map_err(|_| per_codec_error_new("Unknown enum variant"))
+        let (idx, _extended) = decode::decode_enumerated(data, Some(0), Some(2), false)?;
+        Self::try_from(idx as u32).map_err(|_| per_codec_error_new("Unknown enum variant"))
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
-        encode::encode_enumerated(data, Some(0), Some(2), false, *self as i128, false)
+        encode::encode_enumerated(
+            data,
+            Some(0),
+            Some(2),
+            false,
+            *self as i128,
+            (*self as u32) >= 3,
+        )
     }
 }
 
@@ -220,7 +228,7 @@ impl PerCodec for ProtocolIeId {
 }
 // TriggeringMessage
 #[derive(Clone, Debug, Copy, TryFromPrimitive)]
-#[repr(u8)]
+#[repr(u32)]
 pub enum TriggeringMessage {
     InitiatingMessage,
     SuccessfulOutcome,
@@ -229,14 +237,18 @@ pub enum TriggeringMessage {
 
 impl TriggeringMessage {
     fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
-        let (idx, extended) = decode::decode_enumerated(data, Some(0), Some(2), false)?;
-        if extended {
-            return Err(per_codec_error_new("Extended enum not implemented"));
-        }
-        Self::try_from(idx as u8).map_err(|_| per_codec_error_new("Unknown enum variant"))
+        let (idx, _extended) = decode::decode_enumerated(data, Some(0), Some(2), false)?;
+        Self::try_from(idx as u32).map_err(|_| per_codec_error_new("Unknown enum variant"))
     }
     fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
-        encode::encode_enumerated(data, Some(0), Some(2), false, *self as i128, false)
+        encode::encode_enumerated(
+            data,
+            Some(0),
+            Some(2),
+            false,
+            *self as i128,
+            (*self as u32) >= 3,
+        )
     }
 }
 

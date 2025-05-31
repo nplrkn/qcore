@@ -18,7 +18,9 @@ pub fn f1_setup_request() -> F1apPdu {
         gnb_du_served_cells_list: None,
         transport_layer_address_info: None,
         bap_address: None,
-        extended_gnb_cu_name: None,
+        extended_gnb_du_name: None,
+        rrc_terminating_iab_donor_gnb_id: None,
+        mobile_iab_mt_user_location_information: None,
     }))
 }
 
@@ -40,9 +42,13 @@ pub fn initial_ul_rrc_message_transfer(gnb_du_ue_f1ap_id: u32, rrc_bytes: Vec<u8
             rrc_container: RrcContainer(rrc_bytes),
             du_to_cu_rrc_container: Some(make_du_to_cu_rrc_container()),
             sul_access_indication: None,
-            transaction_id: Some(TransactionId(1)), // Should be mandatory - ODU ORAN interop hack
+            transaction_id: TransactionId(1), // Needs to be made optional for ODU ORAN interop?
             ran_ue_id: None,
             rrc_container_rrc_setup_complete: None,
+            nr_red_cap_ue_indication: None,
+            sdt_information: None,
+            sidelink_relay_configuration: None,
+            nr_e_red_cap_ue_indication: None,
         },
     ))
 }
@@ -98,6 +104,16 @@ pub fn ue_context_setup_response(ue: &UeContext, local_ip: &String) -> Result<F1
                 sl_phy_mac_rlc_config: None,
                 sl_config_dedicated_eutra_info: None,
                 requested_p_max_fr2: None,
+                sdt_mac_phy_cg_config: None,
+                musim_gap_config: None,
+                sl_rlc_channel_to_add_mod_list: None,
+                inter_frequency_config_no_gap: None,
+                ul_gap_fr2_config: None,
+                two_phr_mode_mcg: None,
+                two_phr_mode_scg: None,
+                ncd_ssb_red_cap_initial_bwp_sdt: None,
+                serv_cell_info_list: None,
+                sl_phy_mac_rlc_config_ext: None,
             },
             c_rnti: None,
             resource_coordination_transfer_container: None,
@@ -115,6 +131,8 @@ pub fn ue_context_setup_response(ue: &UeContext, local_ip: &String) -> Result<F1
                 ]),
                 additional_pdcp_duplication_tnl_list: None,
                 current_qos_para_set_index: None,
+                tsc_traffic_characteristics_feedback: None,
+                ecn_markingor_congestion_information_reporting_status: None
             }])),
             srbs_failed_to_be_setup_list: None,
             drbs_failed_to_be_setup_list: None,
@@ -127,6 +145,18 @@ pub fn ue_context_setup_response(ue: &UeContext, local_ip: &String) -> Result<F1
             sl_drbs_setup_list: None,
             sl_drbs_failed_to_be_setup_list: None,
             requested_target_cell_global_id: None,
+            scg_activation_status: None,
+            uu_rlc_channel_setup_list: None,
+            uu_rlc_channel_failed_to_be_setup_list: None,
+            pc5rlc_channel_setup_list: None,
+            pc5rlc_channel_failed_to_be_setup_list: None,
+            serving_cell_mo_encoded_in_cgc_list: None,
+            ue_multicast_mr_bs_setupnew_list: None,
+            dedicated_si_delivery_indication: None,
+            configured_bwp_list: None,
+            early_sync_information: None,
+            ltm_configuration: None,
+            s_cpac_configuration: None,
         }),
     ))
 }
@@ -149,6 +179,7 @@ pub fn build_gnb_cu_configuration_update_acknowledge(
             gnb_cu_tnl_association_failed_to_setup_list: None,
             dedicated_si_delivery_needed_ue_list: None,
             transport_layer_address_info: None,
+            cells_with_ss_bs_activated_list: None,
         },
     ))
 }
@@ -165,6 +196,11 @@ pub fn gnb_du_configuration_update() -> F1apPdu {
             gnb_du_id: None,
             gnb_du_tnl_association_to_remove_list: None,
             transport_layer_address_info: None,
+            coverage_modification_notification: None,
+            gnb_du_name: None,
+            extended_gnb_du_name: None,
+            rrc_terminating_iab_donor_related_info: None,
+            mobile_iab_mt_user_location_information: None,
         },
     ))
 }
@@ -179,6 +215,7 @@ pub fn ue_context_release_request(ue: &UeContext) -> F1apPdu {
             gnb_du_ue_f1ap_id: GnbDuUeF1apId(ue.ue_id),
             cause: Cause::RadioNetwork(CauseRadioNetwork::RlFailureRlc),
             target_cells_to_cancel: None,
+            ltm_cells_to_be_released_list: None,
         },
     ))
 }

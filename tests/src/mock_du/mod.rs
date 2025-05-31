@@ -283,6 +283,7 @@ impl MockDu {
                 gnb_cu_ue_f1ap_id: r.gnb_cu_ue_f1ap_id,
                 gnb_du_ue_f1ap_id: r.gnb_du_ue_f1ap_id,
                 criticality_diagnostics: None,
+                recommended_ss_bs_for_paging_list: None,
             }),
         );
 
