@@ -75,8 +75,7 @@ impl QCore {
         );
         info!(&logger, "SST {}", config.sst);
 
-        let packet_processor =
-            PacketProcessor::new(config.ue_subnet.clone(), &mut ebpf, &logger).await?;
+        let packet_processor = PacketProcessor::new(config.ue_subnet, &mut ebpf, &logger).await?;
 
         let mut qc = Box::new(Self::new(config, packet_processor, logger, sub_db).await?);
         qc.run().await.expect("Startup failure");
@@ -185,7 +184,7 @@ impl HandlerApi for QCore {
     async fn take_nas_context(&self, tmsi: &Tmsi) -> Option<NasContext> {
         let entry = self.tmsis.lock().await.remove(tmsi)?;
 
-        let context = match entry {
+        match entry {
             NasContextLocator::Stored(c) => Some(c),
             NasContextLocator::OwnedByUeTask(ue_id) => {
                 let (sender, receiver) = channel::bounded(1);
@@ -199,8 +198,7 @@ impl HandlerApi for QCore {
                 let nas_context = receiver.recv().await;
                 nas_context.ok()
             }
-        };
-        context
+        }
     }
 
     async fn put_nas_context(

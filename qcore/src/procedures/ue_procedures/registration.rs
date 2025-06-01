@@ -184,7 +184,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     }
 
     // Returns Ok(kseaf) on success, Ok(None) on synch failure, and Err for anything else.
-    async fn perform_nas_auth(&mut self, imsi: &String) -> Result<NasAuthOutcome> {
+    async fn perform_nas_auth(&mut self, imsi: &str) -> Result<NasAuthOutcome> {
         let auth_params = self
             .lookup_subscriber_creds_and_inc_sqn(imsi)
             .await

@@ -180,7 +180,7 @@ fn nas_pdu_address(ue_ipv4: &[u8; 4]) -> NasPduAddress {
 
 fn nas_dnn(dnn: &[u8]) -> NasDnn {
     let mut dnn_contents = vec![dnn.len() as u8];
-    dnn_contents.extend_from_slice(&dnn);
+    dnn_contents.extend_from_slice(dnn);
     NasDnn::new(dnn_contents)
 }
 
@@ -214,7 +214,7 @@ pub fn pdu_session_establishment_accept(
                 eap_message: None,
                 authorized_qos_flow_descriptions: Some(authorized_qos_flow_descriptions(five_qi)),
                 extended_protocol_configuration_options: Some(
-                    extended_protocol_configuration_options(&dns_primary, &dns_secondary, true),
+                    extended_protocol_configuration_options(dns_primary, dns_secondary, true),
                 ),
                 dnn: Some(nas_dnn(&pdu_session.dnn)),
                 fgsm_network_feature_support: None,

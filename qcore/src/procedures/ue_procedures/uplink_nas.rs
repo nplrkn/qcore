@@ -23,7 +23,7 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
         UplinkNasProcedure(ue_procedure)
     }
 
-    pub async fn run(mut self, nas_bytes: &mut Vec<u8>) -> Result<()> {
+    pub async fn run(mut self, nas_bytes: &mut [u8]) -> Result<()> {
         patch_nas_for_oai_deregistration_security_header(nas_bytes, self.logger);
 
         // Strip off the security header if there is one.
