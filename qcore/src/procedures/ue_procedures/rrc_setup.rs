@@ -38,7 +38,7 @@ impl<'a, A: HandlerApi> RrcSetupProcedure<'a, A> {
     }
 
     async fn handle_rrc_setup(&mut self, r: Box<InitialUlRrcMessageTransfer>) -> Result<Vec<u8>> {
-        let cell_group_config = self.check_initial_transfer(r)?;
+        let cell_group_config = self.check_initial_transfer(*r)?;
         self.log_message(">> RrcSetupRequest");
         let rrc_setup = crate::rrc::build::setup(0, cell_group_config);
         self.log_message("<< RrcSetup");
@@ -48,7 +48,7 @@ impl<'a, A: HandlerApi> RrcSetupProcedure<'a, A> {
         Ok(nas_bytes)
     }
 
-    fn check_initial_transfer(&self, r: Box<InitialUlRrcMessageTransfer>) -> Result<Vec<u8>> {
+    fn check_initial_transfer(&self, r: InitialUlRrcMessageTransfer) -> Result<Vec<u8>> {
         let Some(DuToCuRrcContainer(cell_group_config)) = r.du_to_cu_rrc_container else {
             bail!("Missing DuToCuRrcContainer on initial UL RRC message")
         };

@@ -125,7 +125,7 @@ impl<T: SerDes + Send + Sync, I: InterfaceProvider<TopPdu = T>> RequestMessageHa
         match self
             .route_request(pdu, logger)
             .await
-            .map(|(m, a)| (m.into_bytes(), a))
+            .map(|(m, a)| (m.as_bytes(), a))
         {
             None => None,
             Some((Ok(bytes), a)) => Some((bytes, a)),

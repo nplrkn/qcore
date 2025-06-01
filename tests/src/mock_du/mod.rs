@@ -129,7 +129,7 @@ impl MockDu {
         initial_rrc: UlCcchMessage,
     ) -> Result<()> {
         let f1_indication =
-            build_f1ap::initial_ul_rrc_message_transfer(ue.ue_id, initial_rrc.into_bytes()?);
+            build_f1ap::initial_ul_rrc_message_transfer(ue.ue_id, initial_rrc.as_bytes()?);
 
         info!(
             self.logger,
@@ -165,7 +165,7 @@ impl MockDu {
         let gnb_cu_ue_f1ap_id = ue.gnb_cu_ue_f1ap_id.unwrap();
 
         // Encapsulate RRC message in PDCP PDU.
-        let rrc_bytes = rrc.into_bytes()?;
+        let rrc_bytes = rrc.as_bytes()?;
         let srb_id = 0; // TODO
         let pdcp_pdu = ue.pdcp_tx.encode(srb_id, rrc_bytes);
 

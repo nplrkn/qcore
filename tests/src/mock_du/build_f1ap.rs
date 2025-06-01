@@ -95,7 +95,7 @@ pub fn ue_context_setup_response(ue: &UeContext, local_ip: &String) -> Result<Bo
     let Some(drb) = &ue.drb else {
         bail!("Drb should be set on UE");
     };
-    let cell_group_config = f1ap::CellGroupConfig(make_rrc_cell_group_config().into_bytes()?);
+    let cell_group_config = f1ap::CellGroupConfig(make_rrc_cell_group_config().as_bytes()?);
     let transport_layer_address = TransportLayerAddress::try_from(local_ip)?;
 
     // TODO: confirm setup of SRB2
@@ -255,6 +255,6 @@ fn make_rrc_cell_group_config() -> rrc::CellGroupConfig {
 
 fn make_du_to_cu_rrc_container() -> DuToCuRrcContainer {
     // We also need a CellGroupConfig to give to the CU.
-    let cell_group_config_ie = make_rrc_cell_group_config().into_bytes().unwrap();
+    let cell_group_config_ie = make_rrc_cell_group_config().as_bytes().unwrap();
     DuToCuRrcContainer(cell_group_config_ie)
 }

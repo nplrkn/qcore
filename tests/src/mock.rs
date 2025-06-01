@@ -121,7 +121,7 @@ impl<P: Pdu> Mock<P> {
     }
 
     pub async fn send<T: SerDes>(&self, pdu: &T, assoc_id: Option<u32>) {
-        let message = pdu.into_bytes().unwrap();
+        let message = pdu.as_bytes().unwrap();
         self.transport
             .send_message(message, assoc_id, &self.logger)
             .await

@@ -45,7 +45,7 @@ pub async fn dump_stats(
         let mut warn_needed = false;
         let mut sum = [0u64; NumCounters as usize];
 
-        for stat in 0..FIRST_NON_RATE {
+        for (stat, rate) in rate.iter_mut().enumerate().take(FIRST_NON_RATE) {
             // Take the delta of the counter and divide by the sample duration to get
             // a change per second.
             // e.g. if 5 packets arrived, that is 1pps.
@@ -54,11 +54,11 @@ pub async fn dump_stats(
 
             // Fold into the moving average to get an approximate rate over a time
             // window. e.g. "average packets per second over the last 30 seconds".
-            rate[stat] = (WEIGHT * delta_per_second as f64 + (1.0 - WEIGHT) * rate[stat]).floor();
+            *rate = (WEIGHT * delta_per_second as f64 + (1.0 - WEIGHT) * *rate).floor();
 
             // If no data is flowing, the rate will decay to 0.
             // We keep issuing info logs tracing this until it gets below 10 per second.
-            if rate[stat] >= 10.0 || delta != 0 {
+            if *rate >= 10.0 || delta != 0 {
                 info_needed = true;
             }
         }
@@ -75,19 +75,24 @@ pub async fn dump_stats(
 
         if info_needed {
             let mut s = String::new();
-            for i in 0_usize..FIRST_NON_RATE {
-                write!(&mut s, " {}/s={}", CounterIndex::VARIANTS[i], rate[i])?;
+            for (i, rate) in rate.iter().enumerate().take(FIRST_NON_RATE) {
+                write!(&mut s, " {}/s={}", CounterIndex::VARIANTS[i], rate)?;
             }
-            for i in 0_usize..FIRST_WARN_IDX {
-                write!(&mut s, " {}={}", CounterIndex::VARIANTS[i], last[i])?;
+            for (i, last) in last.iter().enumerate().take(FIRST_WARN_IDX) {
+                write!(&mut s, " {}={}", CounterIndex::VARIANTS[i], last)?;
             }
             info!(&logger, "{}", s);
         }
 
         if warn_needed {
             let mut s = String::new();
-            for i in FIRST_WARN_IDX..NumCounters as usize {
-                write!(&mut s, " {}={}", CounterIndex::VARIANTS[i], last[i])?;
+            for (i, last) in last
+                .iter()
+                .enumerate()
+                .take(NumCounters as usize)
+                .skip(FIRST_WARN_IDX)
+            {
+                write!(&mut s, " {}={}", CounterIndex::VARIANTS[i], last)?;
             }
             warn!(&logger, "{}", s);
         }

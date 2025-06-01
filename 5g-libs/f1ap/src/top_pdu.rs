@@ -100,7 +100,7 @@ impl Procedure for ResetProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::Reset(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::Reset(r)).as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -138,7 +138,7 @@ impl Procedure for F1SetupProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::F1SetupRequest(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::F1SetupRequest(r)).as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -184,7 +184,7 @@ impl Procedure for GnbDuConfigurationUpdateProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::GnbDuConfigurationUpdate(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::GnbDuConfigurationUpdate(r)).as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -232,7 +232,7 @@ impl Procedure for GnbCuConfigurationUpdateProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::GnbCuConfigurationUpdate(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::GnbCuConfigurationUpdate(r)).as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -275,7 +275,7 @@ impl Procedure for UeContextSetupProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::UeContextSetupRequest(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::UeContextSetupRequest(r)).as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -317,7 +317,7 @@ impl Procedure for UeContextReleaseProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::UeContextReleaseCommand(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::UeContextReleaseCommand(r)).as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -357,7 +357,7 @@ impl Procedure for UeContextModificationProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::UeContextModificationRequest(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::UeContextModificationRequest(r)).as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -403,7 +403,7 @@ impl Procedure for UeContextModificationRequiredProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::UeContextModificationRequired(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::UeContextModificationRequired(r)).as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -445,7 +445,7 @@ impl Procedure for WriteReplaceWarningProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::WriteReplaceWarningRequest(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::WriteReplaceWarningRequest(r)).as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -483,7 +483,7 @@ impl Procedure for PwsCancelProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::PwsCancelRequest(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::PwsCancelRequest(r)).as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -513,7 +513,7 @@ impl Indication for ErrorIndicationProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::ErrorIndication(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::ErrorIndication(r)).as_bytes()
     }
 }
 
@@ -535,7 +535,7 @@ impl Indication for UeContextReleaseRequestProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::UeContextReleaseRequest(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::UeContextReleaseRequest(r)).as_bytes()
     }
 }
 
@@ -559,7 +559,7 @@ impl Indication for InitialUlRrcMessageTransferProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::InitialUlRrcMessageTransfer(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::InitialUlRrcMessageTransfer(r)).as_bytes()
     }
 }
 
@@ -581,7 +581,7 @@ impl Indication for DlRrcMessageTransferProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::DlRrcMessageTransfer(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::DlRrcMessageTransfer(r)).as_bytes()
     }
 }
 
@@ -603,7 +603,7 @@ impl Indication for UlRrcMessageTransferProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::UlRrcMessageTransfer(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::UlRrcMessageTransfer(r)).as_bytes()
     }
 }
 
@@ -625,7 +625,7 @@ impl Indication for UeInactivityNotificationProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::UeInactivityNotification(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::UeInactivityNotification(r)).as_bytes()
     }
 }
 
@@ -659,7 +659,7 @@ impl Procedure for GnbDuResourceCoordinationProcedure {
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
         F1apPdu::InitiatingMessage(InitiatingMessage::GnbDuResourceCoordinationRequest(r))
-            .into_bytes()
+            .as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -693,7 +693,7 @@ impl Indication for SystemInformationDeliveryProcedure {
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
         F1apPdu::InitiatingMessage(InitiatingMessage::SystemInformationDeliveryCommand(r))
-            .into_bytes()
+            .as_bytes()
     }
 }
 
@@ -710,7 +710,7 @@ impl Indication for PagingProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::Paging(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::Paging(r)).as_bytes()
     }
 }
 
@@ -727,7 +727,7 @@ impl Indication for NotifyProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::Notify(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::Notify(r)).as_bytes()
     }
 }
 
@@ -751,7 +751,7 @@ impl Indication for NetworkAccessRateReductionProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::NetworkAccessRateReduction(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::NetworkAccessRateReduction(r)).as_bytes()
     }
 }
 
@@ -773,7 +773,7 @@ impl Indication for PwsRestartIndicationProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::PwsRestartIndication(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::PwsRestartIndication(r)).as_bytes()
     }
 }
 
@@ -795,7 +795,7 @@ impl Indication for PwsFailureIndicationProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::PwsFailureIndication(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::PwsFailureIndication(r)).as_bytes()
     }
 }
 
@@ -817,7 +817,7 @@ impl Indication for GnbDuStatusIndicationProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::GnbDuStatusIndication(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::GnbDuStatusIndication(r)).as_bytes()
     }
 }
 
@@ -838,7 +838,7 @@ impl Indication for RrcDeliveryReportProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::RrcDeliveryReport(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::RrcDeliveryReport(r)).as_bytes()
     }
 }
 
@@ -867,7 +867,7 @@ impl Procedure for F1RemovalProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::F1RemovalRequest(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::F1RemovalRequest(r)).as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -899,7 +899,7 @@ impl Indication for TraceStartProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::TraceStart(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::TraceStart(r)).as_bytes()
     }
 }
 
@@ -920,7 +920,7 @@ impl Indication for DeactivateTraceProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::DeactivateTrace(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::DeactivateTrace(r)).as_bytes()
     }
 }
 
@@ -944,7 +944,7 @@ impl Indication for DuCuRadioInformationTransferProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::DuCuRadioInformationTransfer(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::DuCuRadioInformationTransfer(r)).as_bytes()
     }
 }
 
@@ -968,7 +968,7 @@ impl Indication for CuDuRadioInformationTransferProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::CuDuRadioInformationTransfer(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::CuDuRadioInformationTransfer(r)).as_bytes()
     }
 }
 
@@ -1003,7 +1003,7 @@ impl Procedure for BapMappingConfigurationProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::BapMappingConfiguration(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::BapMappingConfiguration(r)).as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -1051,7 +1051,7 @@ impl Procedure for GnbDuResourceConfigurationProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::GnbDuResourceConfiguration(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::GnbDuResourceConfiguration(r)).as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -1097,7 +1097,7 @@ impl Procedure for IabtnlAddressAllocationProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::IabtnlAddressRequest(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::IabtnlAddressRequest(r)).as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -1141,8 +1141,7 @@ impl Procedure for IabupConfigurationUpdateProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::IabupConfigurationUpdateRequest(r))
-            .into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::IabupConfigurationUpdateRequest(r)).as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -1188,7 +1187,7 @@ impl Procedure for ResourceStatusReportingInitiationProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::ResourceStatusRequest(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::ResourceStatusRequest(r)).as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -1221,7 +1220,7 @@ impl Indication for ResourceStatusReportingProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::ResourceStatusUpdate(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::ResourceStatusUpdate(r)).as_bytes()
     }
 }
 
@@ -1245,7 +1244,7 @@ impl Indication for AccessAndMobilityIndicationProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::AccessAndMobilityIndication(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::AccessAndMobilityIndication(r)).as_bytes()
     }
 }
 
@@ -1272,7 +1271,7 @@ impl Indication for ReferenceTimeInformationReportingControlProcedure {
         F1apPdu::InitiatingMessage(InitiatingMessage::ReferenceTimeInformationReportingControl(
             r,
         ))
-        .into_bytes()
+        .as_bytes()
     }
 }
 
@@ -1296,8 +1295,7 @@ impl Indication for ReferenceTimeInformationReportProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::ReferenceTimeInformationReport(r))
-            .into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::ReferenceTimeInformationReport(r)).as_bytes()
     }
 }
 
@@ -1318,7 +1316,7 @@ impl Indication for AccessSuccessProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::AccessSuccess(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::AccessSuccess(r)).as_bytes()
     }
 }
 
@@ -1339,7 +1337,7 @@ impl Indication for CellTrafficTraceProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::CellTrafficTrace(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::CellTrafficTrace(r)).as_bytes()
     }
 }
 
@@ -1366,7 +1364,7 @@ impl Indication for PositioningAssistanceInformationControlProcedure {
         F1apPdu::InitiatingMessage(InitiatingMessage::PositioningAssistanceInformationControl(
             r,
         ))
-        .into_bytes()
+        .as_bytes()
     }
 }
 
@@ -1393,7 +1391,7 @@ impl Indication for PositioningAssistanceInformationFeedbackProcedure {
         F1apPdu::InitiatingMessage(InitiatingMessage::PositioningAssistanceInformationFeedback(
             r,
         ))
-        .into_bytes()
+        .as_bytes()
     }
 }
 
@@ -1426,7 +1424,7 @@ impl Procedure for PositioningMeasurementExchangeProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::PositioningMeasurementRequest(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::PositioningMeasurementRequest(r)).as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -1463,7 +1461,7 @@ impl Indication for PositioningMeasurementReportProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::PositioningMeasurementReport(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::PositioningMeasurementReport(r)).as_bytes()
     }
 }
 
@@ -1487,7 +1485,7 @@ impl Indication for PositioningMeasurementAbortProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::PositioningMeasurementAbort(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::PositioningMeasurementAbort(r)).as_bytes()
     }
 }
 
@@ -1514,7 +1512,7 @@ impl Indication for PositioningMeasurementFailureIndicationProcedure {
         F1apPdu::InitiatingMessage(InitiatingMessage::PositioningMeasurementFailureIndication(
             r,
         ))
-        .into_bytes()
+        .as_bytes()
     }
 }
 
@@ -1538,7 +1536,7 @@ impl Indication for PositioningMeasurementUpdateProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::PositioningMeasurementUpdate(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::PositioningMeasurementUpdate(r)).as_bytes()
     }
 }
 
@@ -1571,7 +1569,7 @@ impl Procedure for TrpInformationExchangeProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::TrpInformationRequest(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::TrpInformationRequest(r)).as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -1615,7 +1613,7 @@ impl Procedure for PositioningInformationExchangeProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::PositioningInformationRequest(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::PositioningInformationRequest(r)).as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -1659,7 +1657,7 @@ impl Procedure for PositioningActivationProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::PositioningActivationRequest(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::PositioningActivationRequest(r)).as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -1694,7 +1692,7 @@ impl Indication for PositioningDeactivationProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::PositioningDeactivation(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::PositioningDeactivation(r)).as_bytes()
     }
 }
 
@@ -1728,7 +1726,7 @@ impl Procedure for ECidMeasurementInitiationProcedure {
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
         F1apPdu::InitiatingMessage(InitiatingMessage::ECidMeasurementInitiationRequest(r))
-            .into_bytes()
+            .as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -1766,7 +1764,7 @@ impl Indication for ECidMeasurementFailureIndicationProcedure {
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
         F1apPdu::InitiatingMessage(InitiatingMessage::ECidMeasurementFailureIndication(r))
-            .into_bytes()
+            .as_bytes()
     }
 }
 
@@ -1788,7 +1786,7 @@ impl Indication for ECidMeasurementReportProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::ECidMeasurementReport(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::ECidMeasurementReport(r)).as_bytes()
     }
 }
 
@@ -1813,7 +1811,7 @@ impl Indication for ECidMeasurementTerminationProcedure {
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
         F1apPdu::InitiatingMessage(InitiatingMessage::ECidMeasurementTerminationCommand(r))
-            .into_bytes()
+            .as_bytes()
     }
 }
 
@@ -1837,7 +1835,7 @@ impl Indication for PositioningInformationUpdateProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::PositioningInformationUpdate(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::PositioningInformationUpdate(r)).as_bytes()
     }
 }
 
@@ -1868,7 +1866,7 @@ impl Procedure for BroadcastContextSetupProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::BroadcastContextSetupRequest(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::BroadcastContextSetupRequest(r)).as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -1914,8 +1912,7 @@ impl Procedure for BroadcastContextReleaseProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::BroadcastContextReleaseCommand(r))
-            .into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::BroadcastContextReleaseCommand(r)).as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -1950,8 +1947,7 @@ impl Indication for BroadcastContextReleaseRequestProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::BroadcastContextReleaseRequest(r))
-            .into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::BroadcastContextReleaseRequest(r)).as_bytes()
     }
 }
 
@@ -1987,7 +1983,7 @@ impl Procedure for BroadcastContextModificationProcedure {
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
         F1apPdu::InitiatingMessage(InitiatingMessage::BroadcastContextModificationRequest(r))
-            .into_bytes()
+            .as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -2022,7 +2018,7 @@ impl Indication for MulticastGroupPagingProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::MulticastGroupPaging(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::MulticastGroupPaging(r)).as_bytes()
     }
 }
 
@@ -2053,7 +2049,7 @@ impl Procedure for MulticastContextSetupProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::MulticastContextSetupRequest(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::MulticastContextSetupRequest(r)).as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -2099,8 +2095,7 @@ impl Procedure for MulticastContextReleaseProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::MulticastContextReleaseCommand(r))
-            .into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::MulticastContextReleaseCommand(r)).as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -2135,8 +2130,7 @@ impl Indication for MulticastContextReleaseRequestProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::MulticastContextReleaseRequest(r))
-            .into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::MulticastContextReleaseRequest(r)).as_bytes()
     }
 }
 
@@ -2172,7 +2166,7 @@ impl Procedure for MulticastContextModificationProcedure {
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
         F1apPdu::InitiatingMessage(InitiatingMessage::MulticastContextModificationRequest(r))
-            .into_bytes()
+            .as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -2221,7 +2215,7 @@ impl Procedure for MulticastDistributionSetupProcedure {
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
         F1apPdu::InitiatingMessage(InitiatingMessage::MulticastDistributionSetupRequest(r))
-            .into_bytes()
+            .as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -2270,7 +2264,7 @@ impl Procedure for MulticastDistributionReleaseProcedure {
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
         F1apPdu::InitiatingMessage(InitiatingMessage::MulticastDistributionReleaseCommand(r))
-            .into_bytes()
+            .as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -2314,8 +2308,7 @@ impl Procedure for PdcMeasurementInitiationProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::PdcMeasurementInitiationRequest(r))
-            .into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::PdcMeasurementInitiationRequest(r)).as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -2350,7 +2343,7 @@ impl Indication for PdcMeasurementReportProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::PdcMeasurementReport(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::PdcMeasurementReport(r)).as_bytes()
     }
 }
 
@@ -2375,7 +2368,7 @@ impl Indication for PdcMeasurementTerminationCommandProcedure {
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
         F1apPdu::InitiatingMessage(InitiatingMessage::PdcMeasurementTerminationCommand(r))
-            .into_bytes()
+            .as_bytes()
     }
 }
 
@@ -2399,8 +2392,7 @@ impl Indication for PdcMeasurementFailureIndicationProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::PdcMeasurementFailureIndication(r))
-            .into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::PdcMeasurementFailureIndication(r)).as_bytes()
     }
 }
 
@@ -2433,7 +2425,7 @@ impl Procedure for PrsConfigurationExchangeProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::PrsConfigurationRequest(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::PrsConfigurationRequest(r)).as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -2480,7 +2472,7 @@ impl Procedure for MeasurementPreconfigurationProcedure {
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
         F1apPdu::InitiatingMessage(InitiatingMessage::MeasurementPreconfigurationRequired(r))
-            .into_bytes()
+            .as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -2515,7 +2507,7 @@ impl Indication for MeasurementActivationProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::MeasurementActivation(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::MeasurementActivation(r)).as_bytes()
     }
 }
 
@@ -2537,7 +2529,7 @@ impl Indication for QoEInformationTransferProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::QoEInformationTransfer(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::QoEInformationTransfer(r)).as_bytes()
     }
 }
 
@@ -2562,7 +2554,7 @@ impl Indication for PosSystemInformationDeliveryProcedure {
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
         F1apPdu::InitiatingMessage(InitiatingMessage::PosSystemInformationDeliveryCommand(r))
-            .into_bytes()
+            .as_bytes()
     }
 }
 
@@ -2586,7 +2578,7 @@ impl Indication for DuCuCellSwitchNotificationProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::DuCuCellSwitchNotification(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::DuCuCellSwitchNotification(r)).as_bytes()
     }
 }
 
@@ -2610,7 +2602,7 @@ impl Indication for CuDuCellSwitchNotificationProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::CuDuCellSwitchNotification(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::CuDuCellSwitchNotification(r)).as_bytes()
     }
 }
 
@@ -2632,7 +2624,7 @@ impl Indication for DuCuTaInformationTransferProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::DuCuTaInformationTransfer(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::DuCuTaInformationTransfer(r)).as_bytes()
     }
 }
 
@@ -2654,7 +2646,7 @@ impl Indication for CuDuTaInformationTransferProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::CuDuTaInformationTransfer(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::CuDuTaInformationTransfer(r)).as_bytes()
     }
 }
 
@@ -2678,7 +2670,7 @@ impl Indication for QoEInformationTransferControlProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::QoEInformationTransferControl(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::QoEInformationTransferControl(r)).as_bytes()
     }
 }
 
@@ -2699,7 +2691,7 @@ impl Indication for RachIndicationProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::RachIndication(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::RachIndication(r)).as_bytes()
     }
 }
 
@@ -2735,7 +2727,7 @@ impl Procedure for TimingSynchronisationStatusProcedure {
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
         F1apPdu::InitiatingMessage(InitiatingMessage::TimingSynchronisationStatusRequest(r))
-            .into_bytes()
+            .as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -2773,7 +2765,7 @@ impl Indication for TimingSynchronisationStatusReportProcedure {
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
         F1apPdu::InitiatingMessage(InitiatingMessage::TimingSynchronisationStatusReport(r))
-            .into_bytes()
+            .as_bytes()
     }
 }
 
@@ -2795,7 +2787,7 @@ impl Indication for Miabf1SetupTriggeringProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::Miabf1SetupTriggering(r)).into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::Miabf1SetupTriggering(r)).as_bytes()
     }
 }
 
@@ -2819,8 +2811,7 @@ impl Indication for Miabf1SetupOutcomeNotificationProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::Miabf1SetupOutcomeNotification(r))
-            .into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::Miabf1SetupOutcomeNotification(r)).as_bytes()
     }
 }
 
@@ -2856,7 +2847,7 @@ impl Procedure for MulticastContextNotificationProcedure {
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
         F1apPdu::InitiatingMessage(InitiatingMessage::MulticastContextNotificationIndication(r))
-            .into_bytes()
+            .as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -2905,7 +2896,7 @@ impl Procedure for MulticastCommonConfigurationProcedure {
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
         F1apPdu::InitiatingMessage(InitiatingMessage::MulticastCommonConfigurationRequest(r))
-            .into_bytes()
+            .as_bytes()
     }
 
     fn decode_response(bytes: &[u8]) -> Result<Self::Success, RequestError<Self::Failure>> {
@@ -2943,7 +2934,7 @@ impl Indication for BroadcastTransportResourceRequestProcedure {
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
         F1apPdu::InitiatingMessage(InitiatingMessage::BroadcastTransportResourceRequest(r))
-            .into_bytes()
+            .as_bytes()
     }
 }
 
@@ -2967,8 +2958,7 @@ impl Indication for DuCuAccessAndMobilityIndicationProcedure {
     }
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
-        F1apPdu::InitiatingMessage(InitiatingMessage::DuCuAccessAndMobilityIndication(r))
-            .into_bytes()
+        F1apPdu::InitiatingMessage(InitiatingMessage::DuCuAccessAndMobilityIndication(r)).as_bytes()
     }
 }
 
@@ -2993,7 +2983,7 @@ impl Indication for SrsInformationReservationNotificationProcedure {
 
     fn encode_request(r: Self::Request) -> Result<Vec<u8>, PerCodecError> {
         F1apPdu::InitiatingMessage(InitiatingMessage::SrsInformationReservationNotification(r))
-            .into_bytes()
+            .as_bytes()
     }
 }
 

@@ -14,7 +14,7 @@ pub fn f1_setup_response(
     gnb_cu_name: Option<String>,
 ) -> Result<F1SetupResponse> {
     // Ask for all served cells to be activated.
-    let sib2 = build_sib2().into_bytes()?;
+    let sib2 = build_sib2().as_bytes()?;
     let cells_to_be_activated_list = r.gnb_du_served_cells_list.map(|cells| {
         CellsToBeActivatedList(
             cells

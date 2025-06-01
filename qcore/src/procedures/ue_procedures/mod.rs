@@ -125,7 +125,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
     }
 
     async fn rrc_indication<T: Send + SerDes>(&mut self, srb_id: SrbId, rrc: &T) -> Result<()> {
-        let rrc_bytes = rrc.into_bytes()?;
+        let rrc_bytes = rrc.as_bytes()?;
         let rrc_container = maybe_pdcp_encapsulate(rrc_bytes, srb_id.0 as u8, &mut self.ue.pdcp_tx);
         let dl_message = crate::f1ap::build::dl_rrc_message_transfer(
             self.ue.key,
