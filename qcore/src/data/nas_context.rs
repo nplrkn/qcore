@@ -21,11 +21,13 @@ impl NasContext {
             .unwrap_or_default()
     }
 
-    pub fn decode(&mut self, data: &[u8]) -> Result<Nas5gsMessage> {
-        let nas = decode_nas_5gs_message(data)
-            .map_err(|e| anyhow!("NAS decode error - {e} - message bytes: {:?}", data))?;
+    pub fn decode(&mut self, data: &[u8]) -> Result<Box<Nas5gsMessage>> {
+        let nas = Box::new(
+            decode_nas_5gs_message(data)
+                .map_err(|e| anyhow!("NAS decode error - {e} - message bytes: {:?}", data))?,
+        );
 
-        let security_header = if let Nas5gsMessage::SecurityProtected(hdr, _) = &nas {
+        let security_header = if let Nas5gsMessage::SecurityProtected(ref hdr, _) = *nas {
             Some(hdr)
         } else {
             None
@@ -43,12 +45,14 @@ impl NasContext {
     pub fn decode_with_security_header(
         &mut self,
         data: &[u8],
-    ) -> Result<(Nas5gsMessage, Option<Nas5gsSecurityHeader>)> {
-        let nas_message = decode_nas_5gs_message(data)
-            .map_err(|e| anyhow!("NAS decode error - {e} - message bytes: {:?}", data))?;
-        Ok(match nas_message {
+    ) -> Result<(Box<Nas5gsMessage>, Option<Nas5gsSecurityHeader>)> {
+        let nas_message = Box::new(
+            decode_nas_5gs_message(data)
+                .map_err(|e| anyhow!("NAS decode error - {e} - message bytes: {:?}", data))?,
+        );
+        Ok(match *nas_message {
             Nas5gsMessage::Gmm(_, _) => (nas_message, None),
-            Nas5gsMessage::SecurityProtected(hdr, bx) => (*bx, Some(hdr)),
+            Nas5gsMessage::SecurityProtected(hdr, bx) => (bx, Some(hdr)),
             Nas5gsMessage::Gsm(_, _) => bail!("Unexpected Nas SM message {:?} ", nas_message),
         })
     }
@@ -57,7 +61,7 @@ impl NasContext {
         self.security_context = Some(SecurityContext::new(knasint));
     }
 
-    pub fn encode(&mut self, nas: Nas5gsMessage) -> Result<Vec<u8>> {
+    pub fn encode(&mut self, nas: Box<Nas5gsMessage>) -> Result<Vec<u8>> {
         let nas = if let Some(security_context) = &mut self.security_context {
             security_context.encode_with_integrity(nas)?
         } else {

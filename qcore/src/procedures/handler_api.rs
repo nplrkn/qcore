@@ -11,7 +11,7 @@ use xxap::{GtpTunnel, Indication, Procedure, RequestError};
 
 #[derive(Debug)]
 pub enum UeMessage {
-    F1ap(F1apPdu),
+    F1ap(Box<F1apPdu>),
     TakeContext(Sender<NasContext>),
 }
 
@@ -46,10 +46,10 @@ pub trait HandlerApi: Send + Sync + Clone + 'static {
 
     async fn f1ap_request<P: Procedure>(
         &self,
-        r: P::Request,
+        r: Box<P::Request>,
         logger: &Logger,
     ) -> Result<P::Success, RequestError<P::Failure>>;
-    async fn f1ap_indication<P: Indication>(&self, r: P::Request, logger: &Logger);
+    async fn f1ap_indication<P: Indication>(&self, r: Box<P::Request>, logger: &Logger);
 
     async fn reserve_userplane_session(&self, logger: &Logger) -> Result<UserplaneSession>;
     async fn commit_userplane_session(

@@ -53,10 +53,9 @@ impl<P: Pdu> Mock<P> {
     pub async fn new(logger: Logger) -> Self {
         let (sender, receiver) = async_channel::unbounded();
         //let receiver = DebugReceiver(receiver, logger.clone());
-        let transport = SctpTransportProvider::new();
 
         Mock {
-            transport,
+            transport: SctpTransportProvider::new(),
             receiver,
             logger,
             handler: Handler(sender),

@@ -13,12 +13,10 @@ pub struct PdcpTx {
     pub pdcp_integrity_key: Option<[u8; 16]>,
 }
 pub struct PdcpPdu(pub Vec<u8>);
-impl PdcpPdu {
-    /// View the inner packet in a PDCP packet.
-    pub fn view_inner(&self) -> Result<&[u8]> {
-        ensure!(self.0.len() >= 6, "Too short for PDCP PDU");
-        Ok(&self.0[2..self.0.len() - 4])
-    }
+
+pub fn view_inner(v: &Vec<u8>) -> Result<&[u8]> {
+    ensure!(v.len() >= 6, "Too short for PDCP PDU");
+    Ok(&v[2..v.len() - 4])
 }
 
 impl PdcpTx {

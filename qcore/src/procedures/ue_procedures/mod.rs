@@ -25,7 +25,7 @@ use f1ap::{
     UlRrcMessageTransfer,
 };
 use oxirush_nas::Nas5gsMessage;
-use pdcp::{PdcpPdu, PdcpTx};
+use pdcp::PdcpTx;
 use rrc::{
     C1_6, CriticalExtensions37, DedicatedNasMessage, UlDcchMessage, UlDcchMessageType,
     UlInformationTransfer, UlInformationTransferIEs,
@@ -65,11 +65,11 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
 
     // Return Err if the UE handler should exit.
     async fn dispatch(mut self) -> Result<()> {
-        match self.receive_pdu().await? {
+        match *self.receive_pdu().await? {
             F1apPdu::InitiatingMessage(InitiatingMessage::UlRrcMessageTransfer(r)) => {
                 self.log_message(">> F1ap UlRrcMessageTransfer");
-                let rrc = self.extract_ul_dcch_message(r)?;
-                match rrc.message {
+                let mut rrc = self.extract_ul_dcch_message(&r)?;
+                match &mut rrc.message {
                     UlDcchMessageType::C1(C1_6::UlInformationTransfer(ul_information_transfer)) => {
                         UlInformationTransferProcedure::new(self)
                             .run(ul_information_transfer)
@@ -81,7 +81,9 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
                 }
             }
             F1apPdu::InitiatingMessage(InitiatingMessage::UeContextReleaseRequest(r)) => {
-                UeContextReleaseProcedure::new(self).du_initiated(r).await?;
+                UeContextReleaseProcedure::new(self)
+                    .du_initiated(&r)
+                    .await?;
                 bail!("Context release");
             }
             pdu => {
@@ -94,7 +96,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
     // Returns the next F1AP PDU, and also handles TakeContext messages.
     // The latter causes the self-destruction of the UE handler by returning
     // an error.
-    async fn receive_pdu(&mut self) -> Result<F1apPdu> {
+    async fn receive_pdu(&mut self) -> Result<Box<F1apPdu>> {
         match self.receiver.recv().await? {
             UeMessage::F1ap(pdu) => Ok(pdu),
             UeMessage::TakeContext(sender) => {
@@ -107,22 +109,26 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
     async fn rrc_request<T: Send + SerDes>(
         &mut self,
         srb_id: SrbId,
-        rrc: T,
-    ) -> Result<UlDcchMessage> {
+        rrc: &Box<T>,
+    ) -> Result<Box<UlDcchMessage>> {
         self.rrc_indication(srb_id, rrc).await?;
 
         let pdu = self.receive_pdu().await?;
         let F1apPdu::InitiatingMessage(InitiatingMessage::UlRrcMessageTransfer(
             ul_rrc_message_transfer,
-        )) = pdu
+        )) = *pdu
         else {
             bail!("Expected UlRrcMessageTransfer, got {pdu:?}");
         };
         self.log_message(">> F1ap UlRrcMessageTransfer");
-        self.extract_ul_dcch_message(ul_rrc_message_transfer)
+        self.extract_ul_dcch_message(&ul_rrc_message_transfer)
     }
 
-    async fn rrc_indication<T: Send + SerDes>(&mut self, srb_id: SrbId, rrc: T) -> Result<()> {
+    async fn rrc_indication<T: Send + SerDes>(
+        &mut self,
+        srb_id: SrbId,
+        rrc: &Box<T>,
+    ) -> Result<()> {
         let rrc_bytes = rrc.into_bytes()?;
         let rrc_container = maybe_pdcp_encapsulate(rrc_bytes, srb_id.0 as u8, &mut self.ue.pdcp_tx);
         let dl_message = crate::f1ap::build::dl_rrc_message_transfer(
@@ -138,23 +144,19 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         Ok(())
     }
 
-    fn extract_ul_dcch_message(
-        &self,
-        ul_rrc_message_transfer: UlRrcMessageTransfer,
-    ) -> Result<UlDcchMessage> {
-        let pdcp_pdu = PdcpPdu(ul_rrc_message_transfer.rrc_container.0);
-        let rrc_message_bytes = pdcp_pdu.view_inner()?;
-        Ok(UlDcchMessage::from_bytes(rrc_message_bytes)?)
+    fn extract_ul_dcch_message(&self, r: &UlRrcMessageTransfer) -> Result<Box<UlDcchMessage>> {
+        let rrc_message_bytes = pdcp::view_inner(&r.rrc_container.0)?;
+        Ok(Box::new(UlDcchMessage::from_bytes(rrc_message_bytes)?))
     }
 
-    async fn nas_request(&mut self, nas: Nas5gsMessage) -> Result<Nas5gsMessage> {
+    async fn nas_request(&mut self, nas: Box<Nas5gsMessage>) -> Result<Box<Nas5gsMessage>> {
         let nas_bytes = self.ue.nas.encode(nas)?;
         let rrc = crate::rrc::build::dl_information_transfer(
             1, // TODO transaction ID
             DedicatedNasMessage(nas_bytes),
         );
 
-        self.rrc_request(SrbId(1), rrc)
+        self.rrc_request(SrbId(1), &rrc)
             .await
             .and_then(|x| match x.message {
                 UlDcchMessageType::C1(C1_6::UlInformationTransfer(UlInformationTransfer {
@@ -173,14 +175,14 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
             })
     }
 
-    async fn nas_indication(&mut self, nas: Nas5gsMessage) -> Result<()> {
+    async fn nas_indication(&mut self, nas: Box<Nas5gsMessage>) -> Result<()> {
         let nas_bytes = self.ue.nas.encode(nas)?;
         let rrc = crate::rrc::build::dl_information_transfer(
             1, // TODO transaction ID
             DedicatedNasMessage(nas_bytes),
         );
 
-        self.rrc_indication(SrbId(1), rrc).await
+        self.rrc_indication(SrbId(1), &rrc).await
     }
 }
 

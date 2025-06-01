@@ -261,15 +261,15 @@ impl HandlerApi for QCore {
 
     async fn f1ap_request<P: Procedure>(
         &self,
-        r: P::Request,
+        r: Box<P::Request>,
         logger: &Logger,
     ) -> Result<P::Success, RequestError<P::Failure>> {
-        <Stack as RequestProvider<P>>::request(&self.f1ap, r, logger)
+        <Stack as RequestProvider<P>>::request(&self.f1ap, *r, logger)
             .await
             .map(|(x, _)| x)
     }
-    async fn f1ap_indication<P: Indication>(&self, r: P::Request, logger: &Logger) {
-        <Stack as IndicationHandler<P>>::handle(&self.f1ap, r, logger).await
+    async fn f1ap_indication<P: Indication>(&self, r: Box<P::Request>, logger: &Logger) {
+        <Stack as IndicationHandler<P>>::handle(&self.f1ap, *r, logger).await
     }
 
     async fn reserve_userplane_session(&self, logger: &Logger) -> Result<UserplaneSession> {

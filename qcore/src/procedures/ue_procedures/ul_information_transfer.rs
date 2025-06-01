@@ -1,4 +1,4 @@
-use super::{UeProcedure, UplinkNasProcedure, HandlerApi};
+use super::{HandlerApi, UeProcedure, UplinkNasProcedure};
 use anyhow::{Result, bail};
 use derive_deref::{Deref, DerefMut};
 use rrc::{
@@ -13,7 +13,7 @@ impl<'a, A: HandlerApi> UlInformationTransferProcedure<'a, A> {
         UlInformationTransferProcedure(ue_procedure)
     }
 
-    pub async fn run(self, ul_information_transfer: UlInformationTransfer) -> Result<()> {
+    pub async fn run(self, ul_information_transfer: &mut UlInformationTransfer) -> Result<()> {
         self.log_message(">> UlInformationTransfer");
         let UlInformationTransfer {
             critical_extensions:

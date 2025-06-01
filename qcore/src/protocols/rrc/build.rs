@@ -3,8 +3,8 @@
 use asn1_per::{NonEmpty, nonempty};
 use rrc::*;
 
-pub fn setup(rrc_transaction_identifier: u8, master_cell_group: Vec<u8>) -> DlCcchMessage {
-    DlCcchMessage {
+pub fn setup(rrc_transaction_identifier: u8, master_cell_group: Vec<u8>) -> Box<DlCcchMessage> {
+    Box::new(DlCcchMessage {
         message: DlCcchMessageType::C1(C1_1::RrcSetup(RrcSetup {
             rrc_transaction_identifier: RrcTransactionIdentifier(rrc_transaction_identifier),
             critical_extensions: CriticalExtensions21::RrcSetup(RrcSetupIEs {
@@ -25,13 +25,13 @@ pub fn setup(rrc_transaction_identifier: u8, master_cell_group: Vec<u8>) -> DlCc
                 late_non_critical_extension: None,
             }),
         })),
-    }
+    })
 }
 
-pub fn security_mode_command(rrc_transaction_identifier: u8) -> DlDcchMessage {
+pub fn security_mode_command(rrc_transaction_identifier: u8) -> Box<DlDcchMessage> {
     let rrc_transaction_identifier = RrcTransactionIdentifier(rrc_transaction_identifier);
 
-    DlDcchMessage {
+    Box::new(DlDcchMessage {
         message: DlDcchMessageType::C1(C1_2::SecurityModeCommand(rrc::SecurityModeCommand {
             rrc_transaction_identifier,
             critical_extensions: CriticalExtensions26::SecurityModeCommand(
@@ -46,14 +46,14 @@ pub fn security_mode_command(rrc_transaction_identifier: u8) -> DlDcchMessage {
                 },
             ),
         })),
-    }
+    })
 }
 
 pub fn dl_information_transfer(
     rrc_transaction_identifier: u8,
     dedicated_nas_message: DedicatedNasMessage,
-) -> DlDcchMessage {
-    DlDcchMessage {
+) -> Box<DlDcchMessage> {
+    Box::new(DlDcchMessage {
         message: DlDcchMessageType::C1(C1_2::DlInformationTransfer(DlInformationTransfer {
             rrc_transaction_identifier: RrcTransactionIdentifier(rrc_transaction_identifier),
             critical_extensions: CriticalExtensions4::DlInformationTransfer(
@@ -64,7 +64,7 @@ pub fn dl_information_transfer(
                 },
             ),
         })),
-    }
+    })
 }
 
 pub fn reconfiguration(
@@ -72,12 +72,12 @@ pub fn reconfiguration(
     nas_messages: Option<NonEmpty<Vec<u8>>>,
     cell_group_config: Vec<u8>,
     session_id: u8,
-) -> DlDcchMessage {
+) -> Box<DlDcchMessage> {
     let dedicated_nas_message_list = nas_messages.map(|x| (x.map(DedicatedNasMessage)));
 
     // TODO - lots of hardcoding here
 
-    DlDcchMessage {
+    Box::new(DlDcchMessage {
         message: DlDcchMessageType::C1(C1_2::RrcReconfiguration(rrc::RrcReconfiguration {
             rrc_transaction_identifier: RrcTransactionIdentifier(rrc_transaction_identifier),
             critical_extensions: CriticalExtensions15::RrcReconfiguration(RrcReconfigurationIEs {
@@ -129,5 +129,5 @@ pub fn reconfiguration(
                 }),
             }),
         })),
-    }
+    })
 }

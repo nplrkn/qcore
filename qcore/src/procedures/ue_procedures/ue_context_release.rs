@@ -18,13 +18,13 @@ impl<'a, A: HandlerApi> UeContextReleaseProcedure<'a, A> {
         self.perform_f1_ue_context_release(cause).await
     }
 
-    pub async fn du_initiated(&mut self, r: UeContextReleaseRequest) -> Result<()> {
+    pub async fn du_initiated(&mut self, r: &UeContextReleaseRequest) -> Result<()> {
         self.log_message(">> F1ap UeContextReleaseRequest");
         info!(
             self.logger,
             "DU initiated context release, cause {:?}", r.cause
         );
-        self.perform_f1_ue_context_release(r.cause).await
+        self.perform_f1_ue_context_release(r.cause.clone()).await
     }
 
     async fn perform_f1_ue_context_release(&self, cause: Cause) -> Result<()> {

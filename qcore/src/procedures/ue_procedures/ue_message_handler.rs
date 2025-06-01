@@ -14,11 +14,11 @@ pub struct UeMessageHandler<A: HandlerApi> {
 impl<A: HandlerApi> UeMessageHandler<A> {
     pub fn spawn(ue_id: u32, api: A, logger: Logger) -> Sender<UeMessage> {
         let (sender, receiver) = channel::unbounded();
-        let handler = UeMessageHandler {
+        let handler = Box::new(UeMessageHandler {
             receiver,
             api,
             logger,
-        };
+        });
         async_std::task::spawn(async move {
             if let Err(e) = handler.run(ue_id).await {
                 warn!(handler.logger, "UE message handler exiting: {e}");
@@ -29,14 +29,16 @@ impl<A: HandlerApi> UeMessageHandler<A> {
 
     async fn run(&self, ue_id: u32) -> Result<()> {
         // Create a UE context.
-        let message = self.receiver.recv().await?;
-        let UeMessage::F1ap(F1apPdu::InitiatingMessage(
-            InitiatingMessage::InitialUlRrcMessageTransfer(r),
-        )) = message
-        else {
-            bail!("Expected InitialUlRrcMessageTransfer, got {message:?}");
+        let UeMessage::F1ap(message) = self.receiver.recv().await? else {
+            bail!("Expected InitialUlRrcMessageTransfer, got TakeContext");
         };
-        let mut ue_context = UeContext::new(ue_id, r.gnb_du_ue_f1ap_id, r.nr_cgi.clone());
+        let r = match *message {
+            F1apPdu::InitiatingMessage(InitiatingMessage::InitialUlRrcMessageTransfer(r)) => {
+                Box::new(r)
+            }
+            _ => bail!("Expected InitialUlRrcMessageTransfer, got {message:?}"),
+        };
+        let mut ue_context = Box::new(UeContext::new(ue_id, r.gnb_du_ue_f1ap_id, r.nr_cgi.clone()));
         let mut give_context = None;
 
         let result = self.run_inner(&mut ue_context, r, &mut give_context).await;
@@ -74,7 +76,7 @@ impl<A: HandlerApi> UeMessageHandler<A> {
     async fn run_inner(
         &self,
         ue_context: &mut UeContext,
-        r: InitialUlRrcMessageTransfer,
+        r: Box<InitialUlRrcMessageTransfer>,
         give_context: &mut Option<Sender<NasContext>>,
     ) -> Result<()> {
         // Run the initial access procedure.

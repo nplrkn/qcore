@@ -44,7 +44,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
 
     pub async fn run(
         mut self,
-        r: NasRegistrationRequest,
+        r: Box<NasRegistrationRequest>,
         security_header: Option<Nas5gsSecurityHeader>,
     ) -> Result<()> {
         self.log_message(">> RegistrationRequest");
@@ -82,7 +82,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
 
     async fn handle_registration(
         &mut self,
-        registration_request: NasRegistrationRequest,
+        registration_request: Box<NasRegistrationRequest>,
         security_header: Option<Nas5gsSecurityHeader>,
     ) -> Result<(), u8> {
         let error_cause_code = FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED;
@@ -205,7 +205,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         self.log_message("<< NasAuthenticationRequest");
 
         let response = self.nas_request(r).await?;
-        match response {
+        match *response {
             Nas5gsMessage::Gmm(_header, Nas5gmmMessage::AuthenticationResponse(response)) => {
                 self.log_message(">> NasAuthenticationResponse");
                 self.check_authentication_response(response, &challenge)?;
@@ -297,14 +297,14 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         self.configure_rrc_security(uplink_nas_count);
         let r = crate::rrc::build::security_mode_command(1);
         self.log_message("<< RrcSecurityModeCommand");
-        let _rrc_security_mode_complete = self.rrc_request(SrbId(1), r).await;
+        let _rrc_security_mode_complete = self.rrc_request(SrbId(1), &r).await;
         self.log_message(">> RRcSecurityModeComplete");
         Ok(())
     }
 
     fn check_registration_request(
         &self,
-        registration_request: NasRegistrationRequest,
+        registration_request: Box<NasRegistrationRequest>,
     ) -> Result<RegistrationType, u8> {
         self.log_message(">> NAS Registration Request");
 

@@ -6,8 +6,8 @@ use xxap::{GtpTunnel, TransportLayerAddress};
 
 use super::UeContext;
 
-pub fn f1_setup_request() -> F1apPdu {
-    F1apPdu::InitiatingMessage(InitiatingMessage::F1SetupRequest(F1SetupRequest {
+pub fn f1_setup_request() -> Box<F1apPdu> {
+    Box::new(F1apPdu::InitiatingMessage(InitiatingMessage::F1SetupRequest(F1SetupRequest {
         transaction_id: TransactionId(0),
         gnb_du_id: GnbDuId(123),
         gnb_du_rrc_version: RrcVersion {
@@ -21,17 +21,17 @@ pub fn f1_setup_request() -> F1apPdu {
         extended_gnb_du_name: None,
         rrc_terminating_iab_donor_gnb_id: None,
         mobile_iab_mt_user_location_information: None,
-    }))
+    })))
 }
 
-pub fn f1_removal_request() -> F1apPdu {
-    F1apPdu::InitiatingMessage(InitiatingMessage::F1RemovalRequest(F1RemovalRequest {
+pub fn f1_removal_request() -> Box<F1apPdu> {
+    Box::new(F1apPdu::InitiatingMessage(InitiatingMessage::F1RemovalRequest(F1RemovalRequest {
         transaction_id: TransactionId(0),
-    }))
+    })))
 }
 
-pub fn initial_ul_rrc_message_transfer(gnb_du_ue_f1ap_id: u32, rrc_bytes: Vec<u8>) -> F1apPdu {
-    F1apPdu::InitiatingMessage(InitiatingMessage::InitialUlRrcMessageTransfer(
+pub fn initial_ul_rrc_message_transfer(gnb_du_ue_f1ap_id: u32, rrc_bytes: Vec<u8>) -> Box<F1apPdu> {
+    Box::new(F1apPdu::InitiatingMessage(InitiatingMessage::InitialUlRrcMessageTransfer(
         InitialUlRrcMessageTransfer {
             gnb_du_ue_f1ap_id: GnbDuUeF1apId(gnb_du_ue_f1ap_id),
             nr_cgi: NrCgi {
@@ -50,15 +50,15 @@ pub fn initial_ul_rrc_message_transfer(gnb_du_ue_f1ap_id: u32, rrc_bytes: Vec<u8
             sidelink_relay_configuration: None,
             nr_e_red_cap_ue_indication: None,
         },
-    ))
+    )))
 }
 
 pub fn ul_rrc_message_transfer(
     gnb_cu_ue_f1ap_id: GnbCuUeF1apId,
     gnb_du_ue_f1ap_id: u32,
     pdcp_pdu_bytes: Vec<u8>,
-) -> F1apPdu {
-    F1apPdu::InitiatingMessage(InitiatingMessage::UlRrcMessageTransfer(
+) -> Box<F1apPdu> {
+    Box::new(F1apPdu::InitiatingMessage(InitiatingMessage::UlRrcMessageTransfer(
         UlRrcMessageTransfer {
             gnb_cu_ue_f1ap_id,
             gnb_du_ue_f1ap_id: GnbDuUeF1apId(gnb_du_ue_f1ap_id),
@@ -67,10 +67,24 @@ pub fn ul_rrc_message_transfer(
             selected_plmn_id: None,
             new_gnb_du_ue_f1ap_id: None,
         },
-    ))
+    )))
 }
 
-pub fn ue_context_setup_response(ue: &UeContext, local_ip: &String) -> Result<F1apPdu> {
+pub fn ue_context_release_complete(
+    gnb_cu_ue_f1ap_id: GnbCuUeF1apId,
+    gnb_du_ue_f1ap_id: GnbDuUeF1apId,
+) -> Box<F1apPdu> {
+    Box::new(F1apPdu::SuccessfulOutcome(
+            SuccessfulOutcome::UeContextReleaseComplete(UeContextReleaseComplete {
+                gnb_cu_ue_f1ap_id,
+                gnb_du_ue_f1ap_id,
+                criticality_diagnostics: None,
+                recommended_ss_bs_for_paging_list: None,
+            }),
+        ))
+}
+
+pub fn ue_context_setup_response(ue: &UeContext, local_ip: &String) -> Result<Box<F1apPdu>> {
     let Some(gnb_cu_ue_f1ap_id) = ue.gnb_cu_ue_f1ap_id else {
         bail!("CU F1AP ID should be set on UE");
     };
@@ -82,7 +96,7 @@ pub fn ue_context_setup_response(ue: &UeContext, local_ip: &String) -> Result<F1
 
     // TODO: confirm setup of SRB2
 
-    Ok(F1apPdu::SuccessfulOutcome(
+    Ok(Box::new(F1apPdu::SuccessfulOutcome(
         SuccessfulOutcome::UeContextSetupResponse(UeContextSetupResponse {
             gnb_cu_ue_f1ap_id,
             gnb_du_ue_f1ap_id: GnbDuUeF1apId(ue.ue_id),
@@ -158,14 +172,14 @@ pub fn ue_context_setup_response(ue: &UeContext, local_ip: &String) -> Result<F1
             ltm_configuration: None,
             s_cpac_configuration: None,
         }),
-    ))
+    )))
 }
 
 pub fn build_gnb_cu_configuration_update_acknowledge(
     transaction_id: TransactionId,
     transport_layer_address: TransportLayerAddress,
-) -> F1apPdu {
-    F1apPdu::SuccessfulOutcome(SuccessfulOutcome::GnbCuConfigurationUpdateAcknowledge(
+) -> Box<F1apPdu> {
+    Box::new(F1apPdu::SuccessfulOutcome(SuccessfulOutcome::GnbCuConfigurationUpdateAcknowledge(
         GnbCuConfigurationUpdateAcknowledge {
             transaction_id,
             cells_failed_to_be_activated_list: None,
@@ -181,11 +195,11 @@ pub fn build_gnb_cu_configuration_update_acknowledge(
             transport_layer_address_info: None,
             cells_with_ss_bs_activated_list: None,
         },
-    ))
+    )))
 }
 
-pub fn gnb_du_configuration_update() -> F1apPdu {
-    F1apPdu::InitiatingMessage(InitiatingMessage::GnbDuConfigurationUpdate(
+pub fn gnb_du_configuration_update() -> Box<F1apPdu> {
+    Box::new(F1apPdu::InitiatingMessage(InitiatingMessage::GnbDuConfigurationUpdate(
         GnbDuConfigurationUpdate {
             transaction_id: TransactionId(1),
             served_cells_to_add_list: None,
@@ -202,14 +216,14 @@ pub fn gnb_du_configuration_update() -> F1apPdu {
             rrc_terminating_iab_donor_related_info: None,
             mobile_iab_mt_user_location_information: None,
         },
-    ))
+    )))
 }
 
-pub fn ue_context_release_request(ue: &UeContext) -> F1apPdu {
+pub fn ue_context_release_request(ue: &UeContext) -> Box<F1apPdu> {
     let Some(gnb_cu_ue_f1ap_id) = ue.gnb_cu_ue_f1ap_id else {
         panic!("CU F1AP ID should be set on UE");
     };
-    F1apPdu::InitiatingMessage(InitiatingMessage::UeContextReleaseRequest(
+    Box::new(F1apPdu::InitiatingMessage(InitiatingMessage::UeContextReleaseRequest(
         UeContextReleaseRequest {
             gnb_cu_ue_f1ap_id,
             gnb_du_ue_f1ap_id: GnbDuUeF1apId(ue.ue_id),
@@ -217,7 +231,7 @@ pub fn ue_context_release_request(ue: &UeContext) -> F1apPdu {
             target_cells_to_cancel: None,
             ltm_cells_to_be_released_list: None,
         },
-    ))
+    )))
 }
 
 fn make_rrc_cell_group_config() -> rrc::CellGroupConfig {

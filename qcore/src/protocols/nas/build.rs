@@ -21,9 +21,9 @@ use std::net::IpAddr;
 
 use super::AmfIds;
 
-pub fn authentication_request(rand: &[u8; 16], autn: &[u8; 16]) -> Nas5gsMessage {
+pub fn authentication_request(rand: &[u8; 16], autn: &[u8; 16]) -> Box<Nas5gsMessage> {
     // "The SEAF shall set the ABBA parameter as defined in Annex A.7.1."
-    Nas5gsMessage::new_5gmm(
+    Box::new(Nas5gsMessage::new_5gmm(
         Nas5gmmMessageType::AuthenticationRequest,
         Nas5gmmMessage::AuthenticationRequest(NasAuthenticationRequest {
             ngksi: NasKeySetIdentifier::new(0),
@@ -32,16 +32,16 @@ pub fn authentication_request(rand: &[u8; 16], autn: &[u8; 16]) -> Nas5gsMessage
             authentication_parameter_autn: Some(NasAuthenticationParameterAutn::new(autn.to_vec())),
             eap_message: None,
         }),
-    )
+    ))
 }
 
 pub fn security_mode_command(
     replayed_ue_security_capabilities: NasUeSecurityCapability,
-) -> Nas5gsMessage {
+) -> Box<Nas5gsMessage> {
     // Request retransmission of initial NAS message.
     let additional_fg_security_information =
         Some(NasAdditionalFGSecurityInformation::new(vec![0b00000010]));
-    Nas5gsMessage::new_5gmm(
+    Box::new(Nas5gsMessage::new_5gmm(
         Nas5gmmMessageType::SecurityModeCommand,
         Nas5gmmMessage::SecurityModeCommand(NasSecurityModeCommand {
             selected_nas_security_algorithms: NasSecurityAlgorithms::new(2), // AES integrity and NULL encryption,
@@ -54,7 +54,7 @@ pub fn security_mode_command(
             abba: None,
             replayed_s1_ue_security_capabilities: None,
         }),
-    )
+    ))
 }
 
 fn nas_mobile_identity_guti(
@@ -92,13 +92,13 @@ pub fn registration_accept(
     plmn: &PlmnIdentity,
     amf_ids: &AmfIds,
     tmsi: &[u8; 4],
-) -> Nas5gsMessage {
+) -> Box<Nas5gsMessage> {
     let fg_guti = Some(nas_mobile_identity_guti(plmn, amf_ids, tmsi));
 
     // Fake up IMS support - necessary to keep certain UEs registered.
     let fgs_network_feature_support = Some(NasFGsNetworkFeatureSupport::new(vec![0b00000001]));
 
-    Nas5gsMessage::new_5gmm(
+    Box::new(Nas5gsMessage::new_5gmm(
         Nas5gmmMessageType::RegistrationAccept,
         Nas5gmmMessage::RegistrationAccept(NasRegistrationAccept {
             fg_guti,
@@ -108,21 +108,21 @@ pub fn registration_accept(
                 vec![0b00_0_0_0_001], // no emergency, no slice-specific auth, no SMS, 3GPP access
             ))
         }),
-    )
+    ))
 }
 
-pub fn registration_reject(cause: u8) -> Nas5gsMessage {
-    Nas5gsMessage::new_5gmm(
+pub fn registration_reject(cause: u8) -> Box<Nas5gsMessage> {
+    Box::new(Nas5gsMessage::new_5gmm(
         Nas5gmmMessageType::RegistrationReject,
         Nas5gmmMessage::RegistrationReject(NasRegistrationReject::new(NasFGmmCause::new(cause))),
-    )
+    ))
 }
 
-pub fn fgmm_status(cause: u8) -> Nas5gsMessage {
-    Nas5gsMessage::new_5gmm(
+pub fn fgmm_status(cause: u8) -> Box<Nas5gsMessage> {
+    Box::new(Nas5gsMessage::new_5gmm(
         Nas5gmmMessageType::FGmmStatus,
         Nas5gmmMessage::FGmmStatus(NasFGmmStatus::new(NasFGmmCause::new(cause))),
-    )
+    ))
 }
 
 fn session_ambr() -> NasSessionAmbr {
@@ -188,7 +188,7 @@ pub fn pdu_session_establishment_accept(
     pdu_session: &PduSession,
     pti: u8,
     sst: u8,
-) -> Result<Nas5gsMessage> {
+) -> Result<Box<Nas5gsMessage>> {
     let ue_ip_addr = pdu_session.userplane_info.ue_ip_addr;
     let IpAddr::V4(ue_ipv4) = ue_ip_addr else {
         bail!("IPv6 not implemented")
@@ -242,7 +242,7 @@ pub fn pdu_session_establishment_accept(
             lower_bound_timer_value: None,
         }),
     );
-    Ok(outer_message)
+    Ok(Box::new(outer_message))
 }
 
 fn extended_protocol_configuration_options(

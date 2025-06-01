@@ -72,9 +72,9 @@ impl<A: HandlerApi> IndicationHandler<InitialUlRrcMessageTransferProcedure> for 
         if let Err(e) = self
             .dispatch_ue_message(
                 id,
-                UeMessage::F1ap(F1apPdu::InitiatingMessage(
+                UeMessage::F1ap(Box::new(F1apPdu::InitiatingMessage(
                     InitiatingMessage::InitialUlRrcMessageTransfer(r),
-                )),
+                ))),
             )
             .await
         {
@@ -92,9 +92,9 @@ impl<A: HandlerApi> IndicationHandler<UlRrcMessageTransferProcedure> for F1apHan
         if let Err(e) = self
             .dispatch_ue_message(
                 r.gnb_cu_ue_f1ap_id.0,
-                UeMessage::F1ap(F1apPdu::InitiatingMessage(
+                UeMessage::F1ap(Box::new(F1apPdu::InitiatingMessage(
                     InitiatingMessage::UlRrcMessageTransfer(r),
-                )),
+                ))),
             )
             .await
         {
@@ -109,9 +109,9 @@ impl<A: HandlerApi> IndicationHandler<UeContextReleaseRequestProcedure> for F1ap
         if let Err(e) = self
             .dispatch_ue_message(
                 r.gnb_cu_ue_f1ap_id.0,
-                UeMessage::F1ap(F1apPdu::InitiatingMessage(
+                UeMessage::F1ap(Box::new(F1apPdu::InitiatingMessage(
                     InitiatingMessage::UeContextReleaseRequest(r),
-                )),
+                ))),
             )
             .await
         {

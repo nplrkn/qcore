@@ -6,7 +6,7 @@ use anyhow::{Result, anyhow, bail, ensure};
 use asn1_per::SerDes;
 use async_net::IpAddr;
 use f1ap::*;
-use pdcp::{PdcpPdu, PdcpTx};
+use pdcp::PdcpTx;
 use rrc::{
     DlCcchMessage, DlCcchMessageType, DlDcchMessage, DlDcchMessageType, UlCcchMessage,
     UlDcchMessage,
@@ -140,7 +140,7 @@ impl MockDu {
         Ok(())
     }
 
-    pub async fn receive_rrc_dl_ccch(&self, ue: &mut UeContext) -> Result<DlCcchMessageType> {
+    pub async fn receive_rrc_dl_ccch(&self, ue: &mut UeContext) -> Result<Box<DlCcchMessageType>> {
         // Receive DL Rrc Message Transfer and extract RRC Setup
         let pdu = self.receive_pdu().await?;
         let F1apPdu::InitiatingMessage(InitiatingMessage::DlRrcMessageTransfer(
@@ -156,7 +156,9 @@ impl MockDu {
         ue.gnb_cu_ue_f1ap_id = Some(dl_rrc_message_transfer.gnb_cu_ue_f1ap_id);
         let rrc_message_bytes = dl_rrc_message_transfer.rrc_container.0;
 
-        Ok(DlCcchMessage::from_bytes(&rrc_message_bytes)?.message)
+        Ok(Box::new(
+            DlCcchMessage::from_bytes(&rrc_message_bytes)?.message,
+        ))
     }
 
     pub async fn send_ul_rrc(&self, ue: &mut UeContext, rrc: &UlDcchMessage) -> Result<()> {
@@ -169,14 +171,14 @@ impl MockDu {
 
         // Wrap it in an UL Rrc Message Transfer
         let f1_indication =
-            Box::new(build_f1ap::ul_rrc_message_transfer(gnb_cu_ue_f1ap_id, ue.ue_id, pdcp_pdu.into()));
+            build_f1ap::ul_rrc_message_transfer(gnb_cu_ue_f1ap_id, ue.ue_id, pdcp_pdu.into());
 
         self.send(&f1_indication, Some(ue.binding.assoc_id)).await;
 
         Ok(())
     }
 
-    pub async fn receive_rrc_dl_dcch(&self, ue: &UeContext) -> Result<DlDcchMessageType> {
+    pub async fn receive_rrc_dl_dcch(&self, ue: &UeContext) -> Result<Box<DlDcchMessageType>> {
         let ReceivedPdu { pdu, assoc_id } = self.receive_pdu_with_assoc_id().await.unwrap();
 
         // Check that the PDU arrived on the expected binding.
@@ -195,10 +197,10 @@ impl MockDu {
         // SRB2 rather than SRB1.
         assert_eq!(dl_rrc_message_transfer.srb_id.0, 1);
 
-        let pdcp_pdu = PdcpPdu(dl_rrc_message_transfer.rrc_container.0);
-        let rrc_message_bytes = pdcp_pdu.view_inner()?;
-        let m = DlDcchMessage::from_bytes(rrc_message_bytes)?;
-        Ok(m.message)
+        let rrc_message_bytes = pdcp::view_inner(&dl_rrc_message_transfer.rrc_container.0)?;
+        Ok(Box::new(
+            DlDcchMessage::from_bytes(rrc_message_bytes)?.message,
+        ))
     }
 
     pub async fn handle_f1_ue_context_setup(&self, ue: &mut UeContext) -> Result<()> {
@@ -279,14 +281,8 @@ impl MockDu {
         ensure!(ue.ue_id == r.gnb_du_ue_f1ap_id.0);
 
         // Send release complete
-        let ue_release_complete = F1apPdu::SuccessfulOutcome(
-            SuccessfulOutcome::UeContextReleaseComplete(UeContextReleaseComplete {
-                gnb_cu_ue_f1ap_id: r.gnb_cu_ue_f1ap_id,
-                gnb_du_ue_f1ap_id: r.gnb_du_ue_f1ap_id,
-                criticality_diagnostics: None,
-                recommended_ss_bs_for_paging_list: None,
-            }),
-        );
+        let ue_release_complete =
+            build_f1ap::ue_context_release_complete(r.gnb_cu_ue_f1ap_id, r.gnb_du_ue_f1ap_id);
 
         info!(&self.logger, "UeContextReleaseComplete >>");
         self.send(&ue_release_complete, Some(assoc_id)).await;

@@ -54,7 +54,7 @@ impl<'a> MockUe<'a> {
             .send_initial_ul_rrc(&self.du_ue_context, rrc_setup_request)
             .await?;
         let message = self.du.receive_rrc_dl_ccch(&mut self.du_ue_context).await?;
-        let DlCcchMessageType::C1(C1_1::RrcSetup(rrc_setup)) = message else {
+        let DlCcchMessageType::C1(C1_1::RrcSetup(rrc_setup)) = *message else {
             bail!("Unexpected RRC message {:?}", message)
         };
         info!(&self.logger, "DlRrcMessageTransfer(RrcSetup) <<");
@@ -103,13 +103,13 @@ impl<'a> MockUe<'a> {
 
     pub async fn handle_rrc_security_mode(&mut self) -> Result<()> {
         let message = self.du.receive_rrc_dl_dcch(&self.du_ue_context).await?;
-        let DlDcchMessageType::C1(C1_2::SecurityModeCommand(security_mode_command)) = message
+        let DlDcchMessageType::C1(C1_2::SecurityModeCommand(security_mode_command)) = *message
         else {
             bail!("Expected security mode command - got {:?}", message)
         };
         info!(&self.logger, "Rrc SecurityModeCommand <<");
         let security_mode_complete =
-            build_rrc::security_mode_complete(security_mode_command.rrc_transaction_identifier);
+            Box::new(build_rrc::security_mode_complete(security_mode_command.rrc_transaction_identifier));
         info!(&self.logger, "Rrc SecurityModeComplete >>");
         self.du
             .send_ul_rrc(&mut self.du_ue_context, &security_mode_complete)
@@ -189,7 +189,7 @@ impl<'a> MockUe<'a> {
 
     async fn handle_rrc_reconfiguration(&mut self) -> Result<Vec<u8>> {
         let rrc = self.du.receive_rrc_dl_dcch(&self.du_ue_context).await?;
-        let nas_messages = match rrc {
+        let nas_messages = match *rrc {
             DlDcchMessageType::C1(C1_2::RrcReconfiguration(RrcReconfiguration {
                 critical_extensions:
                     CriticalExtensions15::RrcReconfiguration(RrcReconfigurationIEs {
@@ -215,7 +215,7 @@ impl<'a> MockUe<'a> {
         let nas = nas_messages.head.0;
 
         let rrc_reconfiguration_complete =
-            build_rrc::reconfiguration_complete(RrcTransactionIdentifier(0));
+            Box::new(build_rrc::reconfiguration_complete(RrcTransactionIdentifier(0)));
         info!(&self.logger, "Rrc ReconfigurationComplete >>");
         self.du
             .send_ul_rrc(&mut self.du_ue_context, &rrc_reconfiguration_complete)
@@ -231,7 +231,7 @@ impl<'a> MockUe<'a> {
     }
 
     pub async fn receive_nas(&self) -> Result<Vec<u8>> {
-        match self.du.receive_rrc_dl_dcch(&self.du_ue_context).await? {
+        match *self.du.receive_rrc_dl_dcch(&self.du_ue_context).await? {
             DlDcchMessageType::C1(C1_2::DlInformationTransfer(DlInformationTransfer {
                 critical_extensions:
                     CriticalExtensions4::DlInformationTransfer(DlInformationTransferIEs {

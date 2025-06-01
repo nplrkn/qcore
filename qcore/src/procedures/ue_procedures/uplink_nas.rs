@@ -23,22 +23,22 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
         UplinkNasProcedure(ue_procedure)
     }
 
-    pub async fn run(mut self, mut nas_bytes: Vec<u8>) -> Result<()> {
-        patch_nas_for_oai_deregistration_security_header(&mut nas_bytes, self.logger);
+    pub async fn run(mut self, nas_bytes: &mut Vec<u8>) -> Result<()> {
+        patch_nas_for_oai_deregistration_security_header(nas_bytes, self.logger);
 
         // Strip off the security header if there is one.
         let (message, security_header) = if !self.ue.nas.security_activated() {
             // No NAS security context yet - so the options are
             // - a plain SUPI registration -  allows us to create a new security context
             // - an integrity protected message with a GUTI that allow - allows us to retrieve an existing security context.
-            self.ue.nas.decode_with_security_header(&nas_bytes)?
+            self.ue.nas.decode_with_security_header(nas_bytes)?
         } else {
             // Security context exists
-            (self.ue.nas.decode(&nas_bytes)?, None)
+            (self.ue.nas.decode(nas_bytes)?, None)
         };
 
         // The outer message must now be a MM message.
-        let Nas5gsMessage::Gmm(_, mm_message) = message else {
+        let Nas5gsMessage::Gmm(_, mm_message) = *message else {
             warn!(self.logger, "Unhandled NAS UL message {:?}", message);
             return Ok(());
         };
@@ -58,10 +58,12 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
                     }
                 }
 
-                match decode_nas_5gs_message(&payload_container.value)? {
+                let nas = Box::new(decode_nas_5gs_message(&payload_container.value)?);
+
+                match *nas {
                     Nas5gsMessage::Gsm(
                         header,
-                        Nas5gsmMessage::PduSessionEstablishmentRequest(r),
+                        Nas5gsmMessage::PduSessionEstablishmentRequest(ref r),
                     ) => {
                         SessionEstablishmentProcedure::new(self.0)
                             .run(header, r, dnn)
@@ -79,7 +81,7 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
             }
             Nas5gmmMessage::RegistrationRequest(r) => {
                 RegistrationProcedure::new(self.0)
-                    .run(r, security_header)
+                    .run(Box::new(r), security_header)
                     .await?;
             }
             Nas5gmmMessage::DeregistrationRequestFromUe(r) => {

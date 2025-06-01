@@ -58,8 +58,8 @@ pub fn dl_rrc_message_transfer(
     gnb_du_ue_f1ap_id: GnbDuUeF1apId,
     rrc_container: RrcContainer,
     srb_id: SrbId,
-) -> DlRrcMessageTransfer {
-    DlRrcMessageTransfer {
+) -> Box<DlRrcMessageTransfer> {
+    Box::new(DlRrcMessageTransfer {
         gnb_cu_ue_f1ap_id: GnbCuUeF1apId(ue_id),
         gnb_du_ue_f1ap_id,
         old_gnb_du_ue_f1ap_id: None,
@@ -74,7 +74,7 @@ pub fn dl_rrc_message_transfer(
         new_gnb_cu_ue_f1ap_id: None,
         additional_rrm_priority_index: None,
         srb_mapping_info: None,
-    }
+    })
 }
 
 fn build_sib2() -> rrc::Sib2 {
@@ -239,7 +239,7 @@ pub fn ue_context_setup_request(
     ue: &UeContext,
     transport_layer_address: TransportLayerAddress,
     session: &PduSession,
-) -> Result<UeContextSetupRequest> {
+) -> Result<Box<UeContextSetupRequest>> {
     // TODO: avoid hardcoding
     let gnb_du_ue_ambr_ul = Some(BitRate(1_000_000));
 
@@ -254,7 +254,7 @@ pub fn ue_context_setup_request(
         session.userplane_info.five_qi
     )]));
 
-    Ok(UeContextSetupRequest {
+    Ok(Box::new(UeContextSetupRequest {
         gnb_cu_ue_f1ap_id: GnbCuUeF1apId(ue.key),
         gnb_du_ue_f1ap_id: Some(ue.gnb_du_ue_f1ap_id),
         sp_cell_id: ue.nr_cgi.clone(),
@@ -349,11 +349,11 @@ pub fn ue_context_setup_request(
         dllbt_failure_information_request: None,
         sl_positioning_ranging_service_info: None,
         non_integer_drx_cycle: None,
-    })
+    }))
 }
 
-pub fn ue_context_release_command(ue: &UeContext, cause: Cause) -> UeContextReleaseCommand {
-    UeContextReleaseCommand {
+pub fn ue_context_release_command(ue: &UeContext, cause: Cause) -> Box<UeContextReleaseCommand> {
+    Box::new(UeContextReleaseCommand {
         gnb_cu_ue_f1ap_id: GnbCuUeF1apId(ue.key),
         gnb_du_ue_f1ap_id: ue.gnb_du_ue_f1ap_id,
         cause,
@@ -367,5 +367,5 @@ pub fn ue_context_release_command(ue: &UeContext, cause: Cause) -> UeContextRele
         cg_sdt_kept_indicator: None,
         ltm_cells_to_be_released_list: None,
         dllbt_failure_information_request: None,
-    }
+    })
 }

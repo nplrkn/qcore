@@ -1,7 +1,6 @@
 use anyhow::Result;
 use oxirush_nas::{
-    Nas5gsMessage, Nas5gsSecurityHeaderType, encode_nas_5gs_message,
-    messages::Nas5gsSecurityHeader,
+    Nas5gsMessage, Nas5gsSecurityHeaderType, encode_nas_5gs_message, messages::Nas5gsSecurityHeader,
 };
 use security::nia2::calculate_nia2_mac;
 
@@ -25,7 +24,7 @@ impl SecurityContext {
     pub fn admit_message(
         &mut self,
         security_header: Option<&Nas5gsSecurityHeader>,
-        _bytes: &[u8],  // for integrity check in future
+        _bytes: &[u8], // for integrity check in future
     ) -> Result<()> {
         if let Some(security_header) = security_header {
             let last_rcvd_seq_num = (self.ul_count & 0xff) as u8;
@@ -59,7 +58,7 @@ impl SecurityContext {
         Ok(())
     }
 
-    pub fn encode_with_integrity(&mut self, nas: Nas5gsMessage) -> Result<Vec<u8>> {
+    pub fn encode_with_integrity(&mut self, nas: Box<Nas5gsMessage>) -> Result<Vec<u8>> {
         let security_header_type = if self.dl_count == 0 {
             Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext
         } else {
@@ -67,7 +66,7 @@ impl SecurityContext {
         };
 
         let nas =
-            Nas5gsMessage::protect(nas, security_header_type, 0, (self.dl_count & 0xff) as u8);
+            Nas5gsMessage::protect(*nas, security_header_type, 0, (self.dl_count & 0xff) as u8);
         let mut nas_bytes = encode_nas_5gs_message(&nas)?;
 
         // Run the MAC calculation over the inner message, which starts at byte 6.

@@ -22,7 +22,7 @@ impl<'a, A: HandlerApi> SessionEstablishmentProcedure<'a, A> {
     pub async fn run(
         &mut self,
         hdr: Nas5gsmHeader,
-        _r: NasPduSessionEstablishmentRequest,
+        _r: &NasPduSessionEstablishmentRequest,
         dnn: Option<Vec<u8>>,
     ) -> Result<()> {
         self.log_message(">> NasPduSessionEstablishmentRequest");
@@ -84,8 +84,8 @@ impl<'a, A: HandlerApi> SessionEstablishmentProcedure<'a, A> {
             pdu_session_id,
         );
         self.log_message("<< RrcReconfiguration(Nas)");
-        let response = self.rrc_request(SrbId(1), rrc_reconfiguration).await?;
-        self.check_rrc_reconfiguration_complete(response)?;
+        let response = self.rrc_request(SrbId(1), &rrc_reconfiguration).await?;
+        self.check_rrc_reconfiguration_complete(&response)?;
         self.log_message(">> RrcReconfigurationComplete");
         Ok(())
     }
@@ -123,7 +123,7 @@ impl<'a, A: HandlerApi> SessionEstablishmentProcedure<'a, A> {
         Ok((cell_group_config, remote_tunnel_info))
     }
 
-    fn check_rrc_reconfiguration_complete(&self, message: UlDcchMessage) -> Result<()> {
+    fn check_rrc_reconfiguration_complete(&self, message: &UlDcchMessage) -> Result<()> {
         let UlDcchMessage {
             message: UlDcchMessageType::C1(C1_6::RrcReconfigurationComplete(_response)),
         } = message
