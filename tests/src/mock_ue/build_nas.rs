@@ -1,3 +1,4 @@
+#![allow(clippy::unusual_byte_groupings)]
 use anyhow::Result;
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gmmMessageType, Nas5gsMessage, Nas5gsSecurityHeaderType, Nas5gsmMessage,
@@ -49,7 +50,7 @@ impl SecurityHeaderType {
     pub const INTEGRITY_PROTECTED_AND_CIPHERED_WITH_NEW_5G_NAS_SECURITY_CONTEXT: u8 = 0b0100;
 }
 
-pub fn mobile_identity_supi(imsi: &String) -> NasFGsMobileIdentity {
+pub fn mobile_identity_supi(imsi: &str) -> NasFGsMobileIdentity {
     // Get the MSIN out of the IMSI.
     let msin: Vec<u8> = imsi[5..imsi.len()]
         .chars()

@@ -124,7 +124,7 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
 // it calculates inner messsage offsets assuming that it cannot have a security header.
 //
 // For now, we have this hack to patch the message to pacify the NAS decoder.
-fn patch_nas_for_oai_deregistration_security_header(nas_bytes: &mut Vec<u8>, logger: &Logger) {
+fn patch_nas_for_oai_deregistration_security_header(nas_bytes: &mut [u8], logger: &Logger) {
     const INNER_SECURITY_HEADER_TYPE_OFFSET: usize = 8;
     if nas_bytes.len() < (INNER_SECURITY_HEADER_TYPE_OFFSET + 1) {
         return;

@@ -7,7 +7,7 @@ pub fn resync_sqn(
     k: &[u8; 16],
     opc: &[u8; 16],
     rand: &[u8; 16],
-) -> Result<[u8; 6], ()> {
+) -> Option<[u8; 6]> {
     // Run f5*K(RAND)
     let mut m = Milenage::new_with_opc(*k, *opc);
     let ak = m.f5star(rand);
@@ -29,10 +29,10 @@ pub fn resync_sqn(
     // "The HE/AuC verifies AUTS (cf. subsection 6.3.3).""
     let expected_mac_s = m.f1star(rand, &sqn_ms, &[0, 0]);
     //println!("Expected {:?}", expected_mac_s);
-    if expected_mac_s == &auts[6..] {
-        Ok(sqn_ms)
+    if expected_mac_s == auts[6..] {
+        Some(sqn_ms)
     } else {
-        Err(())
+        None
     }
 }
 
@@ -71,5 +71,5 @@ fn test_resync_sqn_bad_macs() {
     let rand = hex!("7e2e5787b935df2f691b9a126a980fe7");
     let auts = hex!("0000000000000000000000000000");
     let sqn_ms = resync_sqn(&auts, &k, &opc, &rand);
-    assert!(sqn_ms.is_err());
+    assert!(sqn_ms.is_none());
 }

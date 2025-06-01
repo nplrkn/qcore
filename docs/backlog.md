@@ -5,17 +5,15 @@ In progress
    -  Samsung
    -  Motorola
 
--  NAS library crashes with unknown IEI (max number of packet filter??) on PDU session establishment (?) - see ies-moto.pcap 
+-  in case of unknown GUTI, do identity request
 
--  GUTI registration
-   -  test successful GUTI registration with real UE
-   -  in case of unknown GUTI, do identity request
--  ASN.1 decode failed - Error { cause: Generic, msg: "Extended enum not implemented", context: ["CauseRadioNetwork", "Cause", "UeContextReleaseRequest", "InitiatingMessage", "F1apPdu"] }.  Wireshark: cause = radioNetwork / rl-failure-others (12).
--  Regression test using real AUTS calculation (to catch SQN handling changes).
- - remaining SQN failure - with different SIM, with long SQN (top byte 01 not 00)?
- - test script should check there are no further messages when a mock is dropped
- - check stack usage with cargo +nightly rustc -- -Z print-type-sizes
-
+-  retest
+   -  NAS library crashes with unknown IEI (max number of packet filter??) on PDU session establishment (?) - see ies-moto.pcap 
+   -  GUTI registration
+   -  cause = radioNetwork / rl-failure-others (12).
+ 
+-  remaining SQN failure - with different SIM, with long SQN (top byte 01 not 00)?
+ 
 Performance
 - iperf framework
 - Release build perf profiling + tuning
@@ -54,6 +52,8 @@ Tidying + refactoring
 - simplify xxap 
 
 Regression tests
+- should check there are no further messages when a mock is dropped
+- using real AUTS calculation (to catch SQN handling changes).
 - downlink packet checking of fields e.g. GTP payload length
 - dl delivery status packet with / without payload
 - tcp out through NAT masquerade

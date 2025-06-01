@@ -14,7 +14,7 @@ pub struct PdcpTx {
 }
 pub struct PdcpPdu(pub Vec<u8>);
 
-pub fn view_inner(v: &Vec<u8>) -> Result<&[u8]> {
+pub fn view_inner(v: &[u8]) -> Result<&[u8]> {
     ensure!(v.len() >= 6, "Too short for PDCP PDU");
     Ok(&v[2..v.len() - 4])
 }

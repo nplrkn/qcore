@@ -6,7 +6,6 @@ use anyhow::{Result, ensure};
 use async_std::channel::Sender;
 use async_std::prelude::*;
 use clap::Parser;
-use local_ip_address;
 use qcore::{AmfIds, Config, PlmnIdentity, QCore, SubscriberDb};
 use signal_hook::consts::signal::*;
 use signal_hook_async_std::Signals;

@@ -31,7 +31,7 @@ impl<'a, A: HandlerApi> SessionEstablishmentProcedure<'a, A> {
         let session = PduSession {
             id: session_id,
             snssai: Snssai(self.config().sst, None),
-            userplane_info: self.api.reserve_userplane_session(&self.logger).await?,
+            userplane_info: self.api.reserve_userplane_session(self.logger).await?,
             dnn: dnn.unwrap_or(b"internet".to_vec()),
         };
 
@@ -45,7 +45,7 @@ impl<'a, A: HandlerApi> SessionEstablishmentProcedure<'a, A> {
         )?;
         let accept = self.ue.nas.encode(accept)?;
 
-        self.commit_userplane_session(&session.userplane_info, remote_tunnel_info, &self.logger)
+        self.commit_userplane_session(&session.userplane_info, remote_tunnel_info, self.logger)
             .await?;
         self.ue.pdu_sessions.push(session);
 

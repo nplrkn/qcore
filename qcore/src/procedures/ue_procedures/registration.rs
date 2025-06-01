@@ -65,7 +65,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         );
         // TODO: should register_new_tmsi be called allocate_tmsi() and return the TMSI?
         self.api
-            .register_new_tmsi(tmsi.clone(), self.ue.key, &self.logger)
+            .register_new_tmsi(tmsi.clone(), self.ue.key, self.logger)
             .await;
         self.ue.tmsi = Some(tmsi);
         self.log_message("<< NasRegistrationAccept");
@@ -163,18 +163,18 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                 }
                 NasAuthOutcome::ResyncSqn(sqn) => {
                     debug!(self.logger, "Resynchronize SQN to {:02x?}", sqn);
-                    self.resync_subscriber_sqn(&imsi, sqn).await?;
+                    self.resync_subscriber_sqn(imsi, sqn).await?;
 
                     // Testing with Samsung phone - indicates that we need to do a double
                     // increment after receiving the resync SQN.
 
                     // TODO - cleanup
                     let _ = self
-                        .lookup_subscriber_creds_and_inc_sqn(&imsi)
+                        .lookup_subscriber_creds_and_inc_sqn(imsi)
                         .await
                         .unwrap();
                     let _ = self
-                        .lookup_subscriber_creds_and_inc_sqn(&imsi)
+                        .lookup_subscriber_creds_and_inc_sqn(imsi)
                         .await
                         .unwrap();
                 } // Getting here means we have resynchronized the SQN
@@ -186,7 +186,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     // Returns Ok(kseaf) on success, Ok(None) on synch failure, and Err for anything else.
     async fn perform_nas_auth(&mut self, imsi: &String) -> Result<NasAuthOutcome> {
         let auth_params = self
-            .lookup_subscriber_creds_and_inc_sqn(&imsi)
+            .lookup_subscriber_creds_and_inc_sqn(imsi)
             .await
             .ok_or_else(|| anyhow!("Unknown IMSI"))?;
 
@@ -263,7 +263,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         // println!("auts:     {:x?}", auts);
 
         resync_sqn(&auts, &sim_creds.ki, &sim_creds.opc, rand)
-            .map_err(|_| anyhow!("Invalid AUTS signature on NAS authentication synch failure"))
+            .ok_or_else(|| anyhow!("Invalid AUTS signature on NAS authentication synch failure"))
     }
 
     async fn activate_nas_security(
@@ -356,13 +356,12 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     }
 
     fn generate_challenge(&self, auth_params: &SubscriberAuthParams) -> Challenge {
-        let challenge = security::generate_challenge(
+        security::generate_challenge(
             &auth_params.sim_creds.ki,
             &auth_params.sim_creds.opc,
             self.config().serving_network_name.as_bytes(),
             &auth_params.sqn,
-        );
-        challenge
+        )
     }
 
     fn check_authentication_response(

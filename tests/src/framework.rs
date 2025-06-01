@@ -5,13 +5,7 @@ use qcore::{AmfIds, Config, ProgramHandle, QCore, SubscriberDb};
 use slog::{Drain, Logger, o};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
-pub async fn init() -> Result<(
-    MockDu,
-    ProgramHandle,
-    DataNetwork,
-    SubscriberDb,
-    Logger,
-)> {
+pub async fn init() -> Result<(MockDu, ProgramHandle, DataNetwork, SubscriberDb, Logger)> {
     exit_on_panic();
     let qc_ip = "127.0.0.1";
     let du_ip = "127.0.0.2";
@@ -19,7 +13,7 @@ pub async fn init() -> Result<(
     let du = MockDu::new(du_ip, &logger).await?;
     let dn = DataNetwork::new(&logger).await;
     let subs = SubscriberDb::new_from_sim_file("test_sims.toml", &logger)?;
-    let qc = start_qcore(&qc_ip, subs.clone(), &logger).await?;
+    let qc = start_qcore(qc_ip, subs.clone(), &logger).await?;
     Ok((du, qc, dn, subs, logger))
 }
 

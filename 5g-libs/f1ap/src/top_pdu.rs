@@ -75,22 +75,6 @@ impl PerCodec for F1apPdu {
     }
 }
 
-impl PerCodec for Box<F1apPdu> {
-    type Allocator = Allocator;
-    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
-        let pdu = F1apPdu::decode_inner(data).map_err(|mut e: PerCodecError| {
-            e.push_context("F1apPdu");
-            e
-        })?;
-        Ok(Box::new(pdu))
-    }
-    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
-        self.encode_inner(data).map_err(|mut e: PerCodecError| {
-            e.push_context("F1apPdu");
-            e
-        })
-    }
-}
 pub struct ResetProcedure {}
 
 #[async_trait]
@@ -3369,7 +3353,7 @@ impl InitiatingMessage {
                 return Err(per_codec_error_new(format!(
                     "Unrecognised procedure code {}",
                     x
-                )))
+                )));
             }
         }
     }
@@ -4834,7 +4818,7 @@ impl SuccessfulOutcome {
                 return Err(per_codec_error_new(format!(
                     "Unrecognised procedure code {}",
                     x
-                )))
+                )));
             }
         }
     }
@@ -5487,7 +5471,7 @@ impl UnsuccessfulOutcome {
                 return Err(per_codec_error_new(format!(
                     "Unrecognised procedure code {}",
                     x
-                )))
+                )));
             }
         }
     }

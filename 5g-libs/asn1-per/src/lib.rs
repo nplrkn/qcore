@@ -15,6 +15,18 @@ pub trait PerCodec: Sized {
     fn encode(&self, _data: &mut PerCodecData) -> Result<(), crate::PerCodecError>;
 }
 
+impl<T: PerCodec + Sized> PerCodec for Box<T> {
+    type Allocator = T::Allocator;
+
+    fn decode(data: &mut PerCodecData) -> Result<Self, crate::PerCodecError> {
+        T::decode(data).map(Box::new)
+    }
+
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), crate::PerCodecError> {
+        T::encode(self.as_ref(), data)
+    }
+}
+
 pub trait SerDes: Sized {
     fn into_bytes(&self) -> Result<Vec<u8>, PerCodecError>;
     fn from_bytes(bytes: &[u8]) -> Result<Self, PerCodecError>;

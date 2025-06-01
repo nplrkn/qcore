@@ -16,7 +16,7 @@ pub async fn dump_stats(
     const WEIGHT: f64 =
         2.0 / ((RATE_APPROX_WINDOW_SECS as f64 / SAMPLE_INTERVAL_SECS as f64) + 1.0);
 
-    let mut rate = [0f64; FIRST_NON_RATE as usize];
+    let mut rate = [0f64; FIRST_NON_RATE];
 
     // TODO: to cope with wrapping, we need to store a 'last' value
     // per cpu.  u64 will not wrap for many lifetimes, but if these
@@ -45,7 +45,7 @@ pub async fn dump_stats(
         let mut warn_needed = false;
         let mut sum = [0u64; NumCounters as usize];
 
-        for stat in 0..FIRST_NON_RATE as usize {
+        for stat in 0..FIRST_NON_RATE {
             // Take the delta of the counter and divide by the sample duration to get
             // a change per second.
             // e.g. if 5 packets arrived, that is 1pps.
@@ -63,7 +63,7 @@ pub async fn dump_stats(
             }
         }
 
-        for stat in FIRST_NON_RATE..FIRST_WARN_IDX as usize {
+        for stat in FIRST_NON_RATE..FIRST_WARN_IDX {
             info_needed |=
                 update_sum(stat, &mut sum, &mut last, &per_cpu_ebpf_counters, num_cpus)? != 0;
         }
@@ -75,10 +75,10 @@ pub async fn dump_stats(
 
         if info_needed {
             let mut s = String::new();
-            for i in 0 as usize..FIRST_NON_RATE as usize {
+            for i in 0_usize..FIRST_NON_RATE {
                 write!(&mut s, " {}/s={}", CounterIndex::VARIANTS[i], rate[i])?;
             }
-            for i in 0 as usize..FIRST_WARN_IDX as usize {
+            for i in 0_usize..FIRST_WARN_IDX {
                 write!(&mut s, " {}={}", CounterIndex::VARIANTS[i], last[i])?;
             }
             info!(&logger, "{}", s);
@@ -86,7 +86,7 @@ pub async fn dump_stats(
 
         if warn_needed {
             let mut s = String::new();
-            for i in FIRST_WARN_IDX as usize..NumCounters as usize {
+            for i in FIRST_WARN_IDX..NumCounters as usize {
                 write!(&mut s, " {}={}", CounterIndex::VARIANTS[i], last[i])?;
             }
             warn!(&logger, "{}", s);

@@ -109,7 +109,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
     async fn rrc_request<T: Send + SerDes>(
         &mut self,
         srb_id: SrbId,
-        rrc: &Box<T>,
+        rrc: &T,
     ) -> Result<Box<UlDcchMessage>> {
         self.rrc_indication(srb_id, rrc).await?;
 
@@ -124,11 +124,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         self.extract_ul_dcch_message(&ul_rrc_message_transfer)
     }
 
-    async fn rrc_indication<T: Send + SerDes>(
-        &mut self,
-        srb_id: SrbId,
-        rrc: &Box<T>,
-    ) -> Result<()> {
+    async fn rrc_indication<T: Send + SerDes>(&mut self, srb_id: SrbId, rrc: &T) -> Result<()> {
         let rrc_bytes = rrc.into_bytes()?;
         let rrc_container = maybe_pdcp_encapsulate(rrc_bytes, srb_id.0 as u8, &mut self.ue.pdcp_tx);
         let dl_message = crate::f1ap::build::dl_rrc_message_transfer(

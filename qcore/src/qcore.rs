@@ -183,11 +183,7 @@ impl HandlerApi for QCore {
     }
 
     async fn take_nas_context(&self, tmsi: &Tmsi) -> Option<NasContext> {
-        let entry = self.tmsis.lock().await.remove(tmsi);
-
-        let Some(entry) = entry else {
-            return None;
-        };
+        let entry = self.tmsis.lock().await.remove(tmsi)?;
 
         let context = match entry {
             NasContextLocator::Stored(c) => Some(c),
