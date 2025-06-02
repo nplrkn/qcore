@@ -1,20 +1,36 @@
+use crate::MockGnb;
+
 use super::{DataNetwork, MockDu, MockUe};
 use anyhow::{Result, bail};
-use f1ap::PlmnIdentity;
 use qcore::{AmfIds, Config, ProgramHandle, QCore, SubscriberDb};
 use slog::{Drain, Logger, o};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use xxap::PlmnIdentity;
 
 pub async fn init() -> Result<(MockDu, ProgramHandle, DataNetwork, SubscriberDb, Logger)> {
+    let logger = init_logging();
+    let du_ip = "127.0.0.2";
+    let du = MockDu::new(du_ip, &logger).await?;
+    init_common(du, logger).await
+}
+
+pub async fn init_ngap() -> Result<(MockGnb, ProgramHandle, DataNetwork, SubscriberDb, Logger)> {
+    let logger = init_logging();
+    let gnb_ip = "127.0.0.2";
+    let gnb = MockGnb::new(gnb_ip, &logger).await?;
+    init_common(gnb, logger).await
+}
+
+async fn init_common<T>(
+    du_or_gnb: T,
+    logger: Logger,
+) -> Result<(T, ProgramHandle, DataNetwork, SubscriberDb, Logger)> {
     exit_on_panic();
     let qc_ip = "127.0.0.1";
-    let du_ip = "127.0.0.2";
-    let logger = init_logging();
-    let du = MockDu::new(du_ip, &logger).await?;
     let dn = DataNetwork::new(&logger).await;
     let subs = SubscriberDb::new_from_sim_file("test_sims.toml", &logger)?;
     let qc = start_qcore(qc_ip, subs.clone(), &logger).await?;
-    Ok((du, qc, dn, subs, logger))
+    Ok((du_or_gnb, qc, dn, subs, logger))
 }
 
 fn exit_on_panic() {

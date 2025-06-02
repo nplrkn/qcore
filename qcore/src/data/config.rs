@@ -1,6 +1,8 @@
 use std::net::{IpAddr, Ipv4Addr};
 
-use f1ap::PlmnIdentity;
+use asn1_per::*;
+use ngap::{AmfPointer, AmfRegionId, AmfSetId};
+use xxap::PlmnIdentity;
 
 use crate::protocols::nas::AmfIds;
 
@@ -38,4 +40,17 @@ pub struct Config {
 
     // /24 UE subnet.
     pub ue_subnet: Ipv4Addr,
+}
+
+impl Config {
+    pub fn guami(&self) -> ngap::Guami {
+        let amf_id_bits: &BitSlice<u8, Msb0> = self.amf_ids.view_bits::<Msb0>();
+
+        ngap::Guami {
+            plmn_identity: self.plmn.clone(),
+            amf_region_id: AmfRegionId(amf_id_bits[0..8].into()),
+            amf_set_id: AmfSetId(amf_id_bits[8..18].into()),
+            amf_pointer: AmfPointer(amf_id_bits[18..24].into()),
+        }
+    }
 }

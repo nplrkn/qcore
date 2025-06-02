@@ -1411,6 +1411,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2df15b1cb023b9d205ae287d5dbe74510ae4d62b5131ceec516f4913ed05230"
 
 [[package]]
+name = "ngap"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "asn1-per",
+ "async-trait",
+ "hex",
+ "num_enum 0.5.11",
+ "slog",
+ "xxap",
+]
+
+[[package]]
 name = "no-std-net"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1731,6 +1744,7 @@ dependencies = [
  "index-pool",
  "libc",
  "local-ip-address",
+ "ngap",
  "num_cpus",
  "oxirush-nas",
  "pdcp",
@@ -1763,6 +1777,7 @@ dependencies = [
  "async-trait",
  "f1ap",
  "local-ip-address",
+ "ngap",
  "oxirush-nas",
  "pdcp",
  "pnet_packet",

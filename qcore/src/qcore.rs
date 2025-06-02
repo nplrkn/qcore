@@ -1,7 +1,8 @@
 use crate::data::{NasContext, Sqn};
 use crate::f1ap::{F1AP_BIND_PORT, F1AP_SCTP_PPID};
-use crate::procedures::{F1apHandler, UeMessage, UeMessageHandler};
+use crate::procedures::{F1apHandler, NgapHandler, UeMessage, UeMessageHandler};
 use crate::protocols::nas::Tmsi;
+use crate::protocols::ngap::{NGAP_BIND_PORT, NGAP_SCTP_PPID};
 use crate::userplane::PacketProcessor;
 use crate::{Config, HandlerApi, SubscriberAuthParams, SubscriberDb, UserplaneSession};
 use anyhow::{Result, anyhow, bail};
@@ -24,7 +25,7 @@ use xxap::{
 #[derive(Clone)]
 pub struct QCore {
     config: Config,
-    f1ap: Stack,
+    stack: Stack,
     logger: Logger,
     server_handle: Arc<Mutex<Option<ShutdownHandle>>>,
     packet_processor: PacketProcessor,
@@ -54,6 +55,8 @@ impl Drop for ProgramHandle {
         block_on(self.qc.graceful_shutdown());
     }
 }
+
+const NGAP_MODE: bool = true;
 
 impl QCore {
     pub async fn start(
@@ -90,7 +93,7 @@ impl QCore {
     ) -> Result<Self> {
         Ok(Self {
             config,
-            f1ap: Stack::new(SctpTransportProvider::new()),
+            stack: Stack::new(SctpTransportProvider::new()),
             logger,
             server_handle: Arc::new(Mutex::new(None)),
             ue_tasks: Arc::new(DashMap::new()),
@@ -101,21 +104,37 @@ impl QCore {
     }
 
     async fn run(&mut self) -> Result<()> {
-        let f1_listen_address = format!("{}:{}", self.config.ip_addr, F1AP_BIND_PORT);
+        let port = if NGAP_MODE {
+            NGAP_BIND_PORT
+        } else {
+            F1AP_BIND_PORT
+        };
+        let listen_address = format!("{}:{}", self.config.ip_addr, port);
         info!(
             &self.logger,
-            "Listen for connection from DU on {}", f1_listen_address
+            "Listen for connection from RAN on {}", listen_address
         );
 
-        let handle = self
-            .f1ap
-            .listen(
-                f1_listen_address,
-                F1AP_SCTP_PPID,
-                F1apHandler::new_f1ap_application(self.clone()),
-                self.logger.clone(),
-            )
-            .await?;
+        let handle = if NGAP_MODE {
+            self.stack
+                .listen(
+                    listen_address,
+                    NGAP_SCTP_PPID,
+                    NgapHandler::new_ngap_application(self.clone()),
+                    self.logger.clone(),
+                )
+                .await?
+        } else {
+            self.stack
+                .listen(
+                    listen_address,
+                    F1AP_SCTP_PPID,
+                    F1apHandler::new_f1ap_application(self.clone()),
+                    self.logger.clone(),
+                )
+                .await?
+        };
+
         *self.server_handle.lock().await = Some(handle);
 
         Ok(())
@@ -123,7 +142,7 @@ impl QCore {
 
     pub async fn graceful_shutdown(&mut self) {
         info!(&self.logger, "Shutting down");
-        self.f1ap.reset().await;
+        self.stack.reset().await;
         if let Some(h) = self.server_handle.lock().await.take() {
             h.graceful_shutdown().await;
         }
@@ -264,12 +283,12 @@ impl HandlerApi for QCore {
         r: Box<P::Request>,
         logger: &Logger,
     ) -> Result<P::Success, RequestError<P::Failure>> {
-        <Stack as RequestProvider<P>>::request(&self.f1ap, *r, logger)
+        <Stack as RequestProvider<P>>::request(&self.stack, *r, logger)
             .await
             .map(|(x, _)| x)
     }
     async fn f1ap_indication<P: Indication>(&self, r: Box<P::Request>, logger: &Logger) {
-        <Stack as IndicationHandler<P>>::handle(&self.f1ap, *r, logger).await
+        <Stack as IndicationHandler<P>>::handle(&self.stack, *r, logger).await
     }
 
     async fn reserve_userplane_session(&self, logger: &Logger) -> Result<UserplaneSession> {

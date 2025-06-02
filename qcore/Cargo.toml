@@ -15,6 +15,7 @@ slog-async = "2.7.0"
 slog-envlogger = "2.2.0"
 clap = { version = "4.5.32", features = ["derive"] }
 f1ap = { path = "../5g-libs/f1ap" }
+ngap = { path = "../5g-libs/ngap" }
 xxap = { path = "../5g-libs/xxap" }
 pdcp = { path = "../5g-libs/pdcp" }
 rrc = { path = "../5g-libs/rrc" }

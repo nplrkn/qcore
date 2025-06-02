@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "5g-libs/asn1-per",
     "5g-libs/f1ap",
+    "5g-libs/ngap",
     "tests",
     "qcore",
     "5g-libs/rrc",
@@ -24,6 +25,7 @@ default-members = [
 
 [profile.dev]
 debug = 1
+opt-level = 1
 
 [profile.release.package.ebpf-userplane]
 debug = 2

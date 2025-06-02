@@ -1,5 +1,7 @@
-This is the mainline flow wherein a 5G UE connects to the RAN and 5G Core, sets up a PDU session.
+# Mainline attach flow
+This is the mainline flow wherein a 5G UE connects to the RAN and 5G Core and sets up a PDU session.
 
+## F1AP mode
 The registration part of the procedure is implemented by InitialAccessProcedure::run() in [initial_access.rs](../../qcore/src/procedures/ue_procedures/initial_access.rs).
 
 The session establishment part of the procedure is implemented by PduSessionEstablishmentProcedure::run() in [pdu_session_establishment.rs](../../qcore/src/procedures/ue_procedures/pdu_session_establishment.rs).
@@ -39,3 +41,34 @@ sequenceDiagram
 ```
 
 The following are assumed: Rrc DlInformationTransfer / F1 DlRrcMessageTransfer; Rrc UlInformationTransfer / F1 UlRrcMessageTransfer.
+
+## NGAP mode
+
+```mermaid
+sequenceDiagram
+  participant GNB
+  participant QC
+  participant DN
+  Note over GNB,QC: Setup
+  GNB->>QC: SCTP connection
+  GNB->>QC: NG Setup Request
+  QC->>GNB: NG Setup Response
+  Note over GNB,QC: Registration
+  GNB->>QC: NG Initial UE Message + Nas Registration Request
+  QC->>GNB: Nas Authentication Request 
+  GNB->>QC: Nas Authentication Response
+  QC->>GNB: Initial Context Setup Request
+  GNB->>QC: Initial Context Setup Response
+  QC->>GNB: Nas Registration Accept
+  GNB->>QC: Nas Registration Complete
+  Note over GNB,QC: Session Establishment
+  GNB->>QC: NG Pdu Session Resource Setup Request  + Nas Pdu Session Establishment Accept
+  QC->>GNB: NG Pdu Session Resource Setup Response
+  Note over GNB,DN: Userplane data flows
+  GNB->>QC: N3 uplink data packet
+  QC->>DN: IP packet
+  DN->>QC: IP packet
+  QC->>GNB: N3 downlink data packet
+```
+
+The following are assumed: NG Uplink NAS transport / NG Downlink NAS transport.

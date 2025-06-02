@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use derive_deref::Deref;
-use f1ap::PlmnIdentity;
+use xxap::PlmnIdentity;
 
 pub mod build;
 pub mod parse;

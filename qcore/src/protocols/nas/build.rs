@@ -1,7 +1,6 @@
 #![allow(clippy::unusual_byte_groupings)]
 use crate::PduSession;
 use anyhow::{Result, bail};
-use f1ap::PlmnIdentity;
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gmmMessageType, Nas5gsMessage, Nas5gsmMessage, Nas5gsmMessageType, NasAbba,
     NasAdditionalFGSecurityInformation, NasAuthenticationParameterAutn,
@@ -18,6 +17,7 @@ use oxirush_nas::{
 };
 use security::NAS_ABBA;
 use std::net::IpAddr;
+use xxap::PlmnIdentity;
 
 use super::AmfIds;
 

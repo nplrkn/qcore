@@ -193,3 +193,36 @@ impl PerCodec for PduSessionId {
         })
     }
 }
+
+// PlmnIdentity
+#[derive(Clone, Debug, PartialEq)]
+pub struct PlmnIdentity(pub [u8; 3]);
+
+impl PlmnIdentity {
+    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        Ok(Self(
+            decode::decode_octetstring(data, Some(3), Some(3), false)?
+                .try_into()
+                .unwrap(),
+        ))
+    }
+    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        encode::encode_octetstring(data, Some(3), Some(3), false, &(self.0).into(), false)
+    }
+}
+
+impl PerCodec for PlmnIdentity {
+    type Allocator = Allocator;
+    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
+        PlmnIdentity::decode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("PlmnIdentity");
+            e
+        })
+    }
+    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
+        self.encode_inner(data).map_err(|mut e: PerCodecError| {
+            e.push_context("PlmnIdentity");
+            e
+        })
+    }
+}

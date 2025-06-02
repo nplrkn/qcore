@@ -1,7 +1,7 @@
 use anyhow::{Result, bail};
-use f1ap::PlmnIdentity;
 use oxirush_nas::NasFGsMobileIdentity;
 use std::fmt::Write;
+use xxap::PlmnIdentity;
 
 use super::{AmfIds, Imsi, MobileIdentity, Tmsi}; // Import the Write trait for String
 

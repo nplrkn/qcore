@@ -2,7 +2,7 @@ use anyhow::{Result, bail};
 use asn1_per::{Msb0, SerDes, bitvec, nonempty};
 use f1ap::*;
 use rrc::CellGroupId;
-use xxap::{GtpTunnel, TransportLayerAddress};
+use xxap::{GtpTunnel, TransportLayerAddress, PlmnIdentity};
 
 use super::UeContext;
 

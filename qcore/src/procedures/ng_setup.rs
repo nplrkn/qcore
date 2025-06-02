@@ -1,0 +1,38 @@
+use crate::{HandlerApi, Procedure};
+use anyhow::Result;
+use derive_deref::{Deref, DerefMut};
+use ngap::{NgSetupFailure, NgSetupRequest, NgSetupResponse};
+use slog::{Logger, info};
+use xxap::{RequestError, ResponseAction};
+
+#[derive(Deref, DerefMut)]
+pub struct NgSetupProcedure<'a, A: HandlerApi>(Procedure<'a, A>);
+
+impl<'a, A: HandlerApi> NgSetupProcedure<'a, A> {
+    pub fn new(api: &'a A, logger: &'a Logger) -> Self {
+        NgSetupProcedure(Procedure::new(api, logger))
+    }
+
+    // Ng Setup Procedure
+    // 1.    Ngap NgSetupRequest >>
+    // 2.    Ngap NgSetupResponse <<
+    pub async fn run(
+        &self,
+        r: NgSetupRequest,
+    ) -> Result<ResponseAction<NgSetupResponse>, RequestError<NgSetupFailure>> {
+        self.log_message(">> NgSetupRequest");
+        let gnb_name = if let Some(ref x) = r.ran_node_name {
+            x.0.clone()
+        } else {
+            "<none>".to_string()
+        };
+        info!(
+            self.logger,
+            "NG setup with GNB name:{gnb_name}, id:{:?}", r.global_ran_node_id
+        );
+        let response =
+            crate::ngap::build::ng_setup_response(&self.config().guami(), &self.config().plmn, self.config().sst)?;
+        self.log_message("<< NgSetupResponse");
+        Ok((response, None))
+    }
+}

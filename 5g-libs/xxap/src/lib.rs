@@ -9,7 +9,7 @@ use net::{AssocId, Message, SctpAssociation};
 use transaction::RequestMessageHandler;
 
 pub use common::*;
-pub use ies::{GtpTeid, GtpTunnel, PduSessionId, TransportLayerAddress};
+pub use ies::{GtpTeid, GtpTunnel, PduSessionId, PlmnIdentity, TransportLayerAddress};
 pub use net::{
     Application, Binding, EventHandler, SctpTransportProvider, Stack, TnlaEvent, TnlaEventHandler,
     TransportProvider,

@@ -12,6 +12,7 @@ qcore = { path = "../qcore" }
 oxirush-nas = { git = "https://github.com/nplrkn/oxirush-nas", branch = "all-fixes" }
 local-ip-address = "0.6.3"
 f1ap = { path = "../5g-libs/f1ap" }
+ngap = { path = "../5g-libs/ngap" }
 xxap = { path = "../5g-libs/xxap" }
 rrc = { path = "../5g-libs/rrc" }
 pdcp = { path = "../5g-libs/pdcp" }
