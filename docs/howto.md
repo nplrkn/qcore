@@ -66,5 +66,3 @@ tail -f /tmp/gnb.log | grep [E]
    -  wrong sequence number
    -  wrong PDU length
 - wrong TCP checksum cause by TCP checksum offload
-
-

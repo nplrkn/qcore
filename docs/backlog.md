@@ -5,8 +5,6 @@ In progress
    -  Samsung
    -  Motorola
 
--  in case of unknown GUTI, do identity request
-
 -  retest
    -  NAS library crashes with unknown IEI (max number of packet filter??) on PDU session establishment (?) - see ies-moto.pcap 
    -  GUTI registration
@@ -23,6 +21,7 @@ Persistence
 - Paging continuity
 
 Function gaps
+- In case of unknown GUTI, do identity request
 - Deregistration accept
 - Idle / paging
 - SQN

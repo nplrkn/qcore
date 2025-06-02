@@ -22,22 +22,7 @@ impl NasContext {
     }
 
     pub fn decode(&mut self, data: &[u8]) -> Result<Box<Nas5gsMessage>> {
-        let nas = Box::new(
-            decode_nas_5gs_message(data)
-                .map_err(|e| anyhow!("NAS decode error - {e} - message bytes: {:?}", data))?,
-        );
-
-        let security_header = if let Nas5gsMessage::SecurityProtected(ref hdr, _) = *nas {
-            Some(hdr)
-        } else {
-            None
-        };
-
-        if let Some(security_context) = &mut self.security_context {
-            security_context.admit_message(security_header, data)?;
-        }
-
-        Ok(nas)
+        self.decode_with_security_header(data).map(|(nas, _)| nas)
     }
 
     // This is used for situations where the security context might need to be retrieved using a GUTI
@@ -50,11 +35,17 @@ impl NasContext {
             decode_nas_5gs_message(data)
                 .map_err(|e| anyhow!("NAS decode error - {e} - message bytes: {:?}", data))?,
         );
-        Ok(match *nas_message {
+        let (nas, security_header) = match *nas_message {
             Nas5gsMessage::Gmm(_, _) => (nas_message, None),
             Nas5gsMessage::SecurityProtected(hdr, bx) => (bx, Some(hdr)),
             Nas5gsMessage::Gsm(_, _) => bail!("Unexpected Nas SM message {:?} ", nas_message),
-        })
+        };
+
+        if let Some(security_context) = &mut self.security_context {
+            security_context.admit_message(security_header.as_ref(), data)?;
+        }
+
+        Ok((nas, security_header))
     }
 
     pub fn enable_security(&mut self, knasint: [u8; 16]) {
