@@ -1,5 +1,4 @@
-use super::nas_context::NasContext;
-use crate::{PduSession, protocols::nas::Tmsi};
+use crate::{NasContext, PduSession, nas::Tmsi};
 use f1ap::{GnbDuUeF1apId, NrCgi};
 use pdcp::PdcpTx;
 

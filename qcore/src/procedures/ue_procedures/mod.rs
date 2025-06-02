@@ -7,7 +7,22 @@ mod ue_message_handler;
 mod ul_information_transfer;
 mod uplink_nas;
 
+use super::{Procedure, UeMessage};
+use crate::{HandlerApi, NasContext, UeContext};
+use anyhow::{Result, anyhow, bail};
+use asn1_per::SerDes;
 use async_std::channel::{Receiver, Sender};
+use f1ap::{
+    DlRrcMessageTransferProcedure, F1apPdu, InitiatingMessage, RrcContainer, SrbId,
+    UlRrcMessageTransfer,
+};
+use oxirush_nas::{Nas5gsMessage, messages::Nas5gsSecurityHeader};
+use rrc::{
+    C1_6, CriticalExtensions37, DedicatedNasMessage, UlDcchMessage, UlDcchMessageType,
+    UlInformationTransfer, UlInformationTransferIEs,
+};
+use slog::Logger;
+
 pub use deregistration::DeregistrationProcedure;
 pub use pdu_session_establishment::SessionEstablishmentProcedure;
 pub use rrc_setup::RrcSetupProcedure;
@@ -15,22 +30,6 @@ pub use ue_context_release::UeContextReleaseProcedure;
 pub use ue_message_handler::UeMessageHandler;
 pub use ul_information_transfer::UlInformationTransferProcedure;
 pub use uplink_nas::UplinkNasProcedure;
-
-use super::{Procedure, UeMessage};
-use crate::{HandlerApi, UeContext, data::NasContext};
-use anyhow::{Result, anyhow, bail};
-use asn1_per::SerDes;
-use f1ap::{
-    DlRrcMessageTransferProcedure, F1apPdu, InitiatingMessage, RrcContainer, SrbId,
-    UlRrcMessageTransfer,
-};
-use oxirush_nas::Nas5gsMessage;
-use pdcp::PdcpTx;
-use rrc::{
-    C1_6, CriticalExtensions37, DedicatedNasMessage, UlDcchMessage, UlDcchMessageType,
-    UlInformationTransfer, UlInformationTransferIEs,
-};
-use slog::Logger;
 
 pub struct UeProcedure<'a, A: HandlerApi> {
     base: Procedure<'a, A>,
@@ -106,13 +105,16 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         }
     }
 
+    /// Sends an RRC message and waits for a response.
     async fn rrc_request<T: Send + SerDes>(
         &mut self,
         srb_id: SrbId,
         rrc: &T,
     ) -> Result<Box<UlDcchMessage>> {
+        // Send the request using the common code in rrc_indication().
         self.rrc_indication(srb_id, rrc).await?;
 
+        // Wait for a response.
         let pdu = self.receive_pdu().await?;
         let F1apPdu::InitiatingMessage(InitiatingMessage::UlRrcMessageTransfer(
             ul_rrc_message_transfer,
@@ -124,14 +126,23 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         self.extract_ul_dcch_message(&ul_rrc_message_transfer)
     }
 
-    async fn rrc_indication<T: Send + SerDes>(&mut self, srb_id: SrbId, rrc: &T) -> Result<()> {
+    /// Sends an RRC message.
+    async fn rrc_indication<T: Send + SerDes>(&mut self, srb: SrbId, rrc: &T) -> Result<()> {
         let rrc_bytes = rrc.as_bytes()?;
-        let rrc_container = maybe_pdcp_encapsulate(rrc_bytes, srb_id.0 as u8, &mut self.ue.pdcp_tx);
+
+        // This needs to be PDCP encapsulated if not going over SRB 0.
+        let srb_id = srb.0 as u8;
+        let rrc_bytes = if srb_id == 0 {
+            rrc_bytes
+        } else {
+            self.ue.pdcp_tx.encode(srb_id, rrc_bytes).into()
+        };
+
         let dl_message = crate::f1ap::build::dl_rrc_message_transfer(
             self.ue.key,
             self.ue.gnb_du_ue_f1ap_id,
-            rrc_container,
-            srb_id,
+            RrcContainer(rrc_bytes),
+            srb,
         );
         self.log_message("<< F1ap DlRrcMessageTransfer");
         self.api
@@ -143,6 +154,17 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
     fn extract_ul_dcch_message(&self, r: &UlRrcMessageTransfer) -> Result<Box<UlDcchMessage>> {
         let rrc_message_bytes = pdcp::view_inner(&r.rrc_container.0)?;
         Ok(Box::new(UlDcchMessage::from_bytes(rrc_message_bytes)?))
+    }
+
+    fn nas_decode(&mut self, bytes: &[u8]) -> Result<Box<Nas5gsMessage>> {
+        self.ue.nas.decode(bytes, self.logger)
+    }
+
+    fn nas_decode_with_security_header(
+        &mut self,
+        bytes: &[u8],
+    ) -> Result<(Box<Nas5gsMessage>, Option<Nas5gsSecurityHeader>)> {
+        self.ue.nas.decode_with_security_header(bytes, self.logger)
     }
 
     async fn nas_request(&mut self, nas: Box<Nas5gsMessage>) -> Result<Box<Nas5gsMessage>> {
@@ -162,7 +184,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
                             ..
                         }),
                 })) => {
-                    let msg = self.ue.nas.decode(&response_bytes)?;
+                    let msg = self.nas_decode(&response_bytes)?;
                     Ok(msg)
                 }
                 _ => Err(anyhow!(
@@ -180,12 +202,4 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
 
         self.rrc_indication(SrbId(1), &rrc).await
     }
-}
-
-fn maybe_pdcp_encapsulate(rrc_bytes: Vec<u8>, srb_id: u8, pdcp: &mut PdcpTx) -> RrcContainer {
-    RrcContainer(if srb_id == 0 {
-        rrc_bytes
-    } else {
-        pdcp.encode(srb_id, rrc_bytes).into()
-    })
 }

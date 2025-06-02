@@ -14,7 +14,7 @@ impl<'a, A: HandlerApi> UlInformationTransferProcedure<'a, A> {
     }
 
     pub async fn run(self, ul_information_transfer: &mut UlInformationTransfer) -> Result<()> {
-        self.log_message(">> UlInformationTransfer");
+        self.log_message(">> Rrc UlInformationTransfer");
         let UlInformationTransfer {
             critical_extensions:
                 CriticalExtensions37::UlInformationTransfer(UlInformationTransferIEs {

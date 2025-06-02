@@ -3,6 +3,7 @@ use anyhow::{Result, anyhow, bail};
 use oxirush_nas::{
     Nas5gsMessage, decode_nas_5gs_message, encode_nas_5gs_message, messages::Nas5gsSecurityHeader,
 };
+use slog::Logger;
 
 #[derive(Debug, Default)]
 pub struct NasContext {
@@ -21,8 +22,9 @@ impl NasContext {
             .unwrap_or_default()
     }
 
-    pub fn decode(&mut self, data: &[u8]) -> Result<Box<Nas5gsMessage>> {
-        self.decode_with_security_header(data).map(|(nas, _)| nas)
+    pub fn decode(&mut self, data: &[u8], logger: &Logger) -> Result<Box<Nas5gsMessage>> {
+        self.decode_with_security_header(data, logger)
+            .map(|(nas, _)| nas)
     }
 
     // This is used for situations where the security context might need to be retrieved using a GUTI
@@ -30,6 +32,7 @@ impl NasContext {
     pub fn decode_with_security_header(
         &mut self,
         data: &[u8],
+        logger: &Logger,
     ) -> Result<(Box<Nas5gsMessage>, Option<Nas5gsSecurityHeader>)> {
         let nas_message = Box::new(
             decode_nas_5gs_message(data)
@@ -42,7 +45,7 @@ impl NasContext {
         };
 
         if let Some(security_context) = &mut self.security_context {
-            security_context.admit_message(security_header.as_ref(), data)?;
+            security_context.admit_message(security_header.as_ref(), data, logger)?;
         }
 
         Ok((nas, security_header))

@@ -26,24 +26,21 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
     pub async fn run(mut self, nas_bytes: &mut [u8]) -> Result<()> {
         patch_nas_for_oai_deregistration_security_header(nas_bytes, self.logger);
 
-        // Strip off the security header if there is one.
-        let (message, security_header) = if !self.ue.nas.security_activated() {
-            // No NAS security context yet - so the options are
-            // - a plain SUPI registration -  allows us to create a new security context
-            // - an integrity protected message with a GUTI that allow - allows us to retrieve an existing security context.
-            self.ue.nas.decode_with_security_header(nas_bytes)?
-        } else {
-            // Security context exists
-            (self.ue.nas.decode(nas_bytes)?, None)
-        };
-
-        // The outer message must now be a MM message.
+        let (message, security_header) = self.nas_decode_with_security_header(nas_bytes)?;
         let Nas5gsMessage::Gmm(_, mm_message) = *message else {
-            warn!(self.logger, "Unhandled NAS UL message {:?}", message);
+            warn!(self.logger, "Expected MM message, got {:?}", message);
             return Ok(());
         };
 
         match mm_message {
+            Nas5gmmMessage::RegistrationRequest(r) => {
+                RegistrationProcedure::new(self.0)
+                    .run(Box::new(r), security_header)
+                    .await?;
+            }
+            Nas5gmmMessage::DeregistrationRequestFromUe(r) => {
+                DeregistrationProcedure::new(self.0).run(r).await?;
+            }
             Nas5gmmMessage::UlNasTransport(NasUlNasTransport {
                 payload_container,
                 dnn,
@@ -59,7 +56,6 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
                 }
 
                 let nas = Box::new(decode_nas_5gs_message(&payload_container.value)?);
-
                 match *nas {
                     Nas5gsMessage::Gsm(
                         header,
@@ -69,6 +65,8 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
                             .run(header, r, dnn)
                             .await?;
                     }
+                    // TODO: PduSessionModificationRequest(NasPduSessionModificationRequest)
+                    // TODO: PduSessionReleaseRequest(NasPduSessionReleaseRequest)
                     m => {
                         warn!(
                             self.logger,
@@ -76,30 +74,18 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
                         );
                     }
                 }
-                // TODO: PduSessionModificationRequest(NasPduSessionModificationRequest)
-                // TODO: PduSessionReleaseRequest(NasPduSessionReleaseRequest)
             }
-            Nas5gmmMessage::RegistrationRequest(r) => {
-                RegistrationProcedure::new(self.0)
-                    .run(Box::new(r), security_header)
-                    .await?;
-            }
-            Nas5gmmMessage::DeregistrationRequestFromUe(r) => {
-                DeregistrationProcedure::new(self.0).run(r).await?;
-            }
-
             m => {
-                warn!(self.logger, "Unhandled NAS UL message {:?}", m);
+                warn!(self.logger, "Unimplemented NAS UL message {:?}", m);
             }
         }
         Ok(())
     }
 
-    // Return true if the DNN is ok, false otherwise
+    // Return true if the DNN is ok, otherwise send a NAS 5GMM Status and return false
+    // A typical scenario is where the UE requests the 'ims' DNN and then falls back to the 'internet' DNN.
+    // Right now we give the UE what it asks for, so long as it is not 'ims'.
     async fn check_dnn(&mut self, dnn: &[u8]) -> Result<bool> {
-        // Send a 5GMM Status if the DNN is not supported.  A typical scenario is
-        // where a UE requests the 'ims' DNN and then falls back to the 'internet' DNN.
-        // Right now we give the UE what it asks for, so long as it is not 'ims'.
         if dnn == b"ims" {
             warn!(
                 self.logger,

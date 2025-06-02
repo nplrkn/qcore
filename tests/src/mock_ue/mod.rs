@@ -108,8 +108,9 @@ impl<'a> MockUe<'a> {
             bail!("Expected security mode command - got {:?}", message)
         };
         info!(&self.logger, "Rrc SecurityModeCommand <<");
-        let security_mode_complete =
-            Box::new(build_rrc::security_mode_complete(security_mode_command.rrc_transaction_identifier));
+        let security_mode_complete = Box::new(build_rrc::security_mode_complete(
+            security_mode_command.rrc_transaction_identifier,
+        ));
         info!(&self.logger, "Rrc SecurityModeComplete >>");
         self.du
             .send_ul_rrc(&mut self.du_ue_context, &security_mode_complete)
@@ -214,8 +215,9 @@ impl<'a> MockUe<'a> {
         }?;
         let nas = nas_messages.head.0;
 
-        let rrc_reconfiguration_complete =
-            Box::new(build_rrc::reconfiguration_complete(RrcTransactionIdentifier(0)));
+        let rrc_reconfiguration_complete = Box::new(build_rrc::reconfiguration_complete(
+            RrcTransactionIdentifier(0),
+        ));
         info!(&self.logger, "Rrc ReconfigurationComplete >>");
         self.du
             .send_ul_rrc(&mut self.du_ue_context, &rrc_reconfiguration_complete)

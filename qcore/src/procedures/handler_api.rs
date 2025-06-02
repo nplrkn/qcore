@@ -1,7 +1,4 @@
-use crate::SubscriberAuthParams;
-use crate::data::NasContext;
-use crate::protocols::nas::Tmsi;
-use crate::{Config, UserplaneSession};
+use crate::{Config, NasContext, SubscriberAuthParams, UserplaneSession, nas::Tmsi};
 use anyhow::Result;
 use async_std::channel::Sender;
 use async_trait::async_trait;
@@ -15,7 +12,7 @@ pub enum UeMessage {
     TakeContext(Sender<NasContext>),
 }
 
-/// Trait representing the collection of services needed by QCore handlers.
+/// Trait representing the collection of services needed by QCore procedure handlers.
 #[async_trait]
 pub trait HandlerApi: Send + Sync + Clone + 'static {
     fn config(&self) -> &Config;

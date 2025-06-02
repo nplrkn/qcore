@@ -23,6 +23,7 @@ Persistence
 Function gaps
 - In case of unknown GUTI, do identity request
 - Deregistration accept
+- PDU session release
 - Idle / paging
 - SQN
 - Session deletion
@@ -38,6 +39,7 @@ Function gaps
 - NEA2 ciphering
 - Processing of UE measurements - detect when UE changes cell
 - Uplink integrity validation for RRC / NAS
+- TODOs
 - Handling of PDCP control packets
 - Handling of uplink PDCP sequence number out or order / gaps
 - Negative testing of rejections and protocol errors
@@ -47,8 +49,8 @@ Function gaps
 
 Tidying + refactoring
 - message logs in both test framework and QCORE debug should use consistent F1 / RRC / NAS prefix
-- merge nas_context.rs and security_context.rs
 - simplify xxap 
+- get rid of patch_nas_for_oai_deregistration_security_header() and fail gracefully
 
 Regression tests
 - should check there are no further messages when a mock is dropped

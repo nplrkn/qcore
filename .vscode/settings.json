@@ -1,5 +1,0 @@
-{
-    "rust-analyzer.files.exclude": [
-        "ebpf/ebpf-userplane/src/main.rs"
-    ]
-}

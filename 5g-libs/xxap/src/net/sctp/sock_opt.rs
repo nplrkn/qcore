@@ -2,7 +2,7 @@
 
 use super::sctp_bindings::*;
 use super::try_io::try_io;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use io::Error;
 use libc::setsockopt;
 use std::{io, mem};

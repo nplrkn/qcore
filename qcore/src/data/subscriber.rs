@@ -16,20 +16,26 @@ pub struct SimCreds {
 #[derive(Clone)]
 pub struct Subscriber {
     pub sim_creds: SimCreds,
-    pub sqn: [u8; 6],
+    pub sqn: Sqn,
     // In future, this structure will become SubscriberAuthParams,
     // contained within a Subscriber struct which also has config.
 }
 pub type SubscriberAuthParams = Subscriber;
 
-impl SubscriberAuthParams {
-    pub fn inc_sqn(&mut self) {
+#[derive(Deref, DerefMut, Clone, Debug)]
+pub struct Sqn(pub [u8; 6]);
+
+impl Sqn {
+    pub fn add(&mut self, amount: u8) {
         let mut scratch = [0u8; 8];
-        scratch[2..8].clone_from_slice(&self.sqn);
+        scratch[2..8].clone_from_slice(&self.0);
         let mut s = u64::from_be_bytes(scratch);
-        s += 1;
+        s += amount as u64;
         let scratch = s.to_be_bytes();
-        self.sqn.clone_from_slice(&scratch[2..8]);
+        self.clone_from_slice(&scratch[2..8]);
+    }
+    pub fn inc(&mut self) {
+        self.add(1);
     }
 }
 
@@ -57,7 +63,7 @@ impl SubscriberDb {
                 imsi.to_string(),
                 Subscriber {
                     sim_creds,
-                    sqn: [0u8; 6],
+                    sqn: Sqn([0u8; 6]),
                 },
             );
         }

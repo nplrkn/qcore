@@ -1,8 +1,7 @@
 //! main - starts a single-instance combined CU-CP and CU-UP
 
 #![allow(unused_parens)]
-use anyhow::anyhow;
-use anyhow::{Result, ensure};
+use anyhow::{Result, anyhow, ensure};
 use async_std::channel::Sender;
 use async_std::prelude::*;
 use clap::Parser;

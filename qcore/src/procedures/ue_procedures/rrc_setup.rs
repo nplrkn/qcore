@@ -25,8 +25,7 @@ impl<'a, A: HandlerApi> RrcSetupProcedure<'a, A> {
         let nas_bytes = self.handle_rrc_setup(r).await?;
 
         // Follow on registration
-        if let Ok((nas_message, security_header)) =
-            self.ue.nas.decode_with_security_header(&nas_bytes)
+        if let Ok((nas_message, security_header)) = self.nas_decode_with_security_header(&nas_bytes)
         {
             if let Ok(registration_request) = expect_nas!(RegistrationRequest, nas_message) {
                 RegistrationProcedure::new(self.0)

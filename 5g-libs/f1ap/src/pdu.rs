@@ -14000,9 +14000,9 @@ impl GnbDuStatusIndication {
         let transaction_id = transaction_id.ok_or(per_codec_error_new(format!(
             "Missing mandatory IE transaction_id"
         )))?;
-        let gnb_du_overload_information = gnb_du_overload_information.ok_or(per_codec_error_new(
-            format!("Missing mandatory IE gnb_du_overload_information"),
-        ))?;
+        let gnb_du_overload_information = gnb_du_overload_information.ok_or(
+            per_codec_error_new(format!("Missing mandatory IE gnb_du_overload_information")),
+        )?;
         Ok(Self {
             transaction_id,
             gnb_du_overload_information,
@@ -14528,8 +14528,9 @@ impl DeactivateTrace {
         let gnb_du_ue_f1ap_id = gnb_du_ue_f1ap_id.ok_or(per_codec_error_new(format!(
             "Missing mandatory IE gnb_du_ue_f1ap_id"
         )))?;
-        let trace_id =
-            trace_id.ok_or(per_codec_error_new(format!("Missing mandatory IE trace_id")))?;
+        let trace_id = trace_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE trace_id"
+        )))?;
         Ok(Self {
             gnb_cu_ue_f1ap_id,
             gnb_du_ue_f1ap_id,
@@ -14632,8 +14633,9 @@ impl CellTrafficTrace {
         let gnb_du_ue_f1ap_id = gnb_du_ue_f1ap_id.ok_or(per_codec_error_new(format!(
             "Missing mandatory IE gnb_du_ue_f1ap_id"
         )))?;
-        let trace_id =
-            trace_id.ok_or(per_codec_error_new(format!("Missing mandatory IE trace_id")))?;
+        let trace_id = trace_id.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE trace_id"
+        )))?;
         let trace_collection_entity_ip_address =
             trace_collection_entity_ip_address.ok_or(per_codec_error_new(format!(
                 "Missing mandatory IE trace_collection_entity_ip_address"
@@ -18647,9 +18649,9 @@ impl PositioningMeasurementReport {
         let ran_measurement_id = ran_measurement_id.ok_or(per_codec_error_new(format!(
             "Missing mandatory IE ran_measurement_id"
         )))?;
-        let pos_measurement_result_list = pos_measurement_result_list.ok_or(per_codec_error_new(
-            format!("Missing mandatory IE pos_measurement_result_list"),
-        ))?;
+        let pos_measurement_result_list = pos_measurement_result_list.ok_or(
+            per_codec_error_new(format!("Missing mandatory IE pos_measurement_result_list")),
+        )?;
         Ok(Self {
             transaction_id,
             lmf_measurement_id,
@@ -19934,8 +19936,9 @@ impl PositioningActivationRequest {
         let gnb_du_ue_f1ap_id = gnb_du_ue_f1ap_id.ok_or(per_codec_error_new(format!(
             "Missing mandatory IE gnb_du_ue_f1ap_id"
         )))?;
-        let srs_type =
-            srs_type.ok_or(per_codec_error_new(format!("Missing mandatory IE srs_type")))?;
+        let srs_type = srs_type.ok_or(per_codec_error_new(format!(
+            "Missing mandatory IE srs_type"
+        )))?;
         Ok(Self {
             gnb_cu_ue_f1ap_id,
             gnb_du_ue_f1ap_id,

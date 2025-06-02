@@ -1,5 +1,4 @@
-use super::UeContextReleaseProcedure;
-use super::UeProcedure;
+use super::{UeContextReleaseProcedure, UeProcedure};
 use crate::HandlerApi;
 use anyhow::{Result, bail};
 use derive_deref::{Deref, DerefMut};

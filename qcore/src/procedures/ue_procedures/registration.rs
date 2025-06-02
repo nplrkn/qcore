@@ -14,6 +14,8 @@ use anyhow::{Result, anyhow, bail};
 use derive_deref::{Deref, DerefMut};
 use f1ap::SrbId;
 use oxirush_nas::Nas5gsSecurityHeaderType;
+use oxirush_nas::NasMessageContainer;
+use oxirush_nas::decode_nas_5gs_message;
 use oxirush_nas::messages::{
     Nas5gsSecurityHeader, NasAuthenticationFailure, NasAuthenticationResponse,
     NasRegistrationRequest, NasSecurityModeComplete,
@@ -162,21 +164,8 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                     return Ok(());
                 }
                 NasAuthOutcome::ResyncSqn(sqn) => {
-                    debug!(self.logger, "Resynchronize SQN to {:02x?}", sqn);
                     self.resync_subscriber_sqn(imsi, sqn).await?;
-
-                    // Testing with Samsung phone - indicates that we need to do a double
-                    // increment after receiving the resync SQN.
-
-                    // TODO - cleanup
-                    let _ = self
-                        .lookup_subscriber_creds_and_inc_sqn(imsi)
-                        .await
-                        .unwrap();
-                    let _ = self
-                        .lookup_subscriber_creds_and_inc_sqn(imsi)
-                        .await
-                        .unwrap();
+                    debug!(self.logger, "Resynchronized SQN to UE {:02x?} plus 2", sqn);
                 } // Getting here means we have resynchronized the SQN
             }
         }
@@ -220,7 +209,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                                 self.logger,
                                 "Ignoring AUTS MAC-S signature failure for testability reasons"
                             );
-                            Ok(auth_params.sqn)
+                            Ok(auth_params.sqn.0)
                         } else {
                             Err(e)
                         }
@@ -397,13 +386,18 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         match security_mode_complete {
             NasSecurityModeComplete {
                 imeisv: _imeisv,
-                nas_message_container: Some(container),
+                nas_message_container: Some(NasMessageContainer { value, .. }),
                 non_imeisv_pei: _non_imeisv_pei,
             } => {
                 // TS24.501, 4.4.6 "After activating a 5G NAS security context resulting from a security
                 // mode control procedure... the UE shall include the entire REGISTRATION REQUEST ... in the ...
                 // NAS message container IE in the SECURITY MODE COMPLETE message."
-                let nas = self.ue.nas.decode(&container.value)?;
+                // We must decode this message without using the security context - hence the direct call to
+                // decode_nas_5gs_message() instead of self.nas_decode().
+                let nas =
+                    Box::new(decode_nas_5gs_message(&value).map_err(|e| {
+                        anyhow!("NAS decode error - {e} - message bytes: {:?}", value)
+                    })?);
                 let _registration_request = expect_nas!(RegistrationRequest, nas)?;
             }
             m => {

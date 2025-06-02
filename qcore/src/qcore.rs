@@ -1,4 +1,4 @@
-use crate::data::NasContext;
+use crate::data::{NasContext, Sqn};
 use crate::f1ap::{F1AP_BIND_PORT, F1AP_SCTP_PPID};
 use crate::procedures::{F1apHandler, UeMessage, UeMessageHandler};
 use crate::protocols::nas::Tmsi;
@@ -167,12 +167,18 @@ impl HandlerApi for QCore {
     ) -> Option<SubscriberAuthParams> {
         self.sub_db.lock().await.get_mut(imsi).map(|entry| {
             let pre_increment = entry.clone();
-            entry.inc_sqn();
+            entry.sqn.inc();
             pre_increment
         })
     }
 
     async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()> {
+        let mut sqn = Sqn(sqn);
+
+        // Testing with Samsung phone indicates that we need to do a double
+        // increment after receiving the resync SQN.
+        sqn.add(2);
+
         self.sub_db
             .lock()
             .await

@@ -5,14 +5,17 @@ mod net;
 mod shutdown_handle;
 mod transaction;
 
-use transaction::{RequestMessageHandler};
 use net::{AssocId, Message, SctpAssociation};
+use transaction::RequestMessageHandler;
 
 pub use common::*;
 pub use ies::{GtpTeid, GtpTunnel, PduSessionId, TransportLayerAddress};
-pub use transaction::{
-    Indication, IndicationHandler, InterfaceProvider, Procedure, RequestError, RequestProvider, ResponseAction};
 pub use net::{
-    Application, TnlaEvent, TnlaEventHandler, EventHandler, Binding, Stack, SctpTransportProvider, TransportProvider,
+    Application, Binding, EventHandler, SctpTransportProvider, Stack, TnlaEvent, TnlaEventHandler,
+    TransportProvider,
 };
 pub use shutdown_handle::ShutdownHandle;
+pub use transaction::{
+    Indication, IndicationHandler, InterfaceProvider, Procedure, RequestError, RequestProvider,
+    ResponseAction,
+};

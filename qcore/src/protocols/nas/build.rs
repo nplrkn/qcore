@@ -82,8 +82,12 @@ pub fn nssai(sst: u8) -> NasNssai {
     // TS24.501, 9.11.3.37 defines as a list of NSSAI length and value from TS24.501, 9.11.2.8.
     NasNssai::new(vec![
         0b00000100, // SST and SD
-        sst, 0x00, // 24 bit SD value
-        0x00, 0x00,
+        sst,        // SST
+        0x00, 0x00, 0x00, // 24 bit SD value
+        // Also offer the same SST but without SD specified
+        // This is needed for OAI interop using the default config.
+        0b00000001, // SST only
+        sst,
     ])
 }
 
