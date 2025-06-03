@@ -56,13 +56,12 @@ impl Drop for ProgramHandle {
     }
 }
 
-const NGAP_MODE: bool = true;
-
 impl QCore {
     pub async fn start(
         config: Config,
         logger: Logger,
         sub_db: SubscriberDb,
+        ngap_mode: bool,
     ) -> Result<ProgramHandle> {
         let local_ip = config.ip_addr;
         let mut ebpf = PacketProcessor::install_ebpf(
@@ -81,7 +80,8 @@ impl QCore {
         let packet_processor = PacketProcessor::new(config.ue_subnet, &mut ebpf, &logger).await?;
 
         let mut qc = Box::new(Self::new(config, packet_processor, logger, sub_db).await?);
-        qc.run().await.expect("Startup failure");
+        qc.run(ngap_mode).await.expect("Startup failure");
+        println!("Exiting Qcore::start()");
         Ok(ProgramHandle { qc, _ebpf: ebpf })
     }
 
@@ -103,8 +103,8 @@ impl QCore {
         })
     }
 
-    async fn run(&mut self) -> Result<()> {
-        let port = if NGAP_MODE {
+    async fn run(&mut self, ngap_mode: bool) -> Result<()> {
+        let port = if ngap_mode {
             NGAP_BIND_PORT
         } else {
             F1AP_BIND_PORT
@@ -115,7 +115,7 @@ impl QCore {
             "Listen for connection from RAN on {}", listen_address
         );
 
-        let handle = if NGAP_MODE {
+        let handle = if ngap_mode {
             self.stack
                 .listen(
                     listen_address,
@@ -249,14 +249,18 @@ impl HandlerApi for QCore {
         .await
     }
 
-    fn spawn_ue_message_handler(&self) -> u32 {
+    fn spawn_ue_message_handler(&self, ngap_mode: bool) -> u32 {
         let mut ue_id = rand::random::<u32>();
         while self.ue_tasks.contains_key(&ue_id) {
             ue_id = rand::random::<u32>();
         }
 
-        let sender =
-            UeMessageHandler::spawn(ue_id, self.clone(), self.logger.new(o!("ue_id" => ue_id)));
+        let sender = UeMessageHandler::spawn(
+            ue_id,
+            self.clone(),
+            ngap_mode,
+            self.logger.new(o!("ue_id" => ue_id)),
+        );
         self.ue_tasks.insert(ue_id, sender);
         ue_id
     }

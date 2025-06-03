@@ -48,6 +48,7 @@ Function gaps
 - >1 DU
 
 Tidying + refactoring
+- avoid having to expect() on UeContext fields
 - message logs in both test framework and QCORE debug should use consistent F1 / RRC / NAS prefix
 - simplify xxap 
 - get rid of patch_nas_for_oai_deregistration_security_header() and fail gracefully

@@ -5,7 +5,7 @@ use std::ops::Deref;
 use super::top_pdu::*;
 use crate::{InitiatingMessage, NgapPdu};
 use async_trait::async_trait;
-use slog::Logger;
+use slog::{Logger, error};
 use xxap::*;
 
 #[derive(Clone, Debug)]
@@ -22,6 +22,7 @@ impl<T> Deref for NgapAmf<T> {
 impl<T> Application for NgapAmf<T> where
     T: RequestProvider<NgSetupProcedure>
         + RequestProvider<RanConfigurationUpdateProcedure>
+        + IndicationHandler<InitialUeMessageProcedure>
         + EventHandler
 {
 }
@@ -43,6 +44,7 @@ where
         + Sync
         + RequestProvider<NgSetupProcedure>
         + RequestProvider<RanConfigurationUpdateProcedure>
+        + IndicationHandler<InitialUeMessageProcedure>
         + EventHandler,
 {
     type TopPdu = NgapPdu;
@@ -54,7 +56,14 @@ where
             NgapPdu::InitiatingMessage(InitiatingMessage::NgSetupRequest(req)) => {
                 NgSetupProcedure::call_provider(&self.0, req, logger).await
             }
-            _ => return None,
+            NgapPdu::InitiatingMessage(InitiatingMessage::InitialUeMessage(req)) => {
+                InitialUeMessageProcedure::call_provider(&self.0, req, logger).await;
+                None
+            }
+            m => {
+                error!(logger, "Unhandled message {:?}", m);
+                return None;
+            }
         }
     }
 }

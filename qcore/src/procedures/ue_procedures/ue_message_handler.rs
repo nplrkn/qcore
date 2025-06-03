@@ -12,7 +12,7 @@ pub struct UeMessageHandler<A: HandlerApi> {
 }
 
 impl<A: HandlerApi> UeMessageHandler<A> {
-    pub fn spawn(ue_id: u32, api: A, logger: Logger) -> Sender<UeMessage> {
+    pub fn spawn(ue_id: u32, api: A, ngap_mode: bool, logger: Logger) -> Sender<UeMessage> {
         let (sender, receiver) = channel::unbounded();
         let handler = Box::new(UeMessageHandler {
             receiver,
@@ -20,22 +20,38 @@ impl<A: HandlerApi> UeMessageHandler<A> {
             logger,
         });
         async_std::task::spawn(async move {
-            if let Err(e) = handler.run(ue_id).await {
+            if let Err(e) = handler.run(ue_id, ngap_mode).await {
                 warn!(handler.logger, "UE message handler exiting: {e}");
             }
         });
         sender
     }
 
-    async fn run(&self, ue_id: u32) -> Result<()> {
-        let (mut ue_context, r) = self.init(ue_id).await?;
+    // TODO stream line this
+    async fn run(&self, ue_id: u32, ngap_mode: bool) -> Result<()> {
         let mut give_context = None;
-        let result = self.run_inner(&mut ue_context, r, &mut give_context).await;
+
+        let (ue_context, result) = if ngap_mode {
+            let mut ue_context = Box::new(UeContext::new(ue_id));
+            let result = self
+                .run_inner_ngap(&mut ue_context, &mut give_context)
+                .await;
+            (ue_context, result)
+        } else {
+            let (mut ue_context, r) = self.init_f1ap(ue_id).await?;
+            let result = self
+                .run_inner_f1ap(&mut ue_context, r, &mut give_context)
+                .await;
+            (ue_context, result)
+        };
         self.cleanup(&give_context, ue_context).await;
         result
     }
 
-    async fn init(&self, ue_id: u32) -> Result<(Box<UeContext>, Box<InitialUlRrcMessageTransfer>)> {
+    async fn init_f1ap(
+        &self,
+        ue_id: u32,
+    ) -> Result<(Box<UeContext>, Box<InitialUlRrcMessageTransfer>)> {
         let UeMessage::F1ap(message) = self.receiver.recv().await? else {
             bail!("Expected InitialUlRrcMessageTransfer, got TakeContext");
         };
@@ -45,19 +61,20 @@ impl<A: HandlerApi> UeMessageHandler<A> {
             }
             _ => bail!("Expected InitialUlRrcMessageTransfer, got {message:?}"),
         };
-        Ok((
-            Box::new(UeContext::new(ue_id, r.gnb_du_ue_f1ap_id, r.nr_cgi.clone())),
-            r,
-        ))
+        let mut ue = Box::new(UeContext::new(ue_id));
+        ue.gnb_du_ue_f1ap_id = Some(r.gnb_du_ue_f1ap_id);
+        ue.nr_cgi = Some(r.nr_cgi.clone());
+        Ok((ue, r))
     }
 
-    async fn run_inner(
+    async fn run_inner_f1ap(
         &self,
         ue_context: &mut UeContext,
         r: Box<InitialUlRrcMessageTransfer>,
         give_context: &mut Option<Sender<NasContext>>,
     ) -> Result<()> {
         // Run the initial access procedure.
+        // TODO: call this from UeProcedure::dispatch()
         RrcSetupProcedure::new(UeProcedure::new(
             &self.api,
             ue_context,
@@ -77,7 +94,25 @@ impl<A: HandlerApi> UeMessageHandler<A> {
                 &self.receiver,
                 give_context,
             )
-            .dispatch()
+            .f1ap_dispatch()
+            .await?;
+        }
+    }
+
+    async fn run_inner_ngap(
+        &self,
+        ue_context: &mut UeContext,
+        give_context: &mut Option<Sender<NasContext>>,
+    ) -> Result<()> {
+        loop {
+            UeProcedure::new(
+                &self.api,
+                ue_context,
+                &self.logger,
+                &self.receiver,
+                give_context,
+            )
+            .ngap_dispatch()
             .await?;
         }
     }

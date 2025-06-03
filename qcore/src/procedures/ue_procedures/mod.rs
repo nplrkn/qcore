@@ -1,4 +1,5 @@
 mod deregistration;
+mod initial_ue_message;
 mod pdu_session_establishment;
 mod registration;
 mod rrc_setup;
@@ -16,6 +17,7 @@ use f1ap::{
     DlRrcMessageTransferProcedure, F1apPdu, InitiatingMessage, RrcContainer, SrbId,
     UlRrcMessageTransfer,
 };
+use ngap::NgapPdu;
 use oxirush_nas::{Nas5gsMessage, messages::Nas5gsSecurityHeader};
 use rrc::{
     C1_6, CriticalExtensions37, DedicatedNasMessage, UlDcchMessage, UlDcchMessageType,
@@ -24,6 +26,7 @@ use rrc::{
 use slog::Logger;
 
 pub use deregistration::DeregistrationProcedure;
+pub use initial_ue_message::InitialUeMessageProcedure;
 pub use pdu_session_establishment::SessionEstablishmentProcedure;
 pub use rrc_setup::RrcSetupProcedure;
 pub use ue_context_release::UeContextReleaseProcedure;
@@ -63,8 +66,8 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
     }
 
     // Return Err if the UE handler should exit.
-    async fn dispatch(mut self) -> Result<()> {
-        match *self.receive_pdu().await? {
+    async fn f1ap_dispatch(mut self) -> Result<()> {
+        match *self.receive_f1ap_pdu().await? {
             F1apPdu::InitiatingMessage(InitiatingMessage::UlRrcMessageTransfer(r)) => {
                 self.log_message(">> F1ap UlRrcMessageTransfer");
                 let mut rrc = self.extract_ul_dcch_message(&r)?;
@@ -92,15 +95,47 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         Ok(())
     }
 
+    // Return Err if the UE handler should exit.
+    async fn ngap_dispatch(mut self) -> Result<()> {
+        match *self.receive_ngap_pdu().await? {
+            NgapPdu::InitiatingMessage(ngap::InitiatingMessage::InitialUeMessage(r)) => {
+                self.log_message(">> Ngap InitialUeMessage");
+                InitialUeMessageProcedure::new(self)
+                    .run(Box::new(r))
+                    .await?
+            }
+            pdu => {
+                bail!("Unsupported F1apPdu {pdu:?}");
+            }
+        }
+        Ok(())
+    }
+
     // Returns the next F1AP PDU, and also handles TakeContext messages.
     // The latter causes the self-destruction of the UE handler by returning
     // an error.
-    async fn receive_pdu(&mut self) -> Result<Box<F1apPdu>> {
+    async fn receive_f1ap_pdu(&mut self) -> Result<Box<F1apPdu>> {
         match self.receiver.recv().await? {
             UeMessage::F1ap(pdu) => Ok(pdu),
             UeMessage::TakeContext(sender) => {
                 *self.give_context = Some(sender);
                 Err(anyhow!("Take context"))
+            }
+            _ => {
+                bail!("Unexpected UeMessage received");
+            }
+        }
+    }
+
+    async fn receive_ngap_pdu(&mut self) -> Result<Box<NgapPdu>> {
+        match self.receiver.recv().await? {
+            UeMessage::Ngap(pdu) => Ok(pdu),
+            UeMessage::TakeContext(sender) => {
+                *self.give_context = Some(sender);
+                Err(anyhow!("Take context"))
+            }
+            _ => {
+                bail!("Unexpected UeMessage received");
             }
         }
     }
@@ -115,7 +150,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         self.rrc_indication(srb_id, rrc).await?;
 
         // Wait for a response.
-        let pdu = self.receive_pdu().await?;
+        let pdu = self.receive_f1ap_pdu().await?;
         let F1apPdu::InitiatingMessage(InitiatingMessage::UlRrcMessageTransfer(
             ul_rrc_message_transfer,
         )) = *pdu
@@ -135,12 +170,19 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         let rrc_bytes = if srb_id == 0 {
             rrc_bytes
         } else {
-            self.ue.pdcp_tx.encode(srb_id, rrc_bytes).into()
+            self.ue
+                .pdcp_tx
+                .as_mut()
+                .expect("PCDP context must be present in F1AP mode")
+                .encode(srb_id, rrc_bytes)
+                .into()
         };
 
         let dl_message = crate::f1ap::build::dl_rrc_message_transfer(
             self.ue.key,
-            self.ue.gnb_du_ue_f1ap_id,
+            self.ue
+                .gnb_du_ue_f1ap_id
+                .expect("gnb_du_ue_f1ap_id must be present in F1AP mode"),
             RrcContainer(rrc_bytes),
             srb,
         );

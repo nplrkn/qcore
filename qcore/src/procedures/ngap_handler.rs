@@ -4,7 +4,7 @@ use crate::HandlerApi;
 use anyhow::Result;
 use async_trait::async_trait;
 use derive_deref::Deref;
-use ngap::RanConfigurationUpdateProcedure;
+use ngap::{InitialUeMessage, InitiatingMessage, NgapPdu, RanConfigurationUpdateProcedure};
 use ngap::{
     NgSetupFailure, NgSetupRequest, NgSetupResponse, NgapAmf, RanConfigurationUpdate,
     RanConfigurationUpdateAcknowledge, RanConfigurationUpdateFailure,
@@ -35,17 +35,40 @@ impl<A: HandlerApi> RequestProvider<ngap::NgSetupProcedure> for NgapHandler<A> {
 }
 
 #[async_trait]
+impl<A: HandlerApi> IndicationHandler<ngap::InitialUeMessageProcedure> for NgapHandler<A> {
+    async fn handle(&self, i: InitialUeMessage, logger: &Logger) {
+        let id = self.0.spawn_ue_message_handler(true);
+        if let Err(e) = self
+            .dispatch_ue_message(
+                id,
+                UeMessage::Ngap(Box::new(NgapPdu::InitiatingMessage(
+                    InitiatingMessage::InitialUeMessage(i),
+                ))),
+            )
+            .await
+        {
+            warn!(
+                logger,
+                "Failed to dispatch InitialUlRrcMessageTransfer - {}", e
+            );
+        }
+    }
+}
+
+#[async_trait]
 impl<A: HandlerApi> RequestProvider<RanConfigurationUpdateProcedure> for NgapHandler<A> {
     async fn request(
         &self,
-        r: RanConfigurationUpdate,
+        _r: RanConfigurationUpdate,
         logger: &Logger,
     ) -> Result<
         ResponseAction<RanConfigurationUpdateAcknowledge>,
         RequestError<RanConfigurationUpdateFailure>,
     > {
         warn!(logger, "RAN configuration update procedure not implemented");
-        todo!()
+        Err(RequestError::Other(
+            "RAN configuration update procedure not implemented".to_string(),
+        ))
     }
 }
 

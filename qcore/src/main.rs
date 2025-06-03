@@ -86,6 +86,7 @@ async fn main() -> Result<()> {
         },
         logger,
         sub_db,
+        false,
     )
     .await?;
 

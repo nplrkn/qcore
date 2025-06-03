@@ -11,25 +11,26 @@ pub async fn init() -> Result<(MockDu, ProgramHandle, DataNetwork, SubscriberDb,
     let logger = init_logging();
     let du_ip = "127.0.0.2";
     let du = MockDu::new(du_ip, &logger).await?;
-    init_common(du, logger).await
+    init_common(du, false, logger).await
 }
 
 pub async fn init_ngap() -> Result<(MockGnb, ProgramHandle, DataNetwork, SubscriberDb, Logger)> {
     let logger = init_logging();
     let gnb_ip = "127.0.0.2";
     let gnb = MockGnb::new(gnb_ip, &logger).await?;
-    init_common(gnb, logger).await
+    init_common(gnb, true, logger).await
 }
 
 async fn init_common<T>(
     du_or_gnb: T,
+    ngap_mode: bool,
     logger: Logger,
 ) -> Result<(T, ProgramHandle, DataNetwork, SubscriberDb, Logger)> {
     exit_on_panic();
     let qc_ip = "127.0.0.1";
     let dn = DataNetwork::new(&logger).await;
     let subs = SubscriberDb::new_from_sim_file("test_sims.toml", &logger)?;
-    let qc = start_qcore(qc_ip, subs.clone(), &logger).await?;
+    let qc = start_qcore(qc_ip, subs.clone(), &logger, ngap_mode).await?;
     Ok((du_or_gnb, qc, dn, subs, logger))
 }
 
@@ -49,7 +50,12 @@ fn init_logging() -> Logger {
     slog::Logger::root(drain, o!())
 }
 
-async fn start_qcore(addr: &str, sub_db: SubscriberDb, logger: &Logger) -> Result<ProgramHandle> {
+async fn start_qcore(
+    addr: &str,
+    sub_db: SubscriberDb,
+    logger: &Logger,
+    ngap_mode: bool,
+) -> Result<ProgramHandle> {
     QCore::start(
         Config {
             ip_addr: addr.parse()?,
@@ -66,6 +72,7 @@ async fn start_qcore(addr: &str, sub_db: SubscriberDb, logger: &Logger) -> Resul
         },
         logger.new(o!("qcore"=> 1)),
         sub_db,
+        ngap_mode,
     )
     .await
 }

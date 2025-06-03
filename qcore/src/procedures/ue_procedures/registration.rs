@@ -431,6 +431,10 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         let krrcint = security::derive_krrcint(&kgnb);
 
         // Tell the PDCP layer to add NIA2 integrity protection henceforth.
-        self.ue.pdcp_tx.enable_security(krrcint);
+        self.ue
+            .pdcp_tx
+            .as_mut()
+            .expect("PCDP context must be present in F1AP mode")
+            .enable_security(krrcint);
     }
 }

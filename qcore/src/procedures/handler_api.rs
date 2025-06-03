@@ -3,12 +3,14 @@ use anyhow::Result;
 use async_std::channel::Sender;
 use async_trait::async_trait;
 use f1ap::F1apPdu;
+use ngap::NgapPdu;
 use slog::Logger;
 use xxap::{GtpTunnel, Indication, Procedure, RequestError};
 
 #[derive(Debug)]
 pub enum UeMessage {
     F1ap(Box<F1apPdu>),
+    Ngap(Box<NgapPdu>),
     TakeContext(Sender<NasContext>),
 }
 
@@ -36,7 +38,7 @@ pub trait HandlerApi: Send + Sync + Clone + 'static {
         logger: &Logger,
     );
 
-    fn spawn_ue_message_handler(&self) -> u32;
+    fn spawn_ue_message_handler(&self, ngap_mode: bool) -> u32;
     async fn dispatch_ue_message(&self, ue_id: u32, message: UeMessage) -> Result<()>;
     fn delete_ue_channel(&self, ue_id: u32);
     fn delete_ue_channels(&self);

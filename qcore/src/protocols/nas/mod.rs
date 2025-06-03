@@ -50,8 +50,14 @@ pub enum MobileIdentity {
 macro_rules! expect_nas {
     ($t:ident, $boxed_nas:expr) => {
         match *$boxed_nas {
-            Nas5gsMessage::Gmm(_header, Nas5gmmMessage::$t(message)) => Ok(message),
-            m => Err(anyhow!("Expected Nas {} but got {:?}", stringify!($t), m)),
+            oxirush_nas::Nas5gsMessage::Gmm(_header, oxirush_nas::Nas5gmmMessage::$t(message)) => {
+                Ok(message)
+            }
+            m => Err(anyhow::anyhow!(
+                "Expected Nas {} but got {:?}",
+                stringify!($t),
+                m
+            )),
         }
     };
 }

@@ -7,7 +7,6 @@ use anyhow::{Result, anyhow, bail};
 use asn1_per::SerDes;
 use derive_deref::{Deref, DerefMut};
 use f1ap::{DuToCuRrcContainer, InitialUlRrcMessageTransfer, SrbId};
-use oxirush_nas::{Nas5gmmMessage, Nas5gsMessage};
 use rrc::{
     C1_4, C1_6, CriticalExtensions22, RrcSetupComplete, RrcSetupRequest, UlCcchMessage,
     UlCcchMessageType, UlDcchMessage, UlDcchMessageType,

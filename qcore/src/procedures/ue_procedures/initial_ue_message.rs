@@ -1,0 +1,31 @@
+use super::UeProcedure;
+use crate::{
+    HandlerApi, PduSession, expect_nas,
+    procedures::ue_procedures::registration::RegistrationProcedure,
+};
+use anyhow::Result;
+use derive_deref::{Deref, DerefMut};
+use ngap::InitialUeMessage;
+
+#[derive(Deref, DerefMut)]
+pub struct InitialUeMessageProcedure<'a, A: HandlerApi>(UeProcedure<'a, A>);
+
+impl<'a, A: HandlerApi> InitialUeMessageProcedure<'a, A> {
+    pub fn new(inner: UeProcedure<'a, A>) -> Self {
+        InitialUeMessageProcedure(inner)
+    }
+
+    pub async fn run(mut self, r: Box<InitialUeMessage>) -> Result<()> {
+        let nas_bytes = r.nas_pdu.0;
+        if let Ok((nas_message, security_header)) = self.nas_decode_with_security_header(&nas_bytes)
+        {
+            if let Ok(registration_request) = expect_nas!(RegistrationRequest, nas_message) {
+                RegistrationProcedure::new(self.0)
+                    .run(Box::new(registration_request), security_header)
+                    .await?;
+            }
+        }
+
+        Ok(())
+    }
+}

@@ -7,6 +7,7 @@ use std::net::Ipv4Addr;
 mod build_nas;
 mod build_rrc;
 pub mod mock_ue_f1ap;
+pub mod mock_ue_ngap;
 
 #[async_trait]
 pub trait Transport {

@@ -40,3 +40,49 @@ pub fn ng_setup_request() -> Box<NgapPdu> {
         }),
     ))
 }
+
+pub fn uplink_nas_transport(
+    amf_ue_ngap_id: AmfUeNgapId,
+    ran_ue_ngap_id: RanUeNgapId,
+    nas_pdu: NasPdu,
+    user_location_information: UserLocationInformation,
+) -> Box<NgapPdu> {
+    Box::new(NgapPdu::InitiatingMessage(
+        InitiatingMessage::UplinkNasTransport(UplinkNasTransport {
+            amf_ue_ngap_id,
+            ran_ue_ngap_id,
+            nas_pdu,
+            user_location_information,
+            w_agf_identity_information: None,
+            tngf_identity_information: None,
+            twif_identity_information: None,
+        }),
+    ))
+}
+
+pub fn initial_ue_message(
+    ran_ue_ngap_id: RanUeNgapId,
+    nas_pdu: NasPdu,
+    user_location_information: UserLocationInformation,
+) -> Box<NgapPdu> {
+    Box::new(NgapPdu::InitiatingMessage(
+        InitiatingMessage::InitialUeMessage(InitialUeMessage {
+            ran_ue_ngap_id,
+            nas_pdu,
+            user_location_information,
+            rrc_establishment_cause: RrcEstablishmentCause::MtAccess,
+            five_g_s_tmsi: None,
+            amf_set_id: None,
+            ue_context_request: None,
+            allowed_nssai: None,
+            source_to_target_amf_information_reroute: None,
+            selected_plmn_identity: None,
+            iab_node_indication: None,
+            c_emode_b_support_indicator: None,
+            ltem_indication: None,
+            edt_session: None,
+            authenticated_indication: None,
+            npn_access_information: None,
+        }),
+    ))
+}
