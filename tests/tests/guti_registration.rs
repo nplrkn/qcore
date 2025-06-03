@@ -1,4 +1,4 @@
-use qcore_tests::{MockUe, framework::*};
+use qcore_tests::{MockUeF1ap, framework::*};
 
 #[async_std::test]
 async fn guti_registration() -> anyhow::Result<()> {
@@ -6,7 +6,7 @@ async fn guti_registration() -> anyhow::Result<()> {
 
     // Register a UE
     du.perform_f1_setup(qc.ip_addr()).await?;
-    let mut ue = MockUe::new(nth_imsi(0, &sims), 1, &du, qc.ip_addr(), &logger).await?;
+    let mut ue = MockUeF1ap::new(nth_imsi(0, &sims), 1, &du, qc.ip_addr(), &logger).await?;
     ue.perform_rrc_setup().await?;
     ue.handle_nas_authentication().await?;
     ue.handle_nas_security_mode().await?;
@@ -16,9 +16,9 @@ async fn guti_registration() -> anyhow::Result<()> {
     // In the first variant, the UE message handler is not running.
 
     // Drop the UE context causing the message handler to exit and park the NAS context.
-    du.send_ue_context_release_request(&ue.du_ue_context)
+    du.send_ue_context_release_request(ue.du_ue_context())
         .await?;
-    du.handle_ue_context_release(&ue.du_ue_context).await?;
+    du.handle_ue_context_release(ue.du_ue_context()).await?;
 
     // UE does a security protected initial registration with GUTI.
     // QCore skip NAS authentication + security and moves straight to RRC security.

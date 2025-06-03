@@ -1,10 +1,10 @@
-use qcore_tests::{MockUe, framework::*};
+use qcore_tests::{MockUeF1ap, framework::*};
 
 #[async_std::test]
 async fn registration_failure_unknown_guti() -> anyhow::Result<()> {
     let (mut du, qc, _dn, sims, logger) = init().await?;
     du.perform_f1_setup(qc.ip_addr()).await?;
-    let mut ue = MockUe::new(nth_imsi(0, &sims), 1, &du, qc.ip_addr(), &logger).await?;
+    let mut ue = MockUeF1ap::new(nth_imsi(0, &sims), 1, &du, qc.ip_addr(), &logger).await?;
 
     // Send in an integrity protected GUTI registration on an RRC Setup Complete.
     // Unknown GUTI - bad AMF IDs

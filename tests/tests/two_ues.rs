@@ -1,4 +1,4 @@
-use qcore_tests::{MockUe, framework::*};
+use qcore_tests::{MockUeF1ap, framework::*};
 
 #[async_std::test]
 async fn two_ues() -> anyhow::Result<()> {
@@ -8,7 +8,7 @@ async fn two_ues() -> anyhow::Result<()> {
     du.perform_f1_setup(qc.ip_addr()).await?;
 
     // UE 1 registers
-    let mut ue_1 = MockUe::new(nth_imsi(0, &sims), 1, &du, qc.ip_addr(), &logger).await?;
+    let mut ue_1 = MockUeF1ap::new(nth_imsi(0, &sims), 1, &du, qc.ip_addr(), &logger).await?;
     ue_1.perform_rrc_setup().await?;
     ue_1.handle_nas_authentication().await?;
     ue_1.handle_nas_security_mode().await?;
@@ -17,13 +17,12 @@ async fn two_ues() -> anyhow::Result<()> {
 
     // UE 1 PDU session
     ue_1.send_nas_pdu_session_establishment_request().await?;
-    du.handle_f1_ue_context_setup(&mut ue_1.du_ue_context)
-        .await?;
+    du.handle_f1_ue_context_setup(ue_1.du_ue_context()).await?;
     ue_1.handle_rrc_reconfiguration_with_session_accept()
         .await?;
 
     // UE 2 registers
-    let mut ue_2 = MockUe::new(nth_imsi(1, &sims), 2, &du, qc.ip_addr(), &logger).await?;
+    let mut ue_2 = MockUeF1ap::new(nth_imsi(1, &sims), 2, &du, qc.ip_addr(), &logger).await?;
     ue_2.perform_rrc_setup().await?;
     ue_2.handle_nas_authentication().await?;
     ue_2.handle_nas_security_mode().await?;
@@ -32,8 +31,7 @@ async fn two_ues() -> anyhow::Result<()> {
 
     // UE 2 PDU session
     ue_2.send_nas_pdu_session_establishment_request().await?;
-    du.handle_f1_ue_context_setup(&mut ue_2.du_ue_context)
-        .await?;
+    du.handle_f1_ue_context_setup(ue_2.du_ue_context()).await?;
     ue_2.handle_rrc_reconfiguration_with_session_accept()
         .await?;
 

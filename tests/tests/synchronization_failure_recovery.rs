@@ -1,4 +1,4 @@
-use qcore_tests::{MockUe, framework::*};
+use qcore_tests::{MockUeF1ap, framework::*};
 
 #[async_std::test]
 async fn synchronization_failure_recovery() -> anyhow::Result<()> {
@@ -10,7 +10,7 @@ async fn synchronization_failure_recovery() -> anyhow::Result<()> {
 
     // Given a UE that is trying to register
     du.perform_f1_setup(qc.ip_addr()).await?;
-    let mut ue = MockUe::new(nth_imsi(0, &sims), 1, &du, qc.ip_addr(), &logger).await?;
+    let mut ue = MockUeF1ap::new(nth_imsi(0, &sims), 1, &du, qc.ip_addr(), &logger).await?;
     ue.perform_rrc_setup().await?;
 
     // When UE rejects authentication with a 'Synch failure' cause and an AUTS value.
@@ -25,7 +25,7 @@ async fn synchronization_failure_recovery() -> anyhow::Result<()> {
     // And if the UE reregisters during the lifetime of QCore, it gets the SQN right this time, and there
     // is no need for another synchronization.
     ue.send_nas_deregistration_request().await?;
-    du.handle_ue_context_release(&ue.du_ue_context).await?;
+    du.handle_ue_context_release(ue.du_ue_context()).await?;
 
     // TODO receive deregistration response
 

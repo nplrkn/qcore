@@ -1,4 +1,4 @@
-use crate::MockGnb;
+use crate::{MockGnb, mock_ue::Transport};
 
 use super::{DataNetwork, MockDu, MockUe};
 use anyhow::{Result, bail};
@@ -73,14 +73,20 @@ async fn start_qcore(addr: &str, sub_db: SubscriberDb, logger: &Logger) -> Resul
 const TEST_UDP_PORT: u16 = 23215;
 
 /// Send a downlink packet from the DN to an arbitrary UDP port on the UE.
-pub async fn pass_through_downlink_ipv4<'a>(dn: &DataNetwork, ue: &MockUe<'a>) -> Result<()> {
+pub async fn pass_through_downlink_ipv4<'a, T: Transport>(
+    dn: &DataNetwork,
+    ue: &MockUe<T>,
+) -> Result<()> {
     dn.send_n6_udp_packet(SocketAddr::new(IpAddr::V4(ue.ipv4_addr), TEST_UDP_PORT))
         .await?;
     let _ip_packet = ue.recv_f1u_data_packet().await?;
     Ok(())
 }
 
-pub async fn pass_through_uplink_ipv4<'a>(ue: &MockUe<'a>, dn: &DataNetwork) -> Result<()> {
+pub async fn pass_through_uplink_ipv4<'a, T: Transport>(
+    ue: &MockUe<T>,
+    dn: &DataNetwork,
+) -> Result<()> {
     let dst_udp_server = dn.udp_server_addr();
     let IpAddr::V4(dst_ip) = dst_udp_server.ip() else {
         bail!("Expected IPv4 address");
@@ -90,9 +96,9 @@ pub async fn pass_through_uplink_ipv4<'a>(ue: &MockUe<'a>, dn: &DataNetwork) -> 
     dn.receive_n6_udp_packet().await
 }
 
-pub async fn pass_through_ue_to_ue_ipv4<'a>(
-    src_ue: &MockUe<'a>,
-    dst_ue: &MockUe<'a>,
+pub async fn pass_through_ue_to_ue_ipv4<'a, T: Transport>(
+    src_ue: &MockUe<T>,
+    dst_ue: &MockUe<T>,
 ) -> Result<()> {
     src_ue
         .send_f1u_data_packet(&dst_ue.ipv4_addr, TEST_UDP_PORT, TEST_UDP_PORT)
