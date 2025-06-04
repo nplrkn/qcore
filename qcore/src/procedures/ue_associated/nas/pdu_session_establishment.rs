@@ -9,14 +9,9 @@ use oxirush_nas::messages::{Nas5gsmHeader, NasPduSessionEstablishmentRequest};
 use rrc::{C1_6, UlDcchMessage, UlDcchMessageType};
 use xxap::{GtpTunnel, Snssai};
 
-#[derive(Deref, DerefMut)]
-pub struct SessionEstablishmentProcedure<'a, A: HandlerApi>(UeProcedure<'a, A>);
+define_ue_procedure!(SessionEstablishmentProcedure);
 
 impl<'a, A: HandlerApi> SessionEstablishmentProcedure<'a, A> {
-    pub fn new(ue_procedure: UeProcedure<'a, A>) -> Self {
-        SessionEstablishmentProcedure(ue_procedure)
-    }
-
     pub async fn run(
         &mut self,
         hdr: Nas5gsmHeader,

@@ -3,14 +3,8 @@ use super::prelude::*;
 use f1ap::{F1SetupFailure, F1SetupRequest, F1SetupResponse};
 use xxap::{RequestError, ResponseAction};
 
-#[derive(Deref, DerefMut)]
-pub struct F1SetupProcedure<'a, A: HandlerApi>(Procedure<'a, A>);
-
+define_procedure!(F1SetupProcedure);
 impl<'a, A: HandlerApi> F1SetupProcedure<'a, A> {
-    pub fn new(inner: Procedure<'a, A>) -> Self {
-        F1SetupProcedure(inner)
-    }
-
     // F1 Setup Procedure
     // 1.    F1ap F1SetupRequest >>
     // 2.    F1ap F1SetupResponse <<

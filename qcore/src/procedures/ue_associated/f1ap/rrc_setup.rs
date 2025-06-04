@@ -10,14 +10,9 @@ use rrc::{
     UlCcchMessageType, UlDcchMessage, UlDcchMessageType,
 };
 
-#[derive(Deref, DerefMut)]
-pub struct RrcSetupProcedure<'a, A: HandlerApi>(UeProcedure<'a, A>);
+define_ue_procedure!(RrcSetupProcedure);
 
 impl<'a, A: HandlerApi> RrcSetupProcedure<'a, A> {
-    pub fn new(inner: UeProcedure<'a, A>) -> Self {
-        RrcSetupProcedure(inner)
-    }
-
     pub async fn run(mut self, r: Box<InitialUlRrcMessageTransfer>) -> Result<()> {
         let nas_bytes = self.handle_rrc_setup(r).await?;
 

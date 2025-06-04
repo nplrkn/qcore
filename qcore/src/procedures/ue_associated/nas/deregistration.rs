@@ -3,14 +3,9 @@ use super::prelude::*;
 use f1ap::{Cause, CauseRadioNetwork};
 use oxirush_nas::messages::NasDeregistrationRequestFromUe;
 
-#[derive(Deref, DerefMut)]
-pub struct DeregistrationProcedure<'a, A: HandlerApi>(UeProcedure<'a, A>);
+define_ue_procedure!(DeregistrationProcedure);
 
 impl<'a, A: HandlerApi> DeregistrationProcedure<'a, A> {
-    pub fn new(inner: UeProcedure<'a, A>) -> Self {
-        DeregistrationProcedure(inner)
-    }
-
     pub async fn run(self, _r: NasDeregistrationRequestFromUe) -> Result<()> {
         self.log_message(">> DeregistrationRequestFromUe");
 

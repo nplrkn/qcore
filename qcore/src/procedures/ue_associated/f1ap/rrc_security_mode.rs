@@ -1,15 +1,9 @@
 use super::prelude::*;
-use derive_deref::{Deref, DerefMut};
 use f1ap::SrbId;
 
-#[derive(Deref, DerefMut)]
-pub struct RrcSecurityModeProcedure<'a, A: HandlerApi>(UeProcedure<'a, A>);
+define_ue_procedure!(RrcSecurityModeProcedure);
 
 impl<'a, A: HandlerApi> RrcSecurityModeProcedure<'a, A> {
-    pub fn new(inner: UeProcedure<'a, A>) -> Self {
-        RrcSecurityModeProcedure(inner)
-    }
-
     pub async fn run(mut self, kgnb: &[u8; 32]) -> Result<UeProcedure<'a, A>> {
         self.configure_rrc_security(kgnb);
         let r = crate::rrc::build::security_mode_command(1);

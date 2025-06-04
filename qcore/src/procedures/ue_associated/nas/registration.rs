@@ -22,14 +22,9 @@ enum NasAuthOutcome {
     ResyncSqn([u8; 6]),
 }
 
-#[derive(Deref, DerefMut)]
-pub struct RegistrationProcedure<'a, A: HandlerApi>(UeProcedure<'a, A>);
+define_ue_procedure!(RegistrationProcedure);
 
 impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
-    pub fn new(inner: UeProcedure<'a, A>) -> Self {
-        RegistrationProcedure(inner)
-    }
-
     pub async fn run(
         mut self,
         r: Box<NasRegistrationRequest>,

@@ -2,14 +2,9 @@ use super::prelude::*;
 use ngap::{NgSetupFailure, NgSetupRequest, NgSetupResponse};
 use xxap::{RequestError, ResponseAction};
 
-#[derive(Deref, DerefMut)]
-pub struct NgSetupProcedure<'a, A: HandlerApi>(Procedure<'a, A>);
+define_procedure!(NgSetupProcedure);
 
 impl<'a, A: HandlerApi> NgSetupProcedure<'a, A> {
-    pub fn new(api: &'a A, logger: &'a Logger) -> Self {
-        NgSetupProcedure(Procedure::new(api, logger))
-    }
-
     // Ng Setup Procedure
     // 1.    Ngap NgSetupRequest >>
     // 2.    Ngap NgSetupResponse <<
@@ -27,8 +22,11 @@ impl<'a, A: HandlerApi> NgSetupProcedure<'a, A> {
             self.logger,
             "NG setup with GNB name:{gnb_name}, id:{:?}", r.global_ran_node_id
         );
-        let response =
-            crate::ngap::build::ng_setup_response(&self.config().guami(), &self.config().plmn, self.config().sst)?;
+        let response = crate::ngap::build::ng_setup_response(
+            &self.config().guami(),
+            &self.config().plmn,
+            self.config().sst,
+        )?;
         self.log_message("<< NgSetupResponse");
         Ok((response, None))
     }

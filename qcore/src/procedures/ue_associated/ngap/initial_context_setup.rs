@@ -1,13 +1,8 @@
 use super::prelude::*;
 
-#[derive(Deref, DerefMut)]
-pub struct InitialContextSetupProcedure<'a, A: HandlerApi>(UeProcedure<'a, A>);
+define_ue_procedure!(InitialContextSetupProcedure);
 
 impl<'a, A: HandlerApi> InitialContextSetupProcedure<'a, A> {
-    pub fn new(inner: UeProcedure<'a, A>) -> Self {
-        InitialContextSetupProcedure(inner)
-    }
-
     pub async fn run(self, kgnb: &[u8; 32]) -> Result<UeProcedure<'a, A>> {
         let initial_context_setup_request = crate::ngap::build::initial_context_setup_request(
             self.ue.amf_ue_ngap_id(),

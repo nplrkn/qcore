@@ -1,13 +1,8 @@
 use super::prelude::*;
 use f1ap::{Cause, UeContextReleaseComplete, UeContextReleaseRequest};
 
-#[derive(Deref, DerefMut)]
-pub struct UeContextReleaseProcedure<'a, A: HandlerApi>(UeProcedure<'a, A>);
-
+define_ue_procedure!(UeContextReleaseProcedure);
 impl<'a, A: HandlerApi> UeContextReleaseProcedure<'a, A> {
-    pub fn new(ue_procedure: UeProcedure<'a, A>) -> Self {
-        UeContextReleaseProcedure(ue_procedure)
-    }
     pub async fn cu_initiated(&mut self, cause: Cause) -> Result<()> {
         self.perform_f1_ue_context_release(cause).await
     }

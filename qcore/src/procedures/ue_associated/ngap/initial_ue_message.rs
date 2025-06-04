@@ -3,14 +3,9 @@ use super::prelude::*;
 use crate::expect_nas;
 use ngap::InitialUeMessage;
 
-#[derive(Deref, DerefMut)]
-pub struct InitialUeMessageProcedure<'a, A: HandlerApi>(UeProcedure<'a, A>);
+define_ue_procedure!(InitialUeMessageProcedure);
 
 impl<'a, A: HandlerApi> InitialUeMessageProcedure<'a, A> {
-    pub fn new(inner: UeProcedure<'a, A>) -> Self {
-        InitialUeMessageProcedure(inner)
-    }
-
     pub async fn run(mut self, r: Box<InitialUeMessage>) -> Result<()> {
         let nas_bytes = r.nas_pdu.0;
         if let Ok((nas_message, security_header)) = self.nas_decode_with_security_header(&nas_bytes)

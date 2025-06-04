@@ -7,14 +7,9 @@ use oxirush_nas::{
     messages::NasUlNasTransport,
 };
 
-#[derive(Deref, DerefMut)]
-pub struct UplinkNasProcedure<'a, A: HandlerApi>(UeProcedure<'a, A>);
+define_ue_procedure!(UplinkNasProcedure);
 
 impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
-    pub fn new(ue_procedure: UeProcedure<'a, A>) -> Self {
-        UplinkNasProcedure(ue_procedure)
-    }
-
     pub async fn run(mut self, nas_bytes: &mut [u8]) -> Result<()> {
         self.patch_nas_for_oai_deregistration_security_header(nas_bytes);
 

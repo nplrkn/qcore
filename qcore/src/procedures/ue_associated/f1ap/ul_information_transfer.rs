@@ -4,14 +4,9 @@ use rrc::{
     CriticalExtensions37, DedicatedNasMessage, UlInformationTransfer, UlInformationTransferIEs,
 };
 
-#[derive(Deref, DerefMut)]
-pub struct UlInformationTransferProcedure<'a, A: HandlerApi>(UeProcedure<'a, A>);
+define_ue_procedure!(UlInformationTransferProcedure);
 
 impl<'a, A: HandlerApi> UlInformationTransferProcedure<'a, A> {
-    pub fn new(ue_procedure: UeProcedure<'a, A>) -> Self {
-        UlInformationTransferProcedure(ue_procedure)
-    }
-
     pub async fn run(self, ul_information_transfer: &mut UlInformationTransfer) -> Result<()> {
         self.log_message(">> Rrc UlInformationTransfer");
         let UlInformationTransfer {

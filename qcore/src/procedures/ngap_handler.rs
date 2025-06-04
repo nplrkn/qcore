@@ -27,7 +27,9 @@ impl<A: HandlerApi> RequestProvider<ngap::NgSetupProcedure> for NgapHandler<A> {
         r: NgSetupRequest,
         logger: &Logger,
     ) -> Result<ResponseAction<NgSetupResponse>, RequestError<NgSetupFailure>> {
-        NgSetupProcedure::new(&self.0, logger).run(r).await
+        NgSetupProcedure::new(Procedure::new(&self.0, logger))
+            .run(r)
+            .await
     }
 }
 

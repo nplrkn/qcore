@@ -14,4 +14,19 @@ pub use ue_procedure::UeProcedure;
 mod prelude {
     pub use super::super::prelude::*;
     pub use super::UeProcedure;
+    pub use crate::define_ue_procedure;
+}
+
+// Reduce procedure boilerplate by defining the newtype struct and the new() function.
+#[macro_export]
+macro_rules! define_ue_procedure {
+    ($t:ident) => {
+        #[derive(Deref, DerefMut)]
+        pub struct $t<'a, A: HandlerApi>(UeProcedure<'a, A>);
+        impl<'a, A: HandlerApi> $t<'a, A> {
+            pub fn new(inner: UeProcedure<'a, A>) -> Self {
+                $t(inner)
+            }
+        }
+    };
 }

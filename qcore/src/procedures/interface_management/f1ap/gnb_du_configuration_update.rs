@@ -4,14 +4,9 @@ use super::prelude::*;
 use f1ap::*;
 use xxap::{RequestError, ResponseAction};
 
-#[derive(Deref, DerefMut)]
-pub struct GnbDuConfigurationUpdateProcedure<'a, A: HandlerApi>(Procedure<'a, A>);
+define_procedure!(GnbDuConfigurationUpdateProcedure);
 
 impl<'a, A: HandlerApi> GnbDuConfigurationUpdateProcedure<'a, A> {
-    pub fn new(inner: Procedure<'a, A>) -> Self {
-        GnbDuConfigurationUpdateProcedure(inner)
-    }
-
     // F1 Setup Procedure
     // 1.    F1ap GnbDuConfigurationUpdate >>
     // 2.    F1ap GnbDuConfigurationUpdateAcknowledge <<

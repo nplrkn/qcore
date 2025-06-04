@@ -2,14 +2,9 @@ use super::prelude::*;
 use f1ap::{F1RemovalFailure, F1RemovalRequest, F1RemovalResponse};
 use xxap::{RequestError, ResponseAction};
 
-#[derive(Deref, DerefMut)]
-pub struct F1RemovalProcedure<'a, A: HandlerApi>(Procedure<'a, A>);
+define_procedure!(F1RemovalProcedure);
 
 impl<'a, A: HandlerApi> F1RemovalProcedure<'a, A> {
-    pub fn new(inner: Procedure<'a, A>) -> Self {
-        F1RemovalProcedure(inner)
-    }
-
     pub async fn run(
         &self,
         r: F1RemovalRequest,
