@@ -5,7 +5,7 @@ mod qcore;
 mod userplane;
 
 use data::*;
-use procedures::{HandlerApi, Procedure};
+use procedures::HandlerApi;
 use protocols::*;
 
 pub use ::xxap::PlmnIdentity;

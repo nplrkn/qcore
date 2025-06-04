@@ -1,4 +1,4 @@
-use super::super::prelude::*;
+use super::prelude::*;
 use crate::expect_nas;
 use crate::nas::*;
 use crate::{SimCreds, SubscriberAuthParams};

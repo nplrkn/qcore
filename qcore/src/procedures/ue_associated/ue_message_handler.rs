@@ -1,5 +1,5 @@
 use super::{RrcSetupProcedure, UeProcedure};
-use crate::{HandlerApi, UeContext, data::NasContext, procedures::UeMessage};
+use crate::{HandlerApi, NasContext, UeContext, procedures::UeMessage};
 use anyhow::{Result, bail};
 use async_std::channel::{self, Receiver, Sender};
 use f1ap::{F1apPdu, InitialUlRrcMessageTransfer, InitiatingMessage};

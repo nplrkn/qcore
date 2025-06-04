@@ -1,5 +1,5 @@
 use super::prelude::*;
-use crate::PduSession;
+use crate::{PduSession, procedures::ue_associated::F1apBase};
 use asn1_per::nonempty;
 use f1ap::{
     CellGroupConfig, DlUpTnlInformationToBeSetupItem, DuToCuRrcInformation, SrbId,
