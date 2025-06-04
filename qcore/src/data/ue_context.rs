@@ -1,5 +1,6 @@
 use crate::{NasContext, PduSession, nas::Tmsi};
 use f1ap::{GnbDuUeF1apId, NrCgi};
+use ngap::RanUeNgapId;
 use pdcp::PdcpTx;
 
 #[derive(Debug)]
@@ -10,9 +11,9 @@ pub struct UeContext {
     pub pdu_sessions: Vec<PduSession>,
     pub nr_cgi: Option<NrCgi>,
     pub nas: NasContext,
+    pub ran_ue_id: u32,
 
     // CU only data
-    pub gnb_du_ue_f1ap_id: GnbDuUeF1apId,
     pub pdcp_tx: PdcpTx,
 }
 
@@ -25,8 +26,15 @@ impl UeContext {
             pdu_sessions: vec![],
             nr_cgi: None,
             nas: NasContext::default(),
-            gnb_du_ue_f1ap_id: GnbDuUeF1apId(0),
+            ran_ue_id: 0,
             pdcp_tx: PdcpTx::default(),
         }
+    }
+
+    pub fn gnb_du_ue_f1ap_id(&self) -> GnbDuUeF1apId {
+        GnbDuUeF1apId(self.ran_ue_id)
+    }
+    pub fn ran_ue_ngap_id(&self) -> RanUeNgapId {
+        RanUeNgapId(self.ran_ue_id)
     }
 }

@@ -44,8 +44,8 @@ impl<'a> Transport for UeNgapMode<'a> {
             .await
     }
 
-    async fn receive_nas(&self, logger: &Logger) -> Result<Vec<u8>> {
-        self.gnb.receive_nas(&self.gnb_ue_context, logger).await
+    async fn receive_nas(&mut self, logger: &Logger) -> Result<Vec<u8>> {
+        self.gnb.receive_nas(&mut self.gnb_ue_context, logger).await
     }
 
     async fn send_userplane_packet(

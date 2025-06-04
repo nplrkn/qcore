@@ -1401,7 +1401,7 @@ impl PerCodec for AmfTnlAssociationToUpdateItem {
     }
 }
 // AmfUeNgapId
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AmfUeNgapId(pub u64);
 
 impl AmfUeNgapId {

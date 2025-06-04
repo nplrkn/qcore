@@ -34,7 +34,7 @@ impl<'a, A: HandlerApi> UeContextReleaseProcedure<'a, A> {
             crate::f1ap::build::ue_context_release_command(self.ue, cause);
         self.log_message("<< UeContextReleaseCommand");
         let rsp = self
-            .f1ap_request::<f1ap::UeContextReleaseProcedure>(
+            .xxap_request::<f1ap::UeContextReleaseProcedure>(
                 ue_context_release_command,
                 self.logger,
             )

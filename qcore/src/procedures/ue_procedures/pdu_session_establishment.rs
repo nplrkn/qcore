@@ -65,7 +65,7 @@ impl<'a, A: HandlerApi> SessionEstablishmentProcedure<'a, A> {
         )?;
         self.log_message("<< UeContextSetupRequest");
         let rsp = self
-            .f1ap_request::<UeContextSetupProcedure>(ue_context_setup_request, self.logger)
+            .xxap_request::<UeContextSetupProcedure>(ue_context_setup_request, self.logger)
             .await?;
         self.log_message(">> UeContextSetupResponse");
         self.check_ue_context_setup_response(rsp)

@@ -62,7 +62,7 @@ impl<A: HandlerApi> UeMessageHandler<A> {
             _ => bail!("Expected InitialUlRrcMessageTransfer, got {message:?}"),
         };
         let mut ue = Box::new(UeContext::new(ue_id));
-        ue.gnb_du_ue_f1ap_id = r.gnb_du_ue_f1ap_id;
+        ue.ran_ue_id = r.gnb_du_ue_f1ap_id.0;
         ue.nr_cgi = Some(r.nr_cgi.clone());
         Ok((ue, r))
     }

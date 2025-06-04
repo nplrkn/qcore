@@ -289,7 +289,7 @@ impl HandlerApi for QCore {
         self.ue_tasks.clear();
     }
 
-    async fn f1ap_request<P: Procedure>(
+    async fn xxap_request<P: Procedure>(
         &self,
         r: Box<P::Request>,
         logger: &Logger,
@@ -298,7 +298,7 @@ impl HandlerApi for QCore {
             .await
             .map(|(x, _)| x)
     }
-    async fn f1ap_indication<P: Indication>(&self, r: Box<P::Request>, logger: &Logger) {
+    async fn xxap_indication<P: Indication>(&self, r: Box<P::Request>, logger: &Logger) {
         <Stack as IndicationHandler<P>>::handle(&self.stack, *r, logger).await
     }
 

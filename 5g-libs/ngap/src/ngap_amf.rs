@@ -23,6 +23,7 @@ impl<T> Application for NgapAmf<T> where
     T: RequestProvider<NgSetupProcedure>
         + RequestProvider<RanConfigurationUpdateProcedure>
         + IndicationHandler<InitialUeMessageProcedure>
+        + IndicationHandler<UplinkNasTransportProcedure>
         + EventHandler
 {
 }
@@ -45,6 +46,7 @@ where
         + RequestProvider<NgSetupProcedure>
         + RequestProvider<RanConfigurationUpdateProcedure>
         + IndicationHandler<InitialUeMessageProcedure>
+        + IndicationHandler<UplinkNasTransportProcedure>
         + EventHandler,
 {
     type TopPdu = NgapPdu;
@@ -58,6 +60,10 @@ where
             }
             NgapPdu::InitiatingMessage(InitiatingMessage::InitialUeMessage(req)) => {
                 InitialUeMessageProcedure::call_provider(&self.0, req, logger).await;
+                None
+            }
+            NgapPdu::InitiatingMessage(InitiatingMessage::UplinkNasTransport(req)) => {
+                UplinkNasTransportProcedure::call_provider(&self.0, req, logger).await;
                 None
             }
             m => {

@@ -67,7 +67,7 @@ impl<'a> Transport for UeF1apMode<'a> {
         self.du.send_ul_rrc(&mut self.du_ue_context, &rrc).await
     }
 
-    async fn receive_nas(&self, logger: &Logger) -> Result<Vec<u8>> {
+    async fn receive_nas(&mut self, logger: &Logger) -> Result<Vec<u8>> {
         match *self.du.receive_rrc_dl_dcch(&self.du_ue_context).await? {
             DlDcchMessageType::C1(C1_2::DlInformationTransfer(DlInformationTransfer {
                 critical_extensions:

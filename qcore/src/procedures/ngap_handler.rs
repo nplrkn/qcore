@@ -4,7 +4,10 @@ use crate::HandlerApi;
 use anyhow::Result;
 use async_trait::async_trait;
 use derive_deref::Deref;
-use ngap::{InitialUeMessage, InitiatingMessage, NgapPdu, RanConfigurationUpdateProcedure};
+use ngap::{
+    InitialUeMessage, InitiatingMessage, NgapPdu, RanConfigurationUpdateProcedure,
+    UplinkNasTransport,
+};
 use ngap::{
     NgSetupFailure, NgSetupRequest, NgSetupResponse, NgapAmf, RanConfigurationUpdate,
     RanConfigurationUpdateAcknowledge, RanConfigurationUpdateFailure,
@@ -47,10 +50,24 @@ impl<A: HandlerApi> IndicationHandler<ngap::InitialUeMessageProcedure> for NgapH
             )
             .await
         {
-            warn!(
-                logger,
-                "Failed to dispatch InitialUlRrcMessageTransfer - {}", e
-            );
+            warn!(logger, "Failed to dispatch InitialUeMessage - {}", e);
+        }
+    }
+}
+
+#[async_trait]
+impl<A: HandlerApi> IndicationHandler<ngap::UplinkNasTransportProcedure> for NgapHandler<A> {
+    async fn handle(&self, i: UplinkNasTransport, logger: &Logger) {
+        if let Err(e) = self
+            .dispatch_ue_message(
+                i.amf_ue_ngap_id.0 as u32,
+                UeMessage::Ngap(Box::new(NgapPdu::InitiatingMessage(
+                    InitiatingMessage::UplinkNasTransport(i),
+                ))),
+            )
+            .await
+        {
+            warn!(logger, "Failed to dispatch UplinkNasTransport - {}", e);
         }
     }
 }

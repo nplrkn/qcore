@@ -134,15 +134,25 @@ impl MockGnb {
         Ok(())
     }
 
-    pub async fn receive_nas(&self, _ue: &UeContext, logger: &Logger) -> Result<Vec<u8>> {
+    pub async fn receive_nas(&self, ue: &mut UeContext, logger: &Logger) -> Result<Vec<u8>> {
         let pdu = self.receive_pdu().await?;
         let NgapPdu::InitiatingMessage(InitiatingMessage::DownlinkNasTransport(
-            DownlinkNasTransport { nas_pdu, .. },
+            DownlinkNasTransport {
+                amf_ue_ngap_id,
+                nas_pdu,
+                ..
+            },
         )) = *pdu
         else {
             bail!("Unexpected Ngap message {:?}", pdu);
         };
         info!(logger, "Ngap DownlinkNasTransport <<");
+
+        if ue.amf_ue_ngap_id.is_none() {
+            ue.amf_ue_ngap_id = Some(amf_ue_ngap_id);
+        } else {
+            assert_eq!(ue.amf_ue_ngap_id, Some(amf_ue_ngap_id));
+        }
         Ok(nas_pdu.0)
     }
 

@@ -12,7 +12,7 @@ pub mod mock_ue_ngap;
 #[async_trait]
 pub trait Transport {
     async fn send_nas(&mut self, nas_bytes: Vec<u8>, logger: &Logger) -> Result<()>;
-    async fn receive_nas(&self, logger: &Logger) -> Result<Vec<u8>>;
+    async fn receive_nas(&mut self, logger: &Logger) -> Result<Vec<u8>>;
     async fn send_userplane_packet(
         &self,
         src_ip: &Ipv4Addr,
@@ -59,7 +59,7 @@ impl<T: Transport> MockUe<T> {
         self.transport.send_nas(nas_bytes, &self.logger).await
     }
 
-    async fn receive_nas(&self) -> Result<Vec<u8>> {
+    async fn receive_nas(&mut self) -> Result<Vec<u8>> {
         self.transport.receive_nas(&self.logger).await
     }
 
@@ -154,15 +154,15 @@ impl<T: Transport> MockUe<T> {
         self.send_nas(nas_authentication_failure).await
     }
 
-    pub async fn receive_nas_registration_reject(&self) -> Result<()> {
-        match decode_nas_5gs_message(&self.receive_nas().await?)? {
+    pub async fn receive_nas_registration_reject(&mut self) -> Result<()> {
+        match decode_nas_5gs_message(&mut self.receive_nas().await?)? {
             Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationReject(_)) => Ok(()),
             m => bail!("Expected reject, got {:?}", m),
         }
     }
 
-    async fn receive_security_protected_nas(&self) -> Result<Nas5gmmMessage> {
-        let nas = decode_nas_5gs_message(&self.receive_nas().await?)?;
+    async fn receive_security_protected_nas(&mut self) -> Result<Nas5gmmMessage> {
+        let nas = decode_nas_5gs_message(&mut self.receive_nas().await?)?;
         let Nas5gsMessage::SecurityProtected(_, message) = nas else {
             bail!("Expected security protected message, got bytes: {:?}", nas);
         };
@@ -172,7 +172,7 @@ impl<T: Transport> MockUe<T> {
         }
     }
 
-    pub async fn receive_nas_5gmm_status(&self) -> Result<()> {
+    pub async fn receive_nas_5gmm_status(&mut self) -> Result<()> {
         match self.receive_security_protected_nas().await? {
             Nas5gmmMessage::FGmmStatus(_) => Ok(()),
             m => bail!("Expected 5GMM status, got {:?}", m),

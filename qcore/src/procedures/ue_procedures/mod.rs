@@ -19,7 +19,7 @@ use f1ap::{
     DlRrcMessageTransferProcedure, F1apPdu, InitiatingMessage, RrcContainer, SrbId,
     UlRrcMessageTransfer,
 };
-use ngap::NgapPdu;
+use ngap::{AmfUeNgapId, NgapPdu, UplinkNasTransport};
 use oxirush_nas::{Nas5gsMessage, messages::Nas5gsSecurityHeader};
 use rrc::{
     C1_6, CriticalExtensions37, DedicatedNasMessage, UlDcchMessage, UlDcchMessageType,
@@ -186,13 +186,13 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
 
         let dl_message = crate::f1ap::build::dl_rrc_message_transfer(
             self.ue.key,
-            self.ue.gnb_du_ue_f1ap_id,
+            self.ue.gnb_du_ue_f1ap_id(),
             RrcContainer(rrc_bytes),
             srb,
         );
         self.log_message("<< F1ap DlRrcMessageTransfer");
         self.api
-            .f1ap_indication::<DlRrcMessageTransferProcedure>(dl_message, self.logger)
+            .xxap_indication::<DlRrcMessageTransferProcedure>(dl_message, self.logger)
             .await;
         Ok(())
     }
@@ -215,12 +215,23 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
     }
 
     async fn nas_request(&mut self, nas: Box<Nas5gsMessage>) -> Result<Box<Nas5gsMessage>> {
-        let nas_bytes = self.ue.nas.encode(nas)?;
-
         // TODO: these two implementation should be in different files
         if self.ngap_mode() {
-            todo!()
+            self.nas_indication(nas).await?;
+            self.receive_ngap_pdu().await.and_then(|x| match *x {
+                NgapPdu::InitiatingMessage(ngap::InitiatingMessage::UplinkNasTransport(
+                    UplinkNasTransport { nas_pdu, .. },
+                )) => {
+                    let msg = self.nas_decode(&nas_pdu.0)?;
+                    Ok(msg)
+                }
+                _ => Err(anyhow!(
+                    "Expected DownlinkNasTransport for UE {}",
+                    self.ue.key
+                )),
+            })
         } else {
+            let nas_bytes = self.ue.nas.encode(nas)?;
             let rrc = crate::rrc::build::dl_information_transfer(
                 1, // TODO transaction ID
                 DedicatedNasMessage(nas_bytes),
@@ -249,7 +260,16 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
     async fn nas_indication(&mut self, nas: Box<Nas5gsMessage>) -> Result<()> {
         let nas_bytes = self.ue.nas.encode(nas)?;
         if self.ngap_mode() {
-            todo!()
+            let ngap = crate::ngap::build::downlink_nas_transport(
+                AmfUeNgapId(self.ue.key as u64),
+                self.ue.ran_ue_ngap_id(),
+                nas_bytes,
+            );
+
+            self.api
+                .xxap_indication::<ngap::DownlinkNasTransportProcedure>(ngap, self.logger)
+                .await;
+            Ok(())
         } else {
             let rrc = crate::rrc::build::dl_information_transfer(
                 1, // TODO transaction ID
