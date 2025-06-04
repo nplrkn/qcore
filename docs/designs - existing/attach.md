@@ -57,6 +57,8 @@ sequenceDiagram
   GNB->>QC: NG Initial UE Message + Nas Registration Request
   QC->>GNB: Nas Authentication Request 
   GNB->>QC: Nas Authentication Response
+  QC->>GNB: Nas Security Mode Command 
+  GNB->>QC: Nas Security Mode Complete
   QC->>GNB: Initial Context Setup Request
   GNB->>QC: Initial Context Setup Response
   QC->>GNB: Nas Registration Accept

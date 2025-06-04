@@ -1,7 +1,7 @@
 //! mock_du - enables a test script to assume the role of the GNB-DU on the F1 reference point
 
 use super::userplane::MockUserplane;
-use crate::mock::{Mock, Pdu};
+use crate::mock::{Mock, Pdu, ReceivedPdu};
 use anyhow::{Result, bail};
 use asn1_per::{Msb0, bitvec};
 use async_net::IpAddr;
@@ -156,57 +156,31 @@ impl MockGnb {
         Ok(nas_pdu.0)
     }
 
-    // pub async fn handle_f1_ue_context_setup(&self, ue: &mut UeContext) -> Result<()> {
-    //     let ReceivedPdu { pdu, assoc_id } = self.receive_pdu_with_assoc_id().await?;
-    //     self.check_and_store_ue_context_setup_request(pdu, ue)?;
-    //     info!(&self.logger, "UeContextSetupRequest <<");
-    //     let ue_setup_response = build_f1ap::ue_context_setup_response(ue, &self.local_ip)?;
-    //     info!(&self.logger, "UeContextSetupResponse >>");
-    //     self.send(&ue_setup_response, Some(assoc_id)).await;
+    pub async fn handle_initial_context_setup(&self, ue: &mut UeContext) -> Result<()> {
+        let ReceivedPdu { pdu, assoc_id } = self.receive_pdu_with_assoc_id().await?;
+        self.check_and_store_initial_context_setup_request(pdu, ue)?;
+        info!(&self.logger, "InitialContextSetupRequest <<");
+        let ue_setup_response = build_ngap::initial_context_setup_response(
+            ue.amf_ue_ngap_id.unwrap(),
+            RanUeNgapId(ue.ue_id),
+        );
+        info!(&self.logger, "InitialContextSetupResponse >>");
+        self.send(&ue_setup_response, Some(assoc_id)).await;
 
-    //     Ok(())
-    // }
+        Ok(())
+    }
 
-    // fn check_and_store_ue_context_setup_request(
-    //     &self,
-    //     pdu: Box<F1apPdu>,
-    //     ue: &mut UeContext,
-    // ) -> Result<()> {
-    //     let F1apPdu::InitiatingMessage(InitiatingMessage::UeContextSetupRequest(ue_setup_request)) =
-    //         *pdu
-    //     else {
-    //         bail!("Unexpected F1ap message {:?}", pdu)
-    //     };
-
-    //     ensure!(
-    //         matches!(ue_setup_request.gnb_du_ue_f1ap_id, Some(GnbDuUeF1apId(x)) if x == ue.ue_id),
-    //         "Bad Ue Id"
-    //     );
-    //     // TODO - SRB2 should also be set up .  Enforce this.  See 38.331, 5.3.1.1:
-    //     // "A configuration with SRB2 without DRB or with DRB without SRB2 is not supported
-    //     // (i.e., SRB2 and at least one DRB must be configured in the same RRC Reconfiguration
-    //     // message, and it is not allowed to release all the DRBs without releasing the RRC
-    //     // Connection)."
-
-    //     ensure!(ue.drb.is_none());
-    //     let Some(drbs_to_be_setup_list) = ue_setup_request.drbs_to_be_setup_list else {
-    //         bail!("No Drbs supplied")
-    //     };
-
-    //     let first_drb = &drbs_to_be_setup_list.0[0];
-    //     let first_tnl_of_first_drb = &first_drb.ul_up_tnl_information_to_be_setup_list.0[0];
-    //     let UpTransportLayerInformation::GtpTunnel(remote_tunnel_info) =
-    //         &first_tnl_of_first_drb.ul_up_tnl_information;
-
-    //     // Check we have been given a real IP address.
-    //     let Ok(_ip_addr) = IpAddr::try_from(remote_tunnel_info.transport_layer_address.clone())
-    //     else {
-    //         bail!(
-    //             "Bad remote transport layer address in {:?}",
-    //             first_tnl_of_first_drb
-    //         );
-    //     };
-
-    //     Ok(())
-    // }
+    fn check_and_store_initial_context_setup_request(
+        &self,
+        pdu: Box<NgapPdu>,
+        _ue: &mut UeContext,
+    ) -> Result<()> {
+        let NgapPdu::InitiatingMessage(InitiatingMessage::InitialContextSetupRequest(
+            _initial_context_setup_request,
+        )) = *pdu
+        else {
+            bail!("Unexpected Ngap message {:?}", pdu)
+        };
+        Ok(())
+    }
 }

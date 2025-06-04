@@ -86,3 +86,18 @@ pub fn initial_ue_message(
         }),
     ))
 }
+
+pub fn initial_context_setup_response(
+    amf_ue_ngap_id: AmfUeNgapId,
+    ran_ue_ngap_id: RanUeNgapId,
+) -> Box<NgapPdu> {
+    Box::new(NgapPdu::SuccessfulOutcome(
+        SuccessfulOutcome::InitialContextSetupResponse(InitialContextSetupResponse {
+            amf_ue_ngap_id,
+            ran_ue_ngap_id,
+            pdu_session_resource_setup_list_cxt_res: None,
+            pdu_session_resource_failed_to_setup_list_cxt_res: None,
+            criticality_diagnostics: None,
+        }),
+    ))
+}

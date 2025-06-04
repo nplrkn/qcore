@@ -50,8 +50,20 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     ) -> Result<()> {
         self.log_message(">> RegistrationRequest");
         match self.handle_registration(r, security_header).await {
-            Ok(_) => {
-                let inner = self.0.perform_ran_ue_registration_actions().await?;
+            Ok(()) => {
+                // Derive Kgnb, and from that kRRCInt.
+
+                /* TS33.501, 6.8.1.1.2.3: "The NAS (uplink and downlink) COUNTs are set to start
+                   values, and the start value of the uplink NAS COUNT shall be used as freshness 
+                   parameter in the KgNB derivation from the fresh KAMF (after primary authentication) 
+                   when UE receives AS SMC the KgNB is derived from the current 5G NAS security context, 
+                   i.e., the fresh KAMF is used to derive the KgNB." */
+
+                /* 6.8.1.1.2.2: When the UE receives the AS SMC without having received a NAS Security Mode Command after the Registration Request
+                with "PDU session(s) to be re-activated", it shall use the uplink NAS COUNT of the Registration Request message that
+                triggered the AS SMC to be sent as freshness parameter in the derivation of the initial KgNB/KeNB.           */
+                let kgnb = security::derive_kgnb(&self.ue.kamf, self.ue.nas.ul_nas_count());
+                let inner = self.0.perform_ran_ue_registration_actions(&kgnb).await?;
                 RegistrationProcedure(inner).accept_registration().await?;
             }
             Err(cause) => self.reject_registration(cause).await?,
@@ -96,6 +108,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         match self.check_registration_request(registration_request)? {
             RegistrationType::Supi(Imsi(imsi), ue_security_capability) => {
                 info!(self.logger, "Register imsi-{imsi}");
+
                 self.authenticate_ue(&imsi).await.map_err(|e| {
                     warn!(self.logger, "SUPI registration failure - {e}");
                     FGMM_CAUSE_ILLEGAL_UE
@@ -394,10 +407,13 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         Ok(())
     }
 
-    fn configure_nas_security(&mut self, _ue_security_capabilities: &NasUeSecurityCapability) {
-        let knasint = security::derive_knasint(&self.ue.kamf);
-        // TODO - check UE security capabilities
+    fn configure_nas_security(&mut self, ue_security_capabilities: &NasUeSecurityCapability) {
+        // Store UE security capabilities
+        self.ue.security_capabilities =
+            crate::nas::parse::nas_ue_security_capability(&ue_security_capabilities);
+
         // TS33.501, 6.7.2: AMF starts integrity protection before transmitting SecurityModeCommand.
+        let knasint = security::derive_knasint(&self.ue.kamf);
         self.ue.nas.enable_security(knasint);
     }
 }

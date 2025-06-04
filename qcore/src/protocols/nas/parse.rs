@@ -1,7 +1,9 @@
 use anyhow::{Result, bail};
-use oxirush_nas::NasFGsMobileIdentity;
+use oxirush_nas::{NasFGsMobileIdentity, NasUeSecurityCapability};
 use std::fmt::Write;
 use xxap::PlmnIdentity;
+
+use crate::data::UeSecurityCapabilities;
 
 use super::{AmfIds, Imsi, MobileIdentity, Tmsi}; // Import the Write trait for String
 
@@ -60,4 +62,10 @@ pub fn fgs_mobile_identity(fgs_mobile_identity: &NasFGsMobileIdentity) -> Result
 
         x => bail!("Mobile identity type {x} not supported - just SUPI and GUTI"),
     }
+}
+
+pub fn nas_ue_security_capability(
+    ue_security_capabilities: &NasUeSecurityCapability,
+) -> UeSecurityCapabilities {
+    ue_security_capabilities.value[0..2].try_into().unwrap()
 }

@@ -38,6 +38,80 @@ pub fn ng_setup_response(
     })
 }
 
+pub fn initial_context_setup_request(
+    amf_ue_ngap_id: AmfUeNgapId,
+    ran_ue_ngap_id: RanUeNgapId,
+    guami: Guami,
+    kgnb: &[u8; 32],
+    sst: u8,
+    ue_security_capabilities: &crate::UeSecurityCapabilities,
+) -> Box<InitialContextSetupRequest> {
+    let allowed_nssai = AllowedNssai(nonempty![
+        AllowedNssaiItem {
+            snssai: Snssai(sst, None).into()
+        },
+        AllowedNssaiItem {
+            snssai: Snssai(sst, Some([0, 0, 0])).into()
+        }
+    ]);
+
+    // These are 16 bit bitstrings.  Our UeSecurityCapabilities type follows the NAS format from 24.501, Figure 9.11.3.54.1.
+    // This needs to be converted into the format from 38.413, 9.3.1.86.
+    // We blank the EUTRA fields, since we do not support 4G.
+    let nr_encryption_algorithms =
+        NrEncryptionAlgorithms(BitVec::from_slice(&[ue_security_capabilities[0] << 1, 0]));
+    let nr_integrity_protection_algorithms =
+        NrIntegrityProtectionAlgorithms(BitVec::from_slice(&[ue_security_capabilities[1] << 1, 0]));
+    let eutr_aencryption_algorithms = EutrAencryptionAlgorithms(BitVec::from_slice(&[0u8; 2]));
+    let eutr_aintegrity_protection_algorithms =
+        EutrAintegrityProtectionAlgorithms(BitVec::from_slice(&[0u8; 2]));
+
+    Box::new(InitialContextSetupRequest {
+        amf_ue_ngap_id,
+        ran_ue_ngap_id,
+        old_amf: None,
+        ue_aggregate_maximum_bit_rate: None,
+        core_network_assistance_information_for_inactive: None,
+        guami,
+        pdu_session_resource_setup_list_cxt_req: None,
+        allowed_nssai,
+        ue_security_capabilities: UeSecurityCapabilities {
+            nr_encryption_algorithms,
+            nr_integrity_protection_algorithms,
+            eutr_aencryption_algorithms,
+            eutr_aintegrity_protection_algorithms,
+        },
+        security_key: SecurityKey(BitVec::from_slice(kgnb)),
+        trace_activation: None,
+        mobility_restriction_list: None,
+        ue_radio_capability: None,
+        index_to_rfsp: None,
+        masked_imeisv: None,
+        nas_pdu: None,
+        emergency_fallback_indicator: None,
+        rrc_inactive_transition_report_request: None,
+        ue_radio_capability_for_paging: None,
+        redirection_voice_fallback: None,
+        location_reporting_request_type: None,
+        cn_assisted_ran_tuning: None,
+        srvcc_operation_possible: None,
+        iab_authorized: None,
+        enhanced_coverage_restriction: None,
+        extended_connected_time: None,
+        ue_differentiation_info: None,
+        nr_v2x_services_authorized: None,
+        ltev2x_services_authorized: None,
+        nr_ue_sidelink_aggregate_maximum_bitrate: None,
+        lte_ue_sidelink_aggregate_maximum_bitrate: None,
+        pc5_qos_parameters: None,
+        c_emode_brestricted: None,
+        ue_up_c_iot_support: None,
+        rg_level_wireline_access_characteristics: None,
+        management_based_mdt_plmn_list: None,
+        ue_radio_capability_id: None,
+    })
+}
+
 pub fn downlink_nas_transport(
     amf_ue_ngap_id: AmfUeNgapId,
     ran_ue_ngap_id: RanUeNgapId,

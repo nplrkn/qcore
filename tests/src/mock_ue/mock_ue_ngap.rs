@@ -79,6 +79,10 @@ impl<'a> MockUeNgap<'a> {
         })
     }
 
+    pub fn gnb_ue_context(&mut self) -> &mut GnbUeContext {
+        &mut self.base.transport.gnb_ue_context
+    }
+
     pub async fn send_nas_register_request(&mut self) -> Result<()> {
         let nas_bytes = self.build_register_request()?;
         self.send_nas(nas_bytes).await
