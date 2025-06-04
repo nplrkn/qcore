@@ -1,11 +1,5 @@
-use anyhow::Result;
-use derive_deref::{Deref, DerefMut};
+use super::prelude::*;
 use f1ap::{Cause, UeContextReleaseComplete, UeContextReleaseRequest};
-use slog::info;
-
-use crate::HandlerApi;
-
-use super::UeProcedure;
 
 #[derive(Deref, DerefMut)]
 pub struct UeContextReleaseProcedure<'a, A: HandlerApi>(UeProcedure<'a, A>);

@@ -1,7 +1,6 @@
-use super::UeProcedure;
-use crate::{HandlerApi, expect_nas, procedures::ue_procedures::RegistrationProcedure};
-use anyhow::Result;
-use derive_deref::{Deref, DerefMut};
+use super::RegistrationProcedure;
+use super::prelude::*;
+use crate::expect_nas;
 use ngap::InitialUeMessage;
 
 #[derive(Deref, DerefMut)]

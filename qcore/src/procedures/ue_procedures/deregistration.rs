@@ -1,10 +1,7 @@
-use super::{UeContextReleaseProcedure, UeProcedure};
-use crate::HandlerApi;
-use anyhow::{Result, bail};
-use derive_deref::{Deref, DerefMut};
+use super::UeContextReleaseProcedure;
+use super::prelude::*;
 use f1ap::{Cause, CauseRadioNetwork};
 use oxirush_nas::messages::NasDeregistrationRequestFromUe;
-use slog::info;
 
 #[derive(Deref, DerefMut)]
 pub struct DeregistrationProcedure<'a, A: HandlerApi>(UeProcedure<'a, A>);

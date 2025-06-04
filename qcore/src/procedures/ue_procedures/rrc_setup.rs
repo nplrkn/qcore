@@ -1,11 +1,9 @@
 //! initial_access - procedure in which UE makes first contact with the 5G core
 
 use super::RegistrationProcedure;
-use super::{HandlerApi, UeProcedure};
+use super::prelude::*;
 use crate::expect_nas;
-use anyhow::{Result, anyhow, bail};
 use asn1_per::SerDes;
-use derive_deref::{Deref, DerefMut};
 use f1ap::{DuToCuRrcContainer, InitialUlRrcMessageTransfer, SrbId};
 use rrc::{
     C1_4, C1_6, CriticalExtensions22, RrcSetupComplete, RrcSetupRequest, UlCcchMessage,

@@ -1,4 +1,5 @@
-use super::{HandlerApi, UeProcedure, UplinkNasProcedure};
+use super::{UeProcedure, UplinkNasProcedure};
+use crate::procedures::HandlerApi;
 use anyhow::{Result, bail};
 use derive_deref::{Deref, DerefMut};
 use rrc::{
