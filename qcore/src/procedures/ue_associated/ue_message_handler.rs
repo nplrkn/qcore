@@ -1,8 +1,7 @@
-use super::{RrcSetupProcedure, UeProcedure};
+use super::UeProcedure;
 use crate::{HandlerApi, NasContext, UeContext, procedures::UeMessage};
-use anyhow::{Result, bail};
+use anyhow::Result;
 use async_std::channel::{self, Receiver, Sender};
-use f1ap::{F1apPdu, InitialUlRrcMessageTransfer, InitiatingMessage};
 use slog::{Logger, debug, warn};
 
 pub struct UeMessageHandler<A: HandlerApi> {
@@ -12,7 +11,7 @@ pub struct UeMessageHandler<A: HandlerApi> {
 }
 
 impl<A: HandlerApi> UeMessageHandler<A> {
-    pub fn spawn(ue_id: u32, api: A, ngap_mode: bool, logger: Logger) -> Sender<UeMessage> {
+    pub fn spawn(ue_id: u32, api: A, logger: Logger) -> Sender<UeMessage> {
         let (sender, receiver) = channel::unbounded();
         let handler = Box::new(UeMessageHandler {
             receiver,
@@ -20,86 +19,22 @@ impl<A: HandlerApi> UeMessageHandler<A> {
             logger,
         });
         async_std::task::spawn(async move {
-            if let Err(e) = handler.run(ue_id, ngap_mode).await {
+            if let Err(e) = handler.run(ue_id).await {
                 warn!(handler.logger, "UE message handler exiting: {e}");
             }
         });
         sender
     }
 
-    // TODO stream line this
-    async fn run(&self, ue_id: u32, ngap_mode: bool) -> Result<()> {
+    async fn run(&self, ue_id: u32) -> Result<()> {
         let mut give_context = None;
-
-        let (ue_context, result) = if ngap_mode {
-            let mut ue_context = Box::new(UeContext::new(ue_id));
-            let result = self
-                .run_inner_ngap(&mut ue_context, &mut give_context)
-                .await;
-            (ue_context, result)
-        } else {
-            let (mut ue_context, r) = self.init_f1ap(ue_id).await?;
-            let result = self
-                .run_inner_f1ap(&mut ue_context, r, &mut give_context)
-                .await;
-            (ue_context, result)
-        };
-        self.cleanup(&give_context, ue_context).await;
+        let mut ue = Box::new(UeContext::new(ue_id));
+        let result = self.dispatch_all(&mut ue, &mut give_context).await;
+        self.cleanup(&give_context, ue).await;
         result
     }
 
-    async fn init_f1ap(
-        &self,
-        ue_id: u32,
-    ) -> Result<(Box<UeContext>, Box<InitialUlRrcMessageTransfer>)> {
-        let UeMessage::F1ap(message) = self.receiver.recv().await? else {
-            bail!("Expected InitialUlRrcMessageTransfer, got TakeContext");
-        };
-        let r = match *message {
-            F1apPdu::InitiatingMessage(InitiatingMessage::InitialUlRrcMessageTransfer(r)) => {
-                Box::new(r)
-            }
-            _ => bail!("Expected InitialUlRrcMessageTransfer, got {message:?}"),
-        };
-        let mut ue = Box::new(UeContext::new(ue_id));
-        ue.ran_ue_id = r.gnb_du_ue_f1ap_id.0;
-        ue.nr_cgi = Some(r.nr_cgi.clone());
-        Ok((ue, r))
-    }
-
-    async fn run_inner_f1ap(
-        &self,
-        ue_context: &mut UeContext,
-        r: Box<InitialUlRrcMessageTransfer>,
-        give_context: &mut Option<Sender<NasContext>>,
-    ) -> Result<()> {
-        // Run the initial access procedure.
-        // TODO: call this from UeProcedure::dispatch()
-        RrcSetupProcedure::new(UeProcedure::new(
-            &self.api,
-            ue_context,
-            &self.logger,
-            &self.receiver,
-            give_context,
-        ))
-        .run(r)
-        .await?;
-
-        // Run subsequent procedures.
-        loop {
-            UeProcedure::new(
-                &self.api,
-                ue_context,
-                &self.logger,
-                &self.receiver,
-                give_context,
-            )
-            .f1ap_dispatch()
-            .await?;
-        }
-    }
-
-    async fn run_inner_ngap(
+    async fn dispatch_all(
         &self,
         ue_context: &mut UeContext,
         give_context: &mut Option<Sender<NasContext>>,
@@ -112,7 +47,7 @@ impl<A: HandlerApi> UeMessageHandler<A> {
                 &self.receiver,
                 give_context,
             )
-            .ngap_dispatch()
+            .dispatch()
             .await?;
         }
     }

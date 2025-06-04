@@ -259,18 +259,14 @@ impl HandlerApi for QCore {
         .await
     }
 
-    fn spawn_ue_message_handler(&self, ngap_mode: bool) -> u32 {
+    fn spawn_ue_message_handler(&self) -> u32 {
         let mut ue_id = rand::random::<u32>();
         while self.ue_tasks.contains_key(&ue_id) {
             ue_id = rand::random::<u32>();
         }
 
-        let sender = UeMessageHandler::spawn(
-            ue_id,
-            self.clone(),
-            ngap_mode,
-            self.logger.new(o!("ue_id" => ue_id)),
-        );
+        let sender =
+            UeMessageHandler::spawn(ue_id, self.clone(), self.logger.new(o!("ue_id" => ue_id)));
         self.ue_tasks.insert(ue_id, sender);
         ue_id
     }

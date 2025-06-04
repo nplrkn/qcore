@@ -14,6 +14,9 @@ define_ue_procedure!(RrcSetupProcedure);
 
 impl<'a, A: HandlerApi> RrcSetupProcedure<'a, A> {
     pub async fn run(mut self, r: Box<InitialUlRrcMessageTransfer>) -> Result<()> {
+        self.ue.ran_ue_id = r.gnb_du_ue_f1ap_id.0;
+        self.ue.nr_cgi = Some(r.nr_cgi.clone());
+
         let nas_bytes = self.handle_rrc_setup(r).await?;
 
         // Follow on registration

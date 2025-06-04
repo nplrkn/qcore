@@ -5,7 +5,8 @@ use crate::{
         UeMessage,
         ue_associated::{
             F1apBase, InitialContextSetupProcedure, InitialUeMessageProcedure, NasBase,
-            RrcSecurityModeProcedure, UeContextReleaseProcedure, UlInformationTransferProcedure,
+            RrcSecurityModeProcedure, RrcSetupProcedure, UeContextReleaseProcedure,
+            UlInformationTransferProcedure,
         },
     },
 };
@@ -61,9 +62,20 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         }
     }
 
+    pub async fn dispatch(self) -> Result<()> {
+        match self.receiver.recv().await? {
+            UeMessage::Ngap(pdu) => self.ngap_dispatch(pdu).await,
+            UeMessage::F1ap(pdu) => self.f1ap_dispatch(pdu).await,
+            UeMessage::TakeContext(sender) => {
+                *self.give_context = Some(sender);
+                Err(anyhow!("Take context"))
+            }
+        }
+    }
+
     // Return Err if the UE handler should exit.
-    pub async fn ngap_dispatch(mut self) -> Result<()> {
-        match *self.receive_ngap_pdu().await? {
+    async fn ngap_dispatch(self, pdu: Box<NgapPdu>) -> Result<()> {
+        match *pdu {
             NgapPdu::InitiatingMessage(ngap::InitiatingMessage::InitialUeMessage(r)) => {
                 self.log_message(">> Ngap InitialUeMessage");
                 InitialUeMessageProcedure::new(self)
@@ -77,39 +89,14 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         Ok(())
     }
 
-    async fn receive_ngap_pdu(&mut self) -> Result<Box<NgapPdu>> {
-        match self.receiver.recv().await? {
-            UeMessage::Ngap(pdu) => Ok(pdu),
-            UeMessage::TakeContext(sender) => {
-                *self.give_context = Some(sender);
-                Err(anyhow!("Take context"))
-            }
-            _ => {
-                bail!("Unexpected UeMessage received");
-            }
-        }
-    }
-
-    pub fn nas_decode(&mut self, bytes: &[u8]) -> Result<Box<Nas5gsMessage>> {
-        self.ue.nas.decode(bytes, self.logger)
-    }
-
-    pub fn nas_decode_with_security_header(
-        &mut self,
-        bytes: &[u8],
-    ) -> Result<(Box<Nas5gsMessage>, Option<Nas5gsSecurityHeader>)> {
-        self.ue.nas.decode_with_security_header(bytes, self.logger)
-    }
-
-    fn extract_ul_dcch_message(&self, r: &UlRrcMessageTransfer) -> Result<Box<UlDcchMessage>> {
-        let rrc_message_bytes = pdcp::view_inner(&r.rrc_container.0)?;
-        Ok(Box::new(UlDcchMessage::from_bytes(rrc_message_bytes)?))
-    }
-
     // TODO move into a different trait Dispatcher?
     // Return Err if the UE handler should exit.
-    pub async fn f1ap_dispatch(mut self) -> Result<()> {
-        match *self.receive_f1ap_pdu().await? {
+    async fn f1ap_dispatch(self, pdu: Box<F1apPdu>) -> Result<()> {
+        match *pdu {
+            F1apPdu::InitiatingMessage(InitiatingMessage::InitialUlRrcMessageTransfer(r)) => {
+                self.log_message(">> F1ap InitialUlRrcMessageTransfer");
+                RrcSetupProcedure::new(self).run(Box::new(r)).await?;
+            }
             F1apPdu::InitiatingMessage(InitiatingMessage::UlRrcMessageTransfer(r)) => {
                 self.log_message(">> F1ap UlRrcMessageTransfer");
                 let mut rrc = self.extract_ul_dcch_message(&r)?;
@@ -151,6 +138,35 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
                 bail!("Unexpected UeMessage received");
             }
         }
+    }
+
+    async fn receive_ngap_pdu(&mut self) -> Result<Box<NgapPdu>> {
+        match self.receiver.recv().await? {
+            UeMessage::Ngap(pdu) => Ok(pdu),
+            UeMessage::TakeContext(sender) => {
+                *self.give_context = Some(sender);
+                Err(anyhow!("Take context"))
+            }
+            _ => {
+                bail!("Unexpected UeMessage received");
+            }
+        }
+    }
+
+    pub fn nas_decode(&mut self, bytes: &[u8]) -> Result<Box<Nas5gsMessage>> {
+        self.ue.nas.decode(bytes, self.logger)
+    }
+
+    pub fn nas_decode_with_security_header(
+        &mut self,
+        bytes: &[u8],
+    ) -> Result<(Box<Nas5gsMessage>, Option<Nas5gsSecurityHeader>)> {
+        self.ue.nas.decode_with_security_header(bytes, self.logger)
+    }
+
+    fn extract_ul_dcch_message(&self, r: &UlRrcMessageTransfer) -> Result<Box<UlDcchMessage>> {
+        let rrc_message_bytes = pdcp::view_inner(&r.rrc_container.0)?;
+        Ok(Box::new(UlDcchMessage::from_bytes(rrc_message_bytes)?))
     }
 }
 

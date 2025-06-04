@@ -36,7 +36,7 @@ impl<A: HandlerApi> RequestProvider<ngap::NgSetupProcedure> for NgapHandler<A> {
 #[async_trait]
 impl<A: HandlerApi> IndicationHandler<ngap::InitialUeMessageProcedure> for NgapHandler<A> {
     async fn handle(&self, i: InitialUeMessage, logger: &Logger) {
-        let id = self.0.spawn_ue_message_handler(true);
+        let id = self.0.spawn_ue_message_handler();
         if let Err(e) = self
             .dispatch_ue_message(
                 id,
