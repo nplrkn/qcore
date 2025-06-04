@@ -1,4 +1,4 @@
-use super::UeContextReleaseProcedure;
+use super::super::UeContextReleaseProcedure;
 use super::prelude::*;
 use f1ap::{Cause, CauseRadioNetwork};
 use oxirush_nas::messages::NasDeregistrationRequestFromUe;
@@ -19,6 +19,7 @@ impl<'a, A: HandlerApi> DeregistrationProcedure<'a, A> {
         // TODO - send NAS deregistration accept (UE originating de-registration).
         // Is this piggy-backed in the RRC Container on the F1 Context Release Command?
 
+        // TODO add NGAP mode
         UeContextReleaseProcedure::new(self.0)
             .cu_initiated(Cause::RadioNetwork(CauseRadioNetwork::NormalRelease))
             .await?;

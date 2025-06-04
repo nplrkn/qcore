@@ -1,6 +1,6 @@
 //! initial_access - procedure in which UE makes first contact with the 5G core
 
-use super::RegistrationProcedure;
+use super::super::RegistrationProcedure;
 use super::prelude::*;
 use crate::expect_nas;
 use asn1_per::SerDes;

@@ -1,4 +1,4 @@
-use super::RegistrationProcedure;
+use super::super::RegistrationProcedure;
 use super::prelude::*;
 use crate::expect_nas;
 use ngap::InitialUeMessage;

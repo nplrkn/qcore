@@ -1,16 +1,13 @@
-use derive_deref::{Deref, DerefMut};
+use super::prelude::*;
 use f1ap::{F1RemovalFailure, F1RemovalRequest, F1RemovalResponse};
-use slog::{Logger, info};
 use xxap::{RequestError, ResponseAction};
-
-use super::{HandlerApi, Procedure};
 
 #[derive(Deref, DerefMut)]
 pub struct F1RemovalProcedure<'a, A: HandlerApi>(Procedure<'a, A>);
 
 impl<'a, A: HandlerApi> F1RemovalProcedure<'a, A> {
-    pub fn new(api: &'a A, logger: &'a Logger) -> Self {
-        F1RemovalProcedure(Procedure::new(api, logger))
+    pub fn new(inner: Procedure<'a, A>) -> Self {
+        F1RemovalProcedure(inner)
     }
 
     pub async fn run(

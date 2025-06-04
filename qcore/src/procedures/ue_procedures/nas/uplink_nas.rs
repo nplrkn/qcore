@@ -1,17 +1,11 @@
 //! uplink_nas - transfer of a Nas message from UE to AMF
-
-use super::{DeregistrationProcedure, SessionEstablishmentProcedure, UeProcedure};
-use crate::{
-    HandlerApi, procedures::ue_procedures::RegistrationProcedure,
-    protocols::nas::FGMM_CAUSE_DNN_NOT_SUPPORTED_OR_NOT_SUBSCRIBED_IN_THE_SLICE,
-};
-use anyhow::Result;
-use derive_deref::{Deref, DerefMut};
+use super::prelude::*;
+use super::{DeregistrationProcedure, RegistrationProcedure, SessionEstablishmentProcedure};
+use crate::protocols::nas::FGMM_CAUSE_DNN_NOT_SUPPORTED_OR_NOT_SUBSCRIBED_IN_THE_SLICE;
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gsMessage, Nas5gsmMessage, decode_nas_5gs_message,
     messages::NasUlNasTransport,
 };
-use slog::{Logger, warn};
 
 #[derive(Deref, DerefMut)]
 pub struct UplinkNasProcedure<'a, A: HandlerApi>(UeProcedure<'a, A>);
@@ -22,7 +16,7 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
     }
 
     pub async fn run(mut self, nas_bytes: &mut [u8]) -> Result<()> {
-        patch_nas_for_oai_deregistration_security_header(nas_bytes, self.logger);
+        self.patch_nas_for_oai_deregistration_security_header(nas_bytes);
 
         let (message, security_header) = self.nas_decode_with_security_header(nas_bytes)?;
         let Nas5gsMessage::Gmm(_, mm_message) = *message else {
@@ -98,32 +92,32 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
             Ok(true)
         }
     }
-}
 
-// OAI UE sends a security protected deregistration request where the inner
-// message has security header type 0x0100 - INTEGRITY_PROTECTED_AND_CIPHERED_WITH_NEW_SECU_CTX -
-// but no security header.
-// Wireshark parses this OK, but our Oxirush NAS decoder doesn't.
-// Current hypothesis is that OAI is getting it wrong, and Wireshark is tolerating it because
-// it calculates inner messsage offsets assuming that it cannot have a security header.
-//
-// For now, we have this hack to patch the message to pacify the NAS decoder.
-fn patch_nas_for_oai_deregistration_security_header(nas_bytes: &mut [u8], logger: &Logger) {
-    const INNER_SECURITY_HEADER_TYPE_OFFSET: usize = 8;
-    if nas_bytes.len() < (INNER_SECURITY_HEADER_TYPE_OFFSET + 1) {
-        return;
-    }
+    // OAI UE sends a security protected deregistration request where the inner
+    // message has security header type 0x0100 - INTEGRITY_PROTECTED_AND_CIPHERED_WITH_NEW_SECU_CTX -
+    // but no security header.
+    // Wireshark parses this OK, but our Oxirush NAS decoder doesn't.
+    // Current hypothesis is that OAI is getting it wrong, and Wireshark is tolerating it because
+    // it calculates inner messsage offsets assuming that it cannot have a security header.
+    //
+    // For now, we have this hack to patch the message to pacify the NAS decoder.
+    fn patch_nas_for_oai_deregistration_security_header(&self, nas_bytes: &mut [u8]) {
+        const INNER_SECURITY_HEADER_TYPE_OFFSET: usize = 8;
+        if nas_bytes.len() < (INNER_SECURITY_HEADER_TYPE_OFFSET + 1) {
+            return;
+        }
 
-    if nas_bytes[0] == 0x7e && nas_bytes[1] == 0x02 {
-        // Security protected MM message.
-        // The inner message header starts at byte 7, and its security header type is at byte 8.
-        if nas_bytes[INNER_SECURITY_HEADER_TYPE_OFFSET] != 0x00 {
-            warn!(
-                logger,
-                "Patching NAS message to change inner message security header type from {:?} to 0",
-                nas_bytes[INNER_SECURITY_HEADER_TYPE_OFFSET]
-            );
-            nas_bytes[INNER_SECURITY_HEADER_TYPE_OFFSET] = 0x00;
+        if nas_bytes[0] == 0x7e && nas_bytes[1] == 0x02 {
+            // Security protected MM message.
+            // The inner message header starts at byte 7, and its security header type is at byte 8.
+            if nas_bytes[INNER_SECURITY_HEADER_TYPE_OFFSET] != 0x00 {
+                warn!(
+                    self.logger,
+                    "Patching NAS message to change inner message security header type from {:?} to 0",
+                    nas_bytes[INNER_SECURITY_HEADER_TYPE_OFFSET]
+                );
+                nas_bytes[INNER_SECURITY_HEADER_TYPE_OFFSET] = 0x00;
+            }
         }
     }
 }

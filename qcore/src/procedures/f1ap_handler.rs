@@ -1,10 +1,11 @@
 //! f1ap - F1AP entry points
-use super::gnb_du_configuration_update::GnbDuConfigurationUpdateProcedure;
-use super::handler_api::UeMessage;
-use super::{f1_removal::F1RemovalProcedure, f1_setup::F1SetupProcedure};
-use crate::HandlerApi;
+use crate::procedures::UeMessage;
+
+use super::interface_management::{
+    F1RemovalProcedure, F1SetupProcedure, GnbDuConfigurationUpdateProcedure,
+};
+use super::prelude::*;
 use async_trait::async_trait;
-use derive_deref::Deref;
 use f1ap::{
     self, F1RemovalFailure, F1RemovalRequest, F1RemovalResponse, F1SetupFailure, F1SetupRequest,
     F1SetupResponse, F1apCu, F1apPdu, GnbDuConfigurationUpdate,
@@ -13,7 +14,7 @@ use f1ap::{
     UeContextReleaseRequest, UeContextReleaseRequestProcedure, UlRrcMessageTransfer,
     UlRrcMessageTransferProcedure,
 };
-use slog::{Logger, info, warn};
+use slog::Logger;
 use xxap::{
     EventHandler, IndicationHandler, RequestError, RequestProvider, ResponseAction, TnlaEvent,
 };
@@ -34,7 +35,9 @@ impl<A: HandlerApi> RequestProvider<f1ap::F1SetupProcedure> for F1apHandler<A> {
         r: F1SetupRequest,
         logger: &Logger,
     ) -> Result<ResponseAction<F1SetupResponse>, RequestError<F1SetupFailure>> {
-        F1SetupProcedure::new(&self.0, logger).run(r).await
+        F1SetupProcedure::new(Procedure::new(&self.0, logger))
+            .run(r)
+            .await
     }
 }
 
@@ -45,7 +48,9 @@ impl<A: HandlerApi> RequestProvider<f1ap::F1RemovalProcedure> for F1apHandler<A>
         r: F1RemovalRequest,
         logger: &Logger,
     ) -> Result<ResponseAction<F1RemovalResponse>, RequestError<F1RemovalFailure>> {
-        F1RemovalProcedure::new(&self.0, logger).run(r).await
+        F1RemovalProcedure::new(Procedure::new(&self.0, logger))
+            .run(r)
+            .await
     }
 }
 
@@ -59,7 +64,7 @@ impl<A: HandlerApi> RequestProvider<f1ap::GnbDuConfigurationUpdateProcedure> for
         ResponseAction<GnbDuConfigurationUpdateAcknowledge>,
         RequestError<GnbDuConfigurationUpdateFailure>,
     > {
-        GnbDuConfigurationUpdateProcedure::new(&self.0, logger)
+        GnbDuConfigurationUpdateProcedure::new(Procedure::new(&self.0, logger))
             .run(r)
             .await
     }

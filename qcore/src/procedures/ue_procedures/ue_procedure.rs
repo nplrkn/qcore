@@ -1,15 +1,14 @@
-use super::UlInformationTransferProcedure;
+use super::prelude::*;
 use crate::{
-    HandlerApi, NasContext, Procedure, UeContext,
+    NasContext, UeContext,
     procedures::{
         UeMessage,
         ue_procedures::{
             InitialContextSetupProcedure, InitialUeMessageProcedure, RrcSecurityModeProcedure,
-            UeContextReleaseProcedure,
+            UeContextReleaseProcedure, UlInformationTransferProcedure,
         },
     },
 };
-use anyhow::{Result, anyhow, bail};
 use asn1_per::SerDes;
 use async_std::channel::{Receiver, Sender};
 use f1ap::{
@@ -22,7 +21,6 @@ use rrc::{
     C1_6, CriticalExtensions37, DedicatedNasMessage, UlDcchMessage, UlDcchMessageType,
     UlInformationTransfer, UlInformationTransferIEs,
 };
-use slog::Logger;
 
 pub struct UeProcedure<'a, A: HandlerApi> {
     base: Procedure<'a, A>,
