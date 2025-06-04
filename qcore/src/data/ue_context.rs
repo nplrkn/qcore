@@ -12,21 +12,21 @@ pub struct UeContext {
     pub nas: NasContext,
 
     // CU only data
-    pub gnb_du_ue_f1ap_id: Option<GnbDuUeF1apId>,
-    pub pdcp_tx: Option<PdcpTx>,
+    pub gnb_du_ue_f1ap_id: GnbDuUeF1apId,
+    pub pdcp_tx: PdcpTx,
 }
 
 impl UeContext {
     pub fn new(ue_id: u32) -> Self {
         UeContext {
             key: ue_id,
-            gnb_du_ue_f1ap_id: None,
             tmsi: None,
             kamf: [0u8; 32],
             pdu_sessions: vec![],
-            pdcp_tx: None,
             nr_cgi: None,
             nas: NasContext::default(),
+            gnb_du_ue_f1ap_id: GnbDuUeF1apId(0),
+            pdcp_tx: PdcpTx::default(),
         }
     }
 }

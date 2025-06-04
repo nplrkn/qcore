@@ -1,5 +1,3 @@
-use super::UeProcedure;
-use crate::HandlerApi;
 use crate::SimCreds;
 use crate::SubscriberAuthParams;
 use crate::expect_nas;
@@ -7,12 +5,13 @@ use crate::nas::{
     FGMM_CAUSE_ILLEGAL_UE, FGMM_CAUSE_SEMANTICALLY_INCORRECT_MESSAGE, FGMM_CAUSE_SYNCH_FAILURE,
     Imsi, MobileIdentity, Tmsi,
 };
+use crate::procedures::HandlerApi;
+use crate::procedures::ue_procedures::UeProcedure;
 use crate::protocols::nas::FGMM_CAUSE_IE_NONEXISTENT_OR_NOT_IMPLEMENTED;
 use crate::protocols::nas::FGMM_CAUSE_PLMN_NOT_ALLOWED;
 use crate::protocols::nas::FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED;
 use anyhow::{Result, anyhow, bail};
 use derive_deref::{Deref, DerefMut};
-use f1ap::SrbId;
 use oxirush_nas::Nas5gsSecurityHeaderType;
 use oxirush_nas::NasMessageContainer;
 use oxirush_nas::decode_nas_5gs_message;
@@ -51,9 +50,14 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     ) -> Result<()> {
         self.log_message(">> RegistrationRequest");
         match self.handle_registration(r, security_header).await {
-            Ok(_) => self.accept_registration().await,
-            Err(cause) => self.reject_registration(cause).await,
+            Ok(_) => {
+                let inner = self.0.perform_ran_ue_registration_actions().await?;
+                RegistrationProcedure(inner).accept_registration().await?;
+            }
+            Err(cause) => self.reject_registration(cause).await?,
         }
+
+        Ok(())
     }
 
     async fn accept_registration(&mut self) -> Result<()> {
@@ -102,7 +106,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                     .map_err(|e| {
                         warn!(self.logger, "SUPI registration failure - {e}");
                         error_cause_code
-                    })?;
+                    })
             }
 
             RegistrationType::Guti(tmsi) => {
@@ -145,15 +149,10 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                     .map_err(|e| {
                         warn!(self.logger, "GUTI registration failure - {e}");
                         error_cause_code
-                    })?;
-
+                    })
                 // TODO: check integrity on the message now we have recovered the IK
             }
-        };
-
-        // TODO - this should be moved to a separate procedure
-        // In the standard 5G architecture, it is associated with the NGAP UE context.
-        self.activate_rrc_security().await.map_err(|_| 0)
+        }
     }
 
     async fn authenticate_ue(&mut self, imsi: &String) -> Result<()> {
@@ -275,20 +274,6 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
             }
             None => bail!("Unknown TMSI"),
         }
-    }
-
-    async fn activate_rrc_security(&mut self) -> Result<()> {
-        let uplink_nas_count = self.ue.nas.ul_nas_count();
-        debug!(
-            self.logger,
-            "Activating RRC security, uplink_nas_count: {}", uplink_nas_count
-        );
-        self.configure_rrc_security(uplink_nas_count);
-        let r = crate::rrc::build::security_mode_command(1);
-        self.log_message("<< RrcSecurityModeCommand");
-        let _rrc_security_mode_complete = self.rrc_request(SrbId(1), &r).await;
-        self.log_message(">> RRcSecurityModeComplete");
-        Ok(())
     }
 
     fn check_registration_request(
@@ -414,27 +399,5 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         // TODO - check UE security capabilities
         // TS33.501, 6.7.2: AMF starts integrity protection before transmitting SecurityModeCommand.
         self.ue.nas.enable_security(knasint);
-    }
-
-    fn configure_rrc_security(&mut self, uplink_nas_count: u32) {
-        // Derive Kgnb, and from that kRRCInt.
-
-        /* TS33.501, 6.8.1.1.2.3: "The NAS (uplink and downlink) COUNTs are set to start
-        values, and the start value of the uplink NAS COUNT shall be used as freshness parameter in the KgNB derivation from
-        the fresh KAMF (after primary authentication) when UE receives AS SMC the KgNB is derived from the current 5G NAS
-        security context, i.e., the fresh KAMF is used to derive the KgNB." */
-
-        /* 6.8.1.1.2.2: When the UE receives the AS SMC without having received a NAS Security Mode Command after the Registration Request
-        with "PDU session(s) to be re-activated", it shall use the uplink NAS COUNT of the Registration Request message that
-        triggered the AS SMC to be sent as freshness parameter in the derivation of the initial KgNB/KeNB.           */
-        let kgnb = security::derive_kgnb(&self.ue.kamf, uplink_nas_count);
-        let krrcint = security::derive_krrcint(&kgnb);
-
-        // Tell the PDCP layer to add NIA2 integrity protection henceforth.
-        self.ue
-            .pdcp_tx
-            .as_mut()
-            .expect("PCDP context must be present in F1AP mode")
-            .enable_security(krrcint);
     }
 }

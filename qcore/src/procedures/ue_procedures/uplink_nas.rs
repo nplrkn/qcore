@@ -1,11 +1,9 @@
 //! uplink_nas - transfer of a Nas message from UE to AMF
 
-use super::{
-    DeregistrationProcedure, SessionEstablishmentProcedure, UeProcedure,
-    registration::RegistrationProcedure,
-};
+use super::{DeregistrationProcedure, SessionEstablishmentProcedure, UeProcedure};
 use crate::{
-    HandlerApi, protocols::nas::FGMM_CAUSE_DNN_NOT_SUPPORTED_OR_NOT_SUBSCRIBED_IN_THE_SLICE,
+    HandlerApi, procedures::ue_procedures::RegistrationProcedure,
+    protocols::nas::FGMM_CAUSE_DNN_NOT_SUPPORTED_OR_NOT_SUBSCRIBED_IN_THE_SLICE,
 };
 use anyhow::Result;
 use derive_deref::{Deref, DerefMut};

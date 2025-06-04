@@ -18,6 +18,7 @@ pub enum UeMessage {
 #[async_trait]
 pub trait HandlerApi: Send + Sync + Clone + 'static {
     fn config(&self) -> &Config;
+    fn ngap_mode(&self) -> bool;
 
     // Returns the K, OPC and SQN, and increments the SQN.
     // The returned SQN is the one _before_ the increment.  This means that

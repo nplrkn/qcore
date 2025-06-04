@@ -32,6 +32,7 @@ pub struct QCore {
     ue_tasks: Arc<DashMap<u32, Sender<UeMessage>>>,
     sub_db: Arc<Mutex<SubscriberDb>>,
     tmsis: Arc<Mutex<HashMap<Tmsi, NasContextLocator>>>,
+    ngap_mode: bool,
 }
 
 enum NasContextLocator {
@@ -79,9 +80,9 @@ impl QCore {
 
         let packet_processor = PacketProcessor::new(config.ue_subnet, &mut ebpf, &logger).await?;
 
-        let mut qc = Box::new(Self::new(config, packet_processor, logger, sub_db).await?);
-        qc.run(ngap_mode).await.expect("Startup failure");
-        println!("Exiting Qcore::start()");
+        let mut qc =
+            Box::new(Self::new(config, packet_processor, logger, sub_db, ngap_mode).await?);
+        qc.run().await.expect("Startup failure");
         Ok(ProgramHandle { qc, _ebpf: ebpf })
     }
 
@@ -90,6 +91,7 @@ impl QCore {
         packet_processor: PacketProcessor,
         logger: Logger,
         sub_db: SubscriberDb,
+        ngap_mode: bool,
     ) -> Result<Self> {
         Ok(Self {
             config,
@@ -100,11 +102,12 @@ impl QCore {
             packet_processor,
             sub_db: Arc::new(Mutex::new(sub_db)),
             tmsis: Arc::new(Mutex::new(HashMap::new())),
+            ngap_mode,
         })
     }
 
-    async fn run(&mut self, ngap_mode: bool) -> Result<()> {
-        let port = if ngap_mode {
+    async fn run(&mut self) -> Result<()> {
+        let port = if self.ngap_mode {
             NGAP_BIND_PORT
         } else {
             F1AP_BIND_PORT
@@ -115,7 +118,7 @@ impl QCore {
             "Listen for connection from RAN on {}", listen_address
         );
 
-        let handle = if ngap_mode {
+        let handle = if self.ngap_mode {
             self.stack
                 .listen(
                     listen_address,
@@ -178,6 +181,10 @@ impl QCore {
 impl HandlerApi for QCore {
     fn config(&self) -> &Config {
         &self.config
+    }
+
+    fn ngap_mode(&self) -> bool {
+        self.ngap_mode
     }
 
     async fn lookup_subscriber_creds_and_inc_sqn(

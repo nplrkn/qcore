@@ -1,8 +1,5 @@
 use super::UeProcedure;
-use crate::{
-    HandlerApi, PduSession, expect_nas,
-    procedures::ue_procedures::registration::RegistrationProcedure,
-};
+use crate::{HandlerApi, expect_nas, procedures::ue_procedures::RegistrationProcedure};
 use anyhow::Result;
 use derive_deref::{Deref, DerefMut};
 use ngap::InitialUeMessage;

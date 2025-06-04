@@ -1,12 +1,14 @@
 mod deregistration;
 mod initial_ue_message;
+mod nas_procedures;
 mod pdu_session_establishment;
-mod registration;
 mod rrc_setup;
 mod ue_context_release;
 mod ue_message_handler;
 mod ul_information_transfer;
 mod uplink_nas;
+pub use nas_procedures::*;
+mod rrc_security_mode;
 
 use super::{Procedure, UeMessage};
 use crate::{HandlerApi, NasContext, UeContext};
@@ -28,6 +30,7 @@ use slog::Logger;
 pub use deregistration::DeregistrationProcedure;
 pub use initial_ue_message::InitialUeMessageProcedure;
 pub use pdu_session_establishment::SessionEstablishmentProcedure;
+pub use rrc_security_mode::RrcSecurityModeProcedure;
 pub use rrc_setup::RrcSetupProcedure;
 pub use ue_context_release::UeContextReleaseProcedure;
 pub use ue_message_handler::UeMessageHandler;
@@ -93,6 +96,14 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
             }
         }
         Ok(())
+    }
+
+    async fn perform_ran_ue_registration_actions(self) -> Result<Self> {
+        if self.ngap_mode() {
+            todo!()
+        } else {
+            RrcSecurityModeProcedure::new(self).run().await
+        }
     }
 
     // Return Err if the UE handler should exit.
@@ -170,19 +181,12 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         let rrc_bytes = if srb_id == 0 {
             rrc_bytes
         } else {
-            self.ue
-                .pdcp_tx
-                .as_mut()
-                .expect("PCDP context must be present in F1AP mode")
-                .encode(srb_id, rrc_bytes)
-                .into()
+            self.ue.pdcp_tx.encode(srb_id, rrc_bytes).into()
         };
 
         let dl_message = crate::f1ap::build::dl_rrc_message_transfer(
             self.ue.key,
-            self.ue
-                .gnb_du_ue_f1ap_id
-                .expect("gnb_du_ue_f1ap_id must be present in F1AP mode"),
+            self.ue.gnb_du_ue_f1ap_id,
             RrcContainer(rrc_bytes),
             srb,
         );
@@ -198,6 +202,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         Ok(Box::new(UlDcchMessage::from_bytes(rrc_message_bytes)?))
     }
 
+    // Could move these into Nas Procedures
     fn nas_decode(&mut self, bytes: &[u8]) -> Result<Box<Nas5gsMessage>> {
         self.ue.nas.decode(bytes, self.logger)
     }
@@ -211,37 +216,47 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
 
     async fn nas_request(&mut self, nas: Box<Nas5gsMessage>) -> Result<Box<Nas5gsMessage>> {
         let nas_bytes = self.ue.nas.encode(nas)?;
-        let rrc = crate::rrc::build::dl_information_transfer(
-            1, // TODO transaction ID
-            DedicatedNasMessage(nas_bytes),
-        );
 
-        self.rrc_request(SrbId(1), &rrc)
-            .await
-            .and_then(|x| match x.message {
-                UlDcchMessageType::C1(C1_6::UlInformationTransfer(UlInformationTransfer {
-                    critical_extensions:
-                        CriticalExtensions37::UlInformationTransfer(UlInformationTransferIEs {
-                            dedicated_nas_message: Some(DedicatedNasMessage(response_bytes)),
-                            ..
-                        }),
-                })) => {
-                    let msg = self.nas_decode(&response_bytes)?;
-                    Ok(msg)
-                }
-                _ => Err(anyhow!(
-                    "Expected RrcUlInformationTransfer with DedicatedNasMessage"
-                )),
-            })
+        // TODO: these two implementation should be in different files
+        if self.ngap_mode() {
+            todo!()
+        } else {
+            let rrc = crate::rrc::build::dl_information_transfer(
+                1, // TODO transaction ID
+                DedicatedNasMessage(nas_bytes),
+            );
+
+            self.rrc_request(SrbId(1), &rrc)
+                .await
+                .and_then(|x| match x.message {
+                    UlDcchMessageType::C1(C1_6::UlInformationTransfer(UlInformationTransfer {
+                        critical_extensions:
+                            CriticalExtensions37::UlInformationTransfer(UlInformationTransferIEs {
+                                dedicated_nas_message: Some(DedicatedNasMessage(response_bytes)),
+                                ..
+                            }),
+                    })) => {
+                        let msg = self.nas_decode(&response_bytes)?;
+                        Ok(msg)
+                    }
+                    _ => Err(anyhow!(
+                        "Expected RrcUlInformationTransfer with DedicatedNasMessage"
+                    )),
+                })
+        }
     }
 
     async fn nas_indication(&mut self, nas: Box<Nas5gsMessage>) -> Result<()> {
         let nas_bytes = self.ue.nas.encode(nas)?;
-        let rrc = crate::rrc::build::dl_information_transfer(
-            1, // TODO transaction ID
-            DedicatedNasMessage(nas_bytes),
-        );
+        if self.ngap_mode() {
+            todo!()
+        } else {
+            let rrc = crate::rrc::build::dl_information_transfer(
+                1, // TODO transaction ID
+                DedicatedNasMessage(nas_bytes),
+            );
 
-        self.rrc_indication(SrbId(1), &rrc).await
+            self.rrc_indication(SrbId(1), &rrc).await
+        }
     }
 }

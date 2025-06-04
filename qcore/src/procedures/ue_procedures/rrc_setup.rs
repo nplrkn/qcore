@@ -1,6 +1,6 @@
 //! initial_access - procedure in which UE makes first contact with the 5G core
 
-use super::registration::RegistrationProcedure;
+use super::RegistrationProcedure;
 use super::{HandlerApi, UeProcedure};
 use crate::expect_nas;
 use anyhow::{Result, anyhow, bail};
