@@ -2,7 +2,7 @@
 
 use super::super::RegistrationProcedure;
 use super::prelude::*;
-use crate::expect_nas;
+use crate::ensure_nas;
 use asn1_per::SerDes;
 use f1ap::{DuToCuRrcContainer, InitialUlRrcMessageTransfer, SrbId};
 use rrc::{
@@ -19,14 +19,12 @@ impl<'a, A: HandlerApi> RrcSetupProcedure<'a, A> {
 
         let nas_bytes = self.handle_rrc_setup(r).await?;
 
-        // Follow on registration
         if let Ok((nas_message, security_header)) = self.nas_decode_with_security_header(&nas_bytes)
         {
-            if let Ok(registration_request) = expect_nas!(RegistrationRequest, nas_message) {
-                RegistrationProcedure::new(self.0)
-                    .run(Box::new(registration_request), security_header)
-                    .await?;
-            }
+            let registration_request = ensure_nas!(RegistrationRequest, nas_message);
+            RegistrationProcedure::new(self.0)
+                .run(Box::new(registration_request), security_header)
+                .await?;
         }
         Ok(())
     }
