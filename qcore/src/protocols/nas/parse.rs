@@ -1,5 +1,5 @@
 use anyhow::{Result, bail};
-use oxirush_nas::{NasFGsMobileIdentity, NasUeSecurityCapability};
+use oxirush_nas::{NasFGsMobileIdentity, NasUeSecurityCapability, messages::NasIdentityResponse};
 use std::fmt::Write;
 use xxap::PlmnIdentity;
 
@@ -68,4 +68,11 @@ pub fn nas_ue_security_capability(
     ue_security_capabilities: &NasUeSecurityCapability,
 ) -> UeSecurityCapabilities {
     ue_security_capabilities.value[0..2].try_into().unwrap()
+}
+
+pub fn identity_response<'a>(identity_response: NasIdentityResponse) -> Result<Imsi> {
+    match fgs_mobile_identity(&identity_response.mobile_identity)? {
+        MobileIdentity::Supi(_plmn, imsi) => Ok(imsi),
+        x => bail!("Asked for SUPI identity, got {:?}", x),
+    }
 }

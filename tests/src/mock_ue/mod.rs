@@ -1,8 +1,21 @@
-use anyhow::{Result, bail};
+use anyhow::{Result, anyhow, bail};
 use async_trait::async_trait;
-use oxirush_nas::{Nas5gmmMessage, Nas5gsMessage, decode_nas_5gs_message};
+use oxirush_nas::{Nas5gsMessage, decode_nas_5gs_message};
 use slog::{Logger, info, o};
 use std::net::Ipv4Addr;
+
+// TODO: commonize with QCore
+#[macro_export]
+macro_rules! ensure_nas {
+    ($t:ident, $boxed_nas:expr) => {
+        match *$boxed_nas {
+            oxirush_nas::Nas5gsMessage::Gmm(_header, oxirush_nas::Nas5gmmMessage::$t(message)) => {
+                message
+            }
+            m => bail!("Expected Nas {} but got {:?}", stringify!($t), m),
+        }
+    };
+}
 
 mod build_nas;
 mod build_rrc;
@@ -30,6 +43,7 @@ pub struct MockUe<T: Transport> {
     dnn: Option<&'static [u8]>,
     transport: T,
     logger: Logger,
+    use_wrong_imsi: bool,
 }
 
 impl<T: Transport> MockUe<T> {
@@ -41,6 +55,7 @@ impl<T: Transport> MockUe<T> {
             dnn: None,
             transport,
             logger: logger.new(o!("ue" => ue_id)),
+            use_wrong_imsi: false,
         }
     }
 
@@ -51,6 +66,11 @@ impl<T: Transport> MockUe<T> {
         self.guti = Some(guti);
     }
 
+    // Use the wrong imsi on the next IdentityResponse
+    pub fn use_wrong_imsi(&mut self) {
+        self.use_wrong_imsi = true;
+    }
+
     pub fn use_dnn(&mut self, dnn: &'static [u8]) {
         self.dnn = Some(dnn);
     }
@@ -59,8 +79,19 @@ impl<T: Transport> MockUe<T> {
         self.transport.send_nas(nas_bytes, &self.logger).await
     }
 
-    async fn receive_nas(&mut self) -> Result<Vec<u8>> {
-        self.transport.receive_nas(&self.logger).await
+    async fn receive_nas(&mut self) -> Result<Box<Nas5gsMessage>> {
+        let nas_bytes = self.transport.receive_nas(&self.logger).await?;
+        let outer = Box::new(
+            decode_nas_5gs_message(&nas_bytes)
+                .map_err(|e| anyhow!("NAS decode error - {e} - message bytes: {:?}", nas_bytes))?,
+        );
+        let (nas, _security_header) = match *outer {
+            Nas5gsMessage::Gmm(_, _) => (outer, None),
+            Nas5gsMessage::SecurityProtected(hdr, bx) => (bx, Some(hdr)),
+            Nas5gsMessage::Gsm(_, _) => bail!("Unexpected Nas SM message {:?} ", outer),
+        };
+
+        Ok(nas)
     }
 
     fn build_register_request(&self) -> Result<Vec<u8>> {
@@ -77,7 +108,7 @@ impl<T: Transport> MockUe<T> {
     }
 
     pub async fn handle_nas_authentication(&mut self) -> Result<()> {
-        let _nas_authentication_request = self.receive_nas().await?;
+        ensure_nas!(AuthenticationRequest, self.receive_nas().await?);
         info!(&self.logger, "NAS Authentication request >>");
         let nas_authentication_response = build_nas::authentication_response()?;
         info!(&self.logger, "NAS Authentication response <<");
@@ -85,23 +116,29 @@ impl<T: Transport> MockUe<T> {
     }
 
     pub async fn handle_nas_security_mode(&mut self) -> Result<()> {
-        let _nas_security_mode_command = self.receive_nas().await?;
+        ensure_nas!(SecurityModeCommand, self.receive_nas().await?);
         info!(&self.logger, "NAS Security mode command <<");
         let nas_security_mode_complete = build_nas::security_mode_complete()?;
         info!(&self.logger, "NAS Security mode complete >>");
         self.send_nas(nas_security_mode_complete).await
     }
 
+    pub async fn handle_identity_procedure(&mut self) -> Result<()> {
+        ensure_nas!(IdentityRequest, self.receive_nas().await?);
+        info!(&self.logger, "NAS Identity Request <<");
+        let imsi = if self.use_wrong_imsi {
+            self.use_wrong_imsi = false;
+            "543938298342342"
+        } else {
+            &self.imsi
+        };
+        let nas_identity_response = build_nas::identity_response(imsi)?;
+        info!(&self.logger, "NAS Identity Response >>");
+        self.send_nas(nas_identity_response).await
+    }
+
     pub async fn handle_nas_registration_accept(&mut self) -> Result<()> {
-        let nas_registration_accept = self.receive_nas().await?;
-        info!(&self.logger, "NAS Registration Accept <<");
-        let nas = decode_nas_5gs_message(&nas_registration_accept)?;
-        let Nas5gsMessage::SecurityProtected(_header, message) = nas else {
-            bail!("Expected security protected message, got {nas:?}")
-        };
-        let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationAccept(message)) = *message else {
-            bail!("Expected security protected registration accept")
-        };
+        let message = ensure_nas!(RegistrationAccept, self.receive_nas().await?);
         let Some(guti_ie) = message.fg_guti else {
             bail!("Expected GUTI in registration accept")
         };
@@ -144,7 +181,7 @@ impl<T: Transport> MockUe<T> {
     }
 
     pub async fn handle_nas_authentication_sync_failure(&mut self) -> Result<()> {
-        let _nas_authentication_request = self.receive_nas().await?;
+        ensure_nas!(AuthenticationRequest, self.receive_nas().await?);
         info!(&self.logger, "NAS Authentication request <<");
         let nas_authentication_failure = build_nas::authentication_failure()?;
         info!(
@@ -155,27 +192,12 @@ impl<T: Transport> MockUe<T> {
     }
 
     pub async fn receive_nas_registration_reject(&mut self) -> Result<()> {
-        match decode_nas_5gs_message(&mut self.receive_nas().await?)? {
-            Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationReject(_)) => Ok(()),
-            m => bail!("Expected reject, got {:?}", m),
-        }
-    }
-
-    async fn receive_security_protected_nas(&mut self) -> Result<Nas5gmmMessage> {
-        let nas = decode_nas_5gs_message(&mut self.receive_nas().await?)?;
-        let Nas5gsMessage::SecurityProtected(_, message) = nas else {
-            bail!("Expected security protected message, got bytes: {:?}", nas);
-        };
-        match *message {
-            Nas5gsMessage::Gmm(_, nas_gmm) => Ok(nas_gmm),
-            _ => bail!("Expected 5GMM message, got GSM message"),
-        }
+        ensure_nas!(RegistrationReject, self.receive_nas().await?);
+        Ok(())
     }
 
     pub async fn receive_nas_5gmm_status(&mut self) -> Result<()> {
-        match self.receive_security_protected_nas().await? {
-            Nas5gmmMessage::FGmmStatus(_) => Ok(()),
-            m => bail!("Expected 5GMM status, got {:?}", m),
-        }
+        ensure_nas!(FGmmStatus, self.receive_nas().await?);
+        Ok(())
     }
 }

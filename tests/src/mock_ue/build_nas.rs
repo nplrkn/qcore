@@ -9,8 +9,9 @@ use oxirush_nas::{
     encode_nas_5gs_message,
     messages::{
         Nas5gmmHeader, Nas5gsmHeader, NasAuthenticationFailure, NasAuthenticationResponse,
-        NasDeregistrationRequestFromUe, NasPduSessionEstablishmentRequest, NasRegistrationComplete,
-        NasRegistrationRequest, NasSecurityModeComplete, NasUlNasTransport,
+        NasDeregistrationRequestFromUe, NasIdentityResponse, NasPduSessionEstablishmentRequest,
+        NasRegistrationComplete, NasRegistrationRequest, NasSecurityModeComplete,
+        NasUlNasTransport,
     },
 };
 
@@ -189,6 +190,18 @@ pub fn authentication_failure() -> Result<Vec<u8>> {
             message_type: Nas5gmmMessageType::AuthenticationFailure {},
         },
         message,
+    );
+    Ok(encode_nas_5gs_message(&message)?)
+}
+
+pub fn identity_response(imsi: &str) -> Result<Vec<u8>> {
+    let message = Nas5gsMessage::Gmm(
+        Nas5gmmHeader {
+            extended_protocol_discriminator: ExtendedProtocolDiscriminator::FIVEGMM,
+            security_header_type: SecurityHeaderType::PLAIN_5GS_NAS_MESSAGE_NOT_SECURITY_PROTECTED,
+            message_type: Nas5gmmMessageType::IdentityResponse {},
+        },
+        Nas5gmmMessage::IdentityResponse(NasIdentityResponse::new(mobile_identity_supi(imsi))),
     );
     Ok(encode_nas_5gs_message(&message)?)
 }

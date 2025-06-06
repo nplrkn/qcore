@@ -5,12 +5,13 @@ use oxirush_nas::{
     Nas5gmmMessage, Nas5gmmMessageType, Nas5gsMessage, Nas5gsmMessage, Nas5gsmMessageType, NasAbba,
     NasAdditionalFGSecurityInformation, NasAuthenticationParameterAutn,
     NasAuthenticationParameterRand, NasDnn, NasExtendedProtocolConfigurationOptions, NasFGmmCause,
-    NasFGsMobileIdentity, NasFGsNetworkFeatureSupport, NasFGsRegistrationResult,
-    NasKeySetIdentifier, NasNssai, NasPayloadContainer, NasPayloadContainerType, NasPduAddress,
-    NasPduSessionType, NasQosFlowDescriptions, NasQosRules, NasSNssai, NasSecurityAlgorithms,
-    NasSessionAmbr, NasUeSecurityCapability, encode_nas_5gs_message,
+    NasFGsIdentityType, NasFGsMobileIdentity, NasFGsNetworkFeatureSupport,
+    NasFGsRegistrationResult, NasKeySetIdentifier, NasNssai, NasPayloadContainer,
+    NasPayloadContainerType, NasPduAddress, NasPduSessionType, NasQosFlowDescriptions, NasQosRules,
+    NasSNssai, NasSecurityAlgorithms, NasSessionAmbr, NasUeSecurityCapability,
+    encode_nas_5gs_message,
     messages::{
-        NasAuthenticationRequest, NasDlNasTransport, NasFGmmStatus,
+        NasAuthenticationRequest, NasDlNasTransport, NasFGmmStatus, NasIdentityRequest,
         NasPduSessionEstablishmentAccept, NasRegistrationAccept, NasRegistrationReject,
         NasSecurityModeCommand,
     },
@@ -32,6 +33,13 @@ pub fn authentication_request(rand: &[u8; 16], autn: &[u8; 16]) -> Box<Nas5gsMes
             authentication_parameter_autn: Some(NasAuthenticationParameterAutn::new(autn.to_vec())),
             eap_message: None,
         }),
+    ))
+}
+
+pub fn identity_request() -> Box<Nas5gsMessage> {
+    Box::new(Nas5gsMessage::new_5gmm(
+        Nas5gmmMessageType::IdentityRequest,
+        Nas5gmmMessage::IdentityRequest(NasIdentityRequest::new(NasFGsIdentityType::new(1))),
     ))
 }
 

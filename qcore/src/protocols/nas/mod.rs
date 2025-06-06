@@ -41,6 +41,7 @@ impl Display for AmfIds {
     }
 }
 
+#[derive(Debug)]
 pub enum MobileIdentity {
     Supi(PlmnIdentity, Imsi),
     Guti(PlmnIdentity, AmfIds, Tmsi),
