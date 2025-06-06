@@ -20,7 +20,7 @@ enum RegistrationType {
 
 enum NasAuthOutcome {
     Kseaf([u8; 32]),
-    ResyncSqn([u8; 6]),
+    ResyncSqn(u8, [u8; 6]),
 }
 
 define_ue_procedure!(RegistrationProcedure);
@@ -121,9 +121,9 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                     self.ue.kamf = security::derive_kamf(&kseaf, imsi.as_bytes());
                     return Ok(());
                 }
-                NasAuthOutcome::ResyncSqn(sqn) => {
-                    self.resync_subscriber_sqn(imsi, sqn).await?;
-                    debug!(self.logger, "Resynchronized SQN to UE {:02x?} plus 2", sqn);
+                NasAuthOutcome::ResyncSqn(increment_by, sqn) => {
+                    let new_sqn = self.resync_subscriber_sqn(imsi, sqn, increment_by).await?;
+                    debug!(self.logger, "Resynchronized SQN to UE {:02x?} plus {increment_by}, now {:02x?}", sqn, new_sqn);
                 } // Getting here means we have resynchronized the SQN
             }
         }
@@ -165,11 +165,14 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         let auth_failure = ensure_nas!(AuthenticationFailure, rsp);
         self.log_message(">> NasAuthenticationFailure");
         match self.try_sqn_resynchronization(auth_failure, &auth_params.sim_creds, rand) {
-            Ok(sqn) => Ok(NasAuthOutcome::ResyncSqn(sqn)),
+            Ok(sqn) => Ok(NasAuthOutcome::ResyncSqn(
+                auth_params.sim_creds.sqn_resync_increment,
+                sqn,
+            )),
             Err(e) => {
                 if self.config().skip_ue_authentication_check {
-                    warn!(&self.logger, "Authentication failure - {e}");
-                    Ok(NasAuthOutcome::ResyncSqn(auth_params.sqn.0))
+                    warn!(&self.logger, "Skipping authentication failure for testability - {e}");
+                    Ok(NasAuthOutcome::ResyncSqn(0, auth_params.sqn.0))
                 } else {
                     Err(e)
                 }
@@ -325,6 +328,8 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
             .await
             .ok_or_else(|| anyhow!("Unknown IMSI"))?;
 
+        debug!(self.logger, "SQN for challenge: {:02x?}", auth_params.sqn);
+        
         let challenge = security::generate_challenge(
             &auth_params.sim_creds.ki,
             &auth_params.sim_creds.opc,

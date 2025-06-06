@@ -11,6 +11,15 @@ pub struct SimCreds {
     pub ki: [u8; 16],
     #[serde(with = "hex")]
     pub opc: [u8; 16],
+    #[serde(with = "hex", default)]
+    // Temporary debug fields that don't belong in a struct called 'SimCreds'
+    pub sqn: [u8; 6],
+    #[serde(default = "default_sqn_resync_increment")]
+    pub sqn_resync_increment: u8,
+}
+
+fn default_sqn_resync_increment() -> u8 {
+    2
 }
 
 #[derive(Clone)]
@@ -59,11 +68,15 @@ impl SubscriberDb {
                 bail!("Key {} in {filename} does not start with 'imsi-'", key,)
             };
             info!(logger, "Loaded creds for IMSI: {imsi} from {filename}");
+
+            // temp code
+            let sqn = sim_creds.sqn.clone();
+
             new_table.insert(
                 imsi.to_string(),
                 Subscriber {
                     sim_creds,
-                    sqn: Sqn([0u8; 6]),
+                    sqn: Sqn(sqn),
                 },
             );
         }

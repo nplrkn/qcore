@@ -26,7 +26,8 @@ pub trait HandlerApi: Send + Sync + Clone + 'static {
     // returns the SQN supplied by the UE for the next challenge.
     async fn lookup_subscriber_creds_and_inc_sqn(&self, imsi: &str)
     -> Option<SubscriberAuthParams>;
-    async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
+    async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6], increment_by: u8)
+     -> Result<[u8; 6]>;
 
     async fn register_new_tmsi(&self, tmsi: Tmsi, ue_id: u32, logger: &Logger);
     async fn take_nas_context(&self, tmsi: &Tmsi) -> Option<NasContext>;

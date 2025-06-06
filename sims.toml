@@ -8,3 +8,11 @@
 [imsi-123450123456789]
 ki = "0123456789abcdef0123456789abcdef"
 opc = "0123456789abcdef0123456789abcdef"
+
+
+# Debugging fields allowing experimentation with SQN for a given IMSI
+#  -  sqn is a hex value that sets the value of the SQN uses by QCore for the first SUPI registration attempt
+#  -  sqn_resync_increment is a decimal value that govern how much the SQN is incremented once the UE has
+#     passed across a new SQN in the AUTS field of the 'synch failure' NasAuthenticationFailure. 
+sqn = "000000030201"
+sqn_resync_increment = 2
