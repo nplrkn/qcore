@@ -22,7 +22,7 @@ rrc = { path = "../5g-libs/rrc" }
 asn1-per = { path = "../5g-libs/asn1-per" }
 dashmap = "6.1.0"
 stop-token = "0.7.0"
-oxirush-nas = { git = "https://github.com/nplrkn/oxirush-nas", branch = "all-fixes" }
+oxirush-nas = { git = "https://github.com/nplrkn/oxirush-nas", rev = "b80245c" }
 hex-literal = "1.0.0"
 rand = "0.9.0"
 index-pool = "1.0.11"

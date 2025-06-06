@@ -1541,6 +1541,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "oxirush-nas"
+version = "0.1.2"
+source = "git+https://github.com/nplrkn/oxirush-nas?rev=b80245c#b80245c9c42b08af3b884ba58bbe2054cd4f6da9"
+dependencies = [
+ "anyhow",
+ "base64",
+ "byteorder",
+ "bytes",
+ "hex",
+ "log",
+ "thiserror 2.0.12",
+]
+
+[[package]]
 name = "parking"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1746,7 +1760,7 @@ dependencies = [
  "local-ip-address",
  "ngap",
  "num_cpus",
- "oxirush-nas",
+ "oxirush-nas 0.1.2 (git+https://github.com/nplrkn/oxirush-nas?rev=b80245c)",
  "pdcp",
  "rand 0.9.1",
  "rrc",
@@ -1778,7 +1792,7 @@ dependencies = [
  "f1ap",
  "local-ip-address",
  "ngap",
- "oxirush-nas",
+ "oxirush-nas 0.1.2 (git+https://github.com/nplrkn/oxirush-nas?branch=all-fixes)",
  "pdcp",
  "pnet_packet",
  "qcore",
