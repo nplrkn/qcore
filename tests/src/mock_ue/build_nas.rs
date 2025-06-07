@@ -266,6 +266,12 @@ pub fn pdu_session_establishment_request(dnn: Option<&[u8]>) -> Result<Vec<u8>> 
     );
     let inner_message = encode_nas_5gs_message(&inner_message)?;
 
+    let dnn = dnn.map(|bytes| {
+        let mut v = vec![bytes.len() as u8];
+        v.extend_from_slice(bytes);
+        NasDnn::new(v)
+    });
+
     let outer_message = Nas5gsMessage::new_5gmm(
         Nas5gmmMessageType::UlNasTransport,
         Nas5gmmMessage::UlNasTransport(NasUlNasTransport {
@@ -275,7 +281,7 @@ pub fn pdu_session_establishment_request(dnn: Option<&[u8]>) -> Result<Vec<u8>> 
             old_pdu_session_id: None,
             request_type: None,
             s_nssai: None,
-            dnn: dnn.map(|bytes| NasDnn::new(bytes.to_vec())),
+            dnn,
             additional_information: None,
             ma_pdu_session_information: None,
             release_assistance_indication: None,

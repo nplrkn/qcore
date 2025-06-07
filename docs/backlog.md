@@ -49,6 +49,10 @@ Function gaps
 - >1 PDU session per UE
 - >1 DU
 
+Error handling
+- Session setup with existing PDU session ID should not leave up old session.  This was seen with OnePlus phone which repeated 
+  its session setup request (with no intervening delete) after not liking the response.
+
 Tidying + refactoring
 - avoid having to expect() on UeContext fields
 - message logs in both test framework and QCORE debug should use consistent F1 / RRC / NAS prefix

@@ -152,7 +152,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                 }
                 NasAuthOutcome::ResyncSqn(sqn) => {
                     self.resync_subscriber_sqn(imsi, sqn).await?;
-                    debug!(self.logger, "Resynchronized SQN to UE {:02x?} plus 2", sqn);
+                    debug!(self.logger, "Resynchronized SQN to UE {:02x?}", sqn);
                 } // Getting here means we have resynchronized the SQN
             }
         }

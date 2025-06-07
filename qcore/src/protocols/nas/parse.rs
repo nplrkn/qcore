@@ -1,5 +1,7 @@
-use anyhow::{Result, bail};
-use oxirush_nas::{NasFGsMobileIdentity, NasUeSecurityCapability, messages::NasIdentityResponse};
+use anyhow::{Result, bail, ensure};
+use oxirush_nas::{
+    NasDnn, NasFGsMobileIdentity, NasUeSecurityCapability, messages::NasIdentityResponse,
+};
 use std::fmt::Write;
 use xxap::PlmnIdentity;
 
@@ -75,4 +77,16 @@ pub fn identity_response<'a>(identity_response: NasIdentityResponse) -> Result<I
         MobileIdentity::Supi(_plmn, imsi) => Ok(imsi),
         x => bail!("Asked for SUPI identity, got {:?}", x),
     }
+}
+
+pub fn dnn(dnn: NasDnn) -> Result<Vec<u8>> {
+    let dnn = dnn.value;
+
+    // The first byte is a length field.
+    ensure!(dnn.len() >= 2, "DNN too short");
+    ensure!(
+        dnn[0] as usize == dnn.len() - 1,
+        "DNN length does not match IE length"
+    );
+    Ok(dnn[1..].into())
 }

@@ -34,13 +34,15 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
                 ..
             }) => {
                 self.log_message(">> UlNasTransport");
-
-                let dnn = dnn.map(|nas_dnn| nas_dnn.value);
-                if let Some(ref dnn) = dnn {
-                    if !self.check_dnn(dnn).await? {
+                let dnn = if let Some(dnn) = dnn {
+                    let dnn = crate::nas::parse::dnn(dnn)?;
+                    if !self.check_dnn(&dnn).await? {
                         return Ok(());
                     }
-                }
+                    Some(dnn)
+                } else {
+                    None
+                };
 
                 let nas = Box::new(decode_nas_5gs_message(&payload_container.value)?);
                 match *nas {
