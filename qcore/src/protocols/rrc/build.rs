@@ -82,7 +82,13 @@ pub fn reconfiguration(
             rrc_transaction_identifier: RrcTransactionIdentifier(rrc_transaction_identifier),
             critical_extensions: CriticalExtensions15::RrcReconfiguration(RrcReconfigurationIEs {
                 radio_bearer_config: Some(RadioBearerConfig {
-                    srb_to_add_mod_list: None,
+                    // This matches the SRB that we previously asked the DU to establish
+                    srb_to_add_mod_list: Some(SrbToAddModList(nonempty![SrbToAddMod {
+                        srb_identity: SrbIdentity(2),
+                        reestablish_pdcp: None,
+                        discard_on_pdcp: None,
+                        pdcp_config: None,
+                    }])),
                     srb_3_to_release: None,
                     drb_to_add_mod_list: Some(DrbToAddModList(nonempty![DrbToAddMod {
                         cn_association: Some(CnAssociation::SdapConfig(SdapConfig {
