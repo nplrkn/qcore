@@ -124,6 +124,8 @@ impl<A: HandlerApi> IndicationHandler<UeContextReleaseRequestProcedure> for F1ap
                 _logger,
                 "Failed to dispatch UeContextReleaseRequest - {}", e
             );
+
+            // TODO just delete it anyway?
         }
     }
 }

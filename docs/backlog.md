@@ -20,8 +20,10 @@ Performance
 Persistence
 - Paging continuity
 
+NGAP mode
+- Registration accept should piggyback on NGAP Initial Context Setup request
+
 Function gaps
-- In case of unknown GUTI, do identity request
 - Deregistration accept
 - PDU session release
 - Idle / paging

@@ -45,6 +45,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                 /* 6.8.1.1.2.2: When the UE receives the AS SMC without having received a NAS Security Mode Command after the Registration Request
                 with "PDU session(s) to be re-activated", it shall use the uplink NAS COUNT of the Registration Request message that
                 triggered the AS SMC to be sent as freshness parameter in the derivation of the initial KgNB/KeNB.           */
+                debug!(self.logger, "UL NAS COUNT {}", self.ue.nas.ul_nas_count());
                 let kgnb = security::derive_kgnb(&self.ue.kamf, self.ue.nas.ul_nas_count());
                 let inner = self.0.perform_ran_ue_registration_actions(&kgnb).await?;
                 RegistrationProcedure(inner).accept_registration().await?;
@@ -96,7 +97,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                     .await?;
 
                 if identity_procedure_needed {
-                    self.ue.reset_security();
+                    self.ue.reset_nas_security();
                     let imsi = self.query_ue_identity().await?;
                     self.supi_registration(&imsi, ue_security_capability)
                         .await?;
@@ -127,7 +128,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         imsi: &str,
         ue_security_capability: NasUeSecurityCapability,
     ) -> Result<(), u8> {
-        info!(self.logger, "Register imsi-{imsi}");
+        info!(self.logger, "SUPI registration for imsi-{imsi}");
 
         self.authenticate_ue(imsi).await.map_err(|e| {
             warn!(self.logger, "SUPI registration failure - {e}");
@@ -252,6 +253,8 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         tmsi: &Tmsi,
         security_header: Option<Nas5gsSecurityHeader>,
     ) -> Result<bool, u8> {
+        info!(self.logger, "GUTI registration for {tmsi}");
+
         // We have already checked the PLMN, so we just need to check the AMF IDs
         // at this stage.
         let guami_matches = amf_ids == &self.config().amf_ids;

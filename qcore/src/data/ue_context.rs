@@ -47,9 +47,8 @@ impl UeContext {
         RanUeNgapId(self.ran_ue_id)
     }
 
-    pub fn reset_security(&mut self) {
+    pub fn reset_nas_security(&mut self) {
         self.nas = NasContext::default();
-        self.pdcp_tx = PdcpTx::default();
         self.kamf = [0u8; 32];
         self.tmsi = None;
     }

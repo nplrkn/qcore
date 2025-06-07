@@ -67,6 +67,10 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
             UeMessage::Ngap(pdu) => self.ngap_dispatch(pdu).await,
             UeMessage::F1ap(pdu) => self.f1ap_dispatch(pdu).await,
             UeMessage::TakeContext(sender) => {
+                info!(
+                    &self.logger,
+                    "UE changed channel - transfer context and clean up"
+                );
                 *self.give_context = Some(sender);
                 Err(anyhow!("Take context"))
             }
