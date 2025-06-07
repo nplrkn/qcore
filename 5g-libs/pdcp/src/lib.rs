@@ -19,6 +19,10 @@ pub fn view_inner(v: &[u8]) -> Result<&[u8]> {
     Ok(&v[2..v.len() - 4])
 }
 
+pub fn sequence_number(v: &[u8]) -> [u8; 2] {
+    v[0..2].try_into().unwrap()
+}
+
 impl PdcpTx {
     pub fn enable_security(&mut self, ik: [u8; 16]) {
         self.pdcp_integrity_key = Some(ik);

@@ -40,9 +40,9 @@ impl<'a> UeF1apMode<'a> {
         UeF1apMode { du, du_ue_context }
     }
 
-    async fn send_initial_ul_rrc(&self, rrc_setup_request: UlCcchMessage) -> Result<()> {
+    async fn send_initial_ul_rrc(&mut self, rrc_setup_request: UlCcchMessage) -> Result<()> {
         self.du
-            .send_initial_ul_rrc(&self.du_ue_context, rrc_setup_request)
+            .send_initial_ul_rrc(&mut self.du_ue_context, rrc_setup_request)
             .await
     }
 
@@ -54,8 +54,8 @@ impl<'a> UeF1apMode<'a> {
         self.du.send_ul_rrc(&mut self.du_ue_context, rrc).await
     }
 
-    async fn receive_rrc_dl_dcch(&self) -> Result<Box<DlDcchMessageType>> {
-        self.du.receive_rrc_dl_dcch(&self.du_ue_context).await
+    async fn receive_rrc_dl_dcch(&mut self) -> Result<Box<DlDcchMessageType>> {
+        self.du.receive_rrc_dl_dcch(&mut self.du_ue_context).await
     }
 }
 
@@ -68,7 +68,7 @@ impl<'a> Transport for UeF1apMode<'a> {
     }
 
     async fn receive_nas(&mut self, logger: &Logger) -> Result<Vec<u8>> {
-        match *self.du.receive_rrc_dl_dcch(&self.du_ue_context).await? {
+        match *self.du.receive_rrc_dl_dcch(&mut self.du_ue_context).await? {
             DlDcchMessageType::C1(C1_2::DlInformationTransfer(DlInformationTransfer {
                 critical_extensions:
                     CriticalExtensions4::DlInformationTransfer(DlInformationTransferIEs {

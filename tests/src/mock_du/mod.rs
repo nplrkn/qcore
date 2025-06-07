@@ -36,6 +36,7 @@ pub struct UeContext {
     pub binding: Binding,
     drb: Option<Drb>,
     pdcp_tx: PdcpTx,
+    expected_srb1_pdcp_seq_num: u16,
 }
 
 pub struct Drb {
@@ -83,6 +84,7 @@ impl MockDu {
             gnb_cu_ue_f1ap_id: None,
             drb: None,
             pdcp_tx: PdcpTx::default(),
+            expected_srb1_pdcp_seq_num: 0,
         })
     }
 
@@ -125,9 +127,11 @@ impl MockDu {
 
     pub async fn send_initial_ul_rrc(
         &self,
-        ue: &UeContext,
+        ue: &mut UeContext,
         initial_rrc: UlCcchMessage,
     ) -> Result<()> {
+        ue.expected_srb1_pdcp_seq_num = 0;
+
         let f1_indication =
             build_f1ap::initial_ul_rrc_message_transfer(ue.ue_id, initial_rrc.as_bytes()?);
 
@@ -178,7 +182,7 @@ impl MockDu {
         Ok(())
     }
 
-    pub async fn receive_rrc_dl_dcch(&self, ue: &UeContext) -> Result<Box<DlDcchMessageType>> {
+    pub async fn receive_rrc_dl_dcch(&self, ue: &mut UeContext) -> Result<Box<DlDcchMessageType>> {
         let ReceivedPdu { pdu, assoc_id } = self.receive_pdu_with_assoc_id().await.unwrap();
 
         // Check that the PDU arrived on the expected binding.
@@ -197,7 +201,15 @@ impl MockDu {
         // SRB2 rather than SRB1.
         assert_eq!(dl_rrc_message_transfer.srb_id.0, 1);
 
-        let rrc_message_bytes = pdcp::view_inner(&dl_rrc_message_transfer.rrc_container.0)?;
+        let pdcp_packet = dl_rrc_message_transfer.rrc_container.0;
+
+        let pdcp_sequence_number = pdcp::sequence_number(&pdcp_packet);
+        assert_eq!(
+            ue.expected_srb1_pdcp_seq_num,
+            u16::from_be_bytes(pdcp_sequence_number)
+        );
+        ue.expected_srb1_pdcp_seq_num = (ue.expected_srb1_pdcp_seq_num + 1) & 0x0fff;
+        let rrc_message_bytes = pdcp::view_inner(&pdcp_packet)?;
         Ok(Box::new(
             DlDcchMessage::from_bytes(rrc_message_bytes)?.message,
         ))
