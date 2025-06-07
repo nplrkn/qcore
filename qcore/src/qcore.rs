@@ -204,9 +204,9 @@ impl HandlerApi for QCore {
     async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()> {
         let mut sqn = Sqn(sqn);
 
-        // Testing with Samsung phone indicates that we need to do a double
-        // increment after receiving the resync SQN.
-        sqn.add(2);
+        // After a resync we need to add 1 to both the IND and SEQ parts of the SQN.  See TS33.102.
+        const RESYNC_SQN_INCREMENT: u8 = 33;
+        sqn.add(RESYNC_SQN_INCREMENT);
 
         self.sub_db
             .lock()
