@@ -201,24 +201,19 @@ impl HandlerApi for QCore {
         })
     }
 
-    async fn resync_subscriber_sqn(
-        &self,
-        imsi: &str,
-        sqn: [u8; 6],
-        increment_by: u8,
-    ) -> Result<[u8; 6]> {
+    async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()> {
         let mut sqn = Sqn(sqn);
 
         // Testing with Samsung phone indicates that we need to do a double
         // increment after receiving the resync SQN.
-        sqn.add(increment_by);
+        sqn.add(2);
 
         self.sub_db
             .lock()
             .await
             .get_mut(imsi)
             .ok_or(anyhow!("IMSI not found"))
-            .map(|entry| {entry.sqn = sqn; entry.sqn.0})
+            .map(|entry| entry.sqn = sqn)
     }
 
     async fn take_nas_context(&self, tmsi: &Tmsi) -> Option<NasContext> {
