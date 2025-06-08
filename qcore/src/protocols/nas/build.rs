@@ -7,9 +7,9 @@ use oxirush_nas::{
     NasAuthenticationParameterRand, NasDnn, NasExtendedProtocolConfigurationOptions, NasFGmmCause,
     NasFGsIdentityType, NasFGsMobileIdentity, NasFGsNetworkFeatureSupport,
     NasFGsRegistrationResult, NasKeySetIdentifier, NasNssai, NasPayloadContainer,
-    NasPayloadContainerType, NasPduAddress, NasPduSessionType, NasQosFlowDescriptions, NasQosRules,
-    NasSNssai, NasSecurityAlgorithms, NasSessionAmbr, NasUeSecurityCapability,
-    encode_nas_5gs_message,
+    NasPayloadContainerType, NasPduAddress, NasPduSessionIdentity2, NasPduSessionType,
+    NasQosFlowDescriptions, NasQosRules, NasSNssai, NasSecurityAlgorithms, NasSessionAmbr,
+    NasUeSecurityCapability, encode_nas_5gs_message,
     messages::{
         NasAuthenticationRequest, NasDlNasTransport, NasFGmmStatus, NasIdentityRequest,
         NasPduSessionEstablishmentAccept, NasRegistrationAccept, NasRegistrationReject,
@@ -247,7 +247,7 @@ pub fn pdu_session_establishment_accept(
         Nas5gmmMessage::DlNasTransport(NasDlNasTransport {
             payload_container_type: NasPayloadContainerType::new(0b0001), // 5GSM
             payload_container: NasPayloadContainer::new(inner_message),
-            pdu_session_id: None,
+            pdu_session_id: Some(NasPduSessionIdentity2::new(pdu_session.id)),
             additional_information: None,
             fgmm_cause: None,
             back_off_timer_value: None,
