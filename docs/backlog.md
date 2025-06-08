@@ -34,7 +34,7 @@ Function gaps
 - PDCP Rx reordering
 - Obey DL DATA DELIVERY STATUS backpressure (desired buffer size)
 - PDCP retransmission for RLC Am
-- Time out during procedures
+- Time out during procedures - e.g. Authentication procedure uses T3560
 - UE AMBR
 - Transport key for SIM creds
 - SUCI

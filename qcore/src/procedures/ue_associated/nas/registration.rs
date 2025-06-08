@@ -18,8 +18,10 @@ enum RegistrationType {
     Guti(AmfIds, Tmsi),
 }
 
+#[derive(Debug)]
 enum NasAuthOutcome {
     Kseaf([u8; 32]),
+    RetryWithNewKSI,
     ResyncSqn([u8; 6]),
 }
 
@@ -131,7 +133,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         info!(self.logger, "SUPI registration for imsi-{imsi}");
 
         self.authenticate_ue(imsi).await.map_err(|e| {
-            warn!(self.logger, "SUPI registration failure - {e}");
+            warn!(self.logger, "Authentication failure - {e}");
             FGMM_CAUSE_ILLEGAL_UE
         })?;
 
@@ -144,19 +146,27 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     }
 
     async fn authenticate_ue(&mut self, imsi: &str) -> Result<()> {
-        for _ in 0..2 {
+        let mut ksi_retry_done = false;
+        let mut resync_retry_done = false;
+        loop {
             match self.perform_nas_authentication(imsi).await? {
                 NasAuthOutcome::Kseaf(kseaf) => {
                     self.ue.kamf = security::derive_kamf(&kseaf, imsi.as_bytes());
                     return Ok(());
                 }
-                NasAuthOutcome::ResyncSqn(sqn) => {
+                NasAuthOutcome::RetryWithNewKSI if !ksi_retry_done => {
+                    ksi_retry_done = true;
+                    continue;
+                }
+                NasAuthOutcome::ResyncSqn(sqn) if !resync_retry_done => {
                     self.resync_subscriber_sqn(imsi, sqn).await?;
+                    resync_retry_done = true;
                     debug!(self.logger, "Resynchronized SQN to UE {:02x?}", sqn);
-                } // Getting here means we have resynchronized the SQN
+                    continue;
+                }
+                x => bail!("Successive auth failures {:?}", x),
             }
         }
-        bail!("Successive synch failure during NAS authentication")
     }
 
     async fn activate_nas_security(
@@ -173,7 +183,15 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
 
     async fn perform_nas_authentication(&mut self, imsi: &str) -> Result<NasAuthOutcome> {
         let (challenge, auth_params) = self.generate_challenge(imsi).await?;
-        let req = crate::nas::build::authentication_request(&challenge.rand, &challenge.autn);
+        let req = crate::nas::build::authentication_request(
+            &challenge.rand,
+            &challenge.autn,
+            self.ue.ksi,
+        );
+
+        // Update the KSI for next time.  It is a number in the range 0-6.
+        self.ue.ksi = (self.ue.ksi + 1) % 7;
+
         self.log_message("<< NasAuthenticationRequest");
         match expect_nas!(AuthenticationResponse, self.nas_request(req).await?) {
             Ok(rsp) => {
@@ -193,18 +211,30 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     ) -> Result<NasAuthOutcome> {
         let auth_failure = ensure_nas!(AuthenticationFailure, rsp);
         self.log_message(">> NasAuthenticationFailure");
-        match self.try_sqn_resynchronization(auth_failure, &auth_params.sim_creds, rand) {
-            Ok(sqn) => Ok(NasAuthOutcome::ResyncSqn(sqn)),
-            Err(e) => {
-                if self.config().skip_ue_authentication_check {
-                    warn!(
-                        &self.logger,
-                        "Skipping authentication failure for testability - {e}"
-                    );
-                    Ok(NasAuthOutcome::ResyncSqn(auth_params.sqn.0))
-                } else {
-                    Err(e)
+        match auth_failure.fgmm_cause.value {
+            FGMM_CAUSE_SYNCH_FAILURE => {
+                debug!(self.logger, "Synch failure");
+                match self.try_sqn_resynchronization(auth_failure, &auth_params.sim_creds, rand) {
+                    Ok(sqn) => Ok(NasAuthOutcome::ResyncSqn(sqn)),
+                    Err(e) => {
+                        if self.config().skip_ue_authentication_check {
+                            warn!(
+                                &self.logger,
+                                "Skipping authentication failure for testability - {e}"
+                            );
+                            Ok(NasAuthOutcome::ResyncSqn(auth_params.sqn.0))
+                        } else {
+                            Err(e)
+                        }
+                    }
                 }
+            }
+            FGMM_CAUSE_NGKSI_ALREADY_IN_USE => {
+                debug!(self.logger, "ngKSI already in use");
+                Ok(NasAuthOutcome::RetryWithNewKSI)
+            }
+            cause => {
+                bail!("Authentication failure cause {cause}");
             }
         }
     }
@@ -215,15 +245,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         sim_creds: &SimCreds,
         rand: &[u8; 16],
     ) -> Result<[u8; 6]> {
-        let NasAuthenticationFailure {
-            fgmm_cause,
-            authentication_failure_parameter,
-        } = m;
-
-        if fgmm_cause.value != FGMM_CAUSE_SYNCH_FAILURE {
-            bail!("UE failed authentication with cause {:?}", fgmm_cause);
-        }
-        let Some(auts) = authentication_failure_parameter else {
+        let Some(auts) = m.authentication_failure_parameter else {
             bail!("Missing authentication failure parameter on NAS authentication synch failure");
         };
         let Ok(auts) = auts.value.try_into() else {

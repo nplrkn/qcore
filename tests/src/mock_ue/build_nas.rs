@@ -171,13 +171,16 @@ pub fn authentication_response() -> Result<Vec<u8>> {
     Ok(encode_nas_5gs_message(&message)?)
 }
 
-pub fn authentication_failure() -> Result<Vec<u8>> {
-    const SYNCH_FAILURE: u8 = 0b00010101; // TS24.501, Table 9.11.3.2.1
+// TODO: commonize with QCore
+pub const SYNCH_FAILURE: u8 = 0b00010101; // TS24.501, Table 9.11.3.2.1
+pub const NGKSI_IN_USE: u8 = 0b01000111;
+
+pub fn authentication_failure(cause: u8) -> Result<Vec<u8>> {
     let authentication_failure_parameter_ie = vec![
         85, 107, 146, 161, 234, 64, 160, 75, 103, 130, 213, 245, 143, 62,
     ];
     let message = Nas5gmmMessage::AuthenticationFailure(NasAuthenticationFailure {
-        fgmm_cause: NasFGmmCause::new(SYNCH_FAILURE),
+        fgmm_cause: NasFGmmCause::new(cause),
         authentication_failure_parameter: Some(NasAuthenticationFailureParameter::new(
             authentication_failure_parameter_ie,
         )),

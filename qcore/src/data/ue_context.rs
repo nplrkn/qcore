@@ -11,6 +11,7 @@ pub struct UeContext {
     pub key: u32,
     pub tmsi: Option<Tmsi>,
     pub kamf: [u8; 32],
+    pub ksi: u8,
     pub pdu_sessions: Vec<PduSession>,
     pub nr_cgi: Option<NrCgi>,
     pub nas: NasContext,
@@ -27,6 +28,7 @@ impl UeContext {
             key: ue_id,
             tmsi: None,
             kamf: [0u8; 32],
+            ksi: 0,
             pdu_sessions: vec![],
             nr_cgi: None,
             nas: NasContext::default(),
@@ -48,6 +50,9 @@ impl UeContext {
     }
 
     pub fn reset_nas_security(&mut self) {
+        // Leave ksi as it is, to ensure that it differs
+        // between successive authentication requests for a given
+        // TMSI.
         self.nas = NasContext::default();
         self.kamf = [0u8; 32];
         self.tmsi = None;

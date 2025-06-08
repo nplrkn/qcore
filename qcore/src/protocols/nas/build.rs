@@ -22,12 +22,12 @@ use xxap::PlmnIdentity;
 
 use super::AmfIds;
 
-pub fn authentication_request(rand: &[u8; 16], autn: &[u8; 16]) -> Box<Nas5gsMessage> {
+pub fn authentication_request(rand: &[u8; 16], autn: &[u8; 16], ksi: u8) -> Box<Nas5gsMessage> {
     // "The SEAF shall set the ABBA parameter as defined in Annex A.7.1."
     Box::new(Nas5gsMessage::new_5gmm(
         Nas5gmmMessageType::AuthenticationRequest,
         Nas5gmmMessage::AuthenticationRequest(NasAuthenticationRequest {
-            ngksi: NasKeySetIdentifier::new(0),
+            ngksi: NasKeySetIdentifier::new(ksi),
             abba: NasAbba::new(NAS_ABBA.to_vec()),
             authentication_parameter_rand: Some(NasAuthenticationParameterRand::new(rand.to_vec())),
             authentication_parameter_autn: Some(NasAuthenticationParameterAutn::new(autn.to_vec())),

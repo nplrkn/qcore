@@ -1,4 +1,4 @@
-use qcore_tests::{MockUeF1ap, framework::*};
+use qcore_tests::{MockUeF1ap, SYNCH_FAILURE, framework::*};
 
 #[async_std::test]
 async fn synchronization_failure_recovery() -> anyhow::Result<()> {
@@ -14,7 +14,7 @@ async fn synchronization_failure_recovery() -> anyhow::Result<()> {
     ue.perform_rrc_setup().await?;
 
     // When UE rejects authentication with a 'Synch failure' cause and an AUTS value.
-    ue.handle_nas_authentication_sync_failure().await?;
+    ue.fail_nas_authentication(SYNCH_FAILURE).await?;
 
     // Then QCore retries authentication with an updated SQN and registration completes successfully.
     ue.handle_nas_authentication().await?;

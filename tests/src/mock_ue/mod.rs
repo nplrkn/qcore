@@ -4,6 +4,8 @@ use oxirush_nas::{Nas5gsMessage, decode_nas_5gs_message};
 use slog::{Logger, info, o};
 use std::net::Ipv4Addr;
 
+pub use crate::mock_ue::build_nas::{NGKSI_IN_USE, SYNCH_FAILURE};
+
 // TODO: commonize with QCore
 #[macro_export]
 macro_rules! ensure_nas {
@@ -180,14 +182,11 @@ impl<T: Transport> MockUe<T> {
         self.transport.receive_userplane_packet().await
     }
 
-    pub async fn handle_nas_authentication_sync_failure(&mut self) -> Result<()> {
+    pub async fn fail_nas_authentication(&mut self, cause: u8) -> Result<()> {
         ensure_nas!(AuthenticationRequest, self.receive_nas().await?);
         info!(&self.logger, "NAS Authentication request <<");
-        let nas_authentication_failure = build_nas::authentication_failure()?;
-        info!(
-            &self.logger,
-            "NAS Authentication failure (synch failure) >>"
-        );
+        let nas_authentication_failure = build_nas::authentication_failure(cause)?;
+        info!(&self.logger, "NAS Authentication failure >>");
         self.send_nas(nas_authentication_failure).await
     }
 
