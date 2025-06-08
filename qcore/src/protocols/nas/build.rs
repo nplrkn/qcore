@@ -210,11 +210,20 @@ pub fn pdu_session_establishment_accept(
     let dns_primary = &[0x08, 0x08, 0x08, 0x08];
     let dns_secondary = &[0x08, 0x08, 0x04, 0x04];
 
+    // Work around limitation in NAS library.  SSC Mode and Selected Session Type are
+    // half byte V fields (24.501, table 8.3.2.1.1).  NasPduSessionType wrongly includes
+    // a type field.  However, since NasPduSessionType::encode() ORs the type field with
+    // the value field we can get the right behaviour by putting the SSC mode in the type field.
+    let ssc_mode_and_selected_session_type = NasPduSessionType {
+        type_field: 0b0001_0000, // SSC mode 1
+        value: 0b0000_0001,      // session type IPv4
+    };
+
     let inner_message =
         Nas5gsMessage::new_5gsm(
             Nas5gsmMessageType::PduSessionEstablishmentAccept,
             Nas5gsmMessage::PduSessionEstablishmentAccept(NasPduSessionEstablishmentAccept {
-                selected_pdu_session_type: NasPduSessionType::new(0b001), // IPv4
+                selected_pdu_session_type: ssc_mode_and_selected_session_type,
                 authorized_qos_rules: authorized_qos_rules(),
                 session_ambr: session_ambr(),
                 fgsm_cause: None,
