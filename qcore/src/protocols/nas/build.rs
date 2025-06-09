@@ -45,6 +45,7 @@ pub fn identity_request() -> Box<Nas5gsMessage> {
 
 pub fn security_mode_command(
     replayed_ue_security_capabilities: NasUeSecurityCapability,
+    ksi: u8,
 ) -> Box<Nas5gsMessage> {
     // Request retransmission of initial NAS message.
     let additional_fg_security_information =
@@ -53,7 +54,7 @@ pub fn security_mode_command(
         Nas5gmmMessageType::SecurityModeCommand,
         Nas5gmmMessage::SecurityModeCommand(NasSecurityModeCommand {
             selected_nas_security_algorithms: NasSecurityAlgorithms::new(2), // AES integrity and NULL encryption,
-            ngksi: NasKeySetIdentifier { value: 0 },
+            ngksi: NasKeySetIdentifier::new(ksi),
             replayed_ue_security_capabilities,
             imeisv_request: None,
             selected_eps_nas_security_algorithms: None,

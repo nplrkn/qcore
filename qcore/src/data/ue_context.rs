@@ -28,7 +28,7 @@ impl UeContext {
             key: ue_id,
             tmsi: None,
             kamf: [0u8; 32],
-            ksi: 0,
+            ksi: 6, // Max value, will wrap to 0 for the first auth request
             pdu_sessions: vec![],
             nr_cgi: None,
             nas: NasContext::default(),

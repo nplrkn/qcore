@@ -174,7 +174,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         ue_security_capabilities: NasUeSecurityCapability,
     ) -> Result<()> {
         self.configure_nas_security(&ue_security_capabilities);
-        let r = crate::nas::build::security_mode_command(ue_security_capabilities);
+        let r = crate::nas::build::security_mode_command(ue_security_capabilities, self.ue.ksi);
         self.log_message("<< NasSecurityModeCommand");
         let rsp = ensure_nas!(SecurityModeComplete, self.nas_request(r).await?);
         self.log_message(">> NasSecurityModeComplete");
@@ -188,9 +188,6 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
             &challenge.autn,
             self.ue.ksi,
         );
-
-        // Update the KSI for next time.  It is a number in the range 0-6.
-        self.ue.ksi = (self.ue.ksi + 1) % 7;
 
         self.log_message("<< NasAuthenticationRequest");
         match expect_nas!(AuthenticationResponse, self.nas_request(req).await?) {
@@ -390,13 +387,19 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         Ok(ret)
     }
 
-    async fn generate_challenge(&self, imsi: &str) -> Result<(Challenge, SubscriberAuthParams)> {
+    async fn generate_challenge(
+        &mut self,
+        imsi: &str,
+    ) -> Result<(Challenge, SubscriberAuthParams)> {
         let auth_params = self
             .lookup_subscriber_creds_and_inc_sqn(imsi)
             .await
             .ok_or_else(|| anyhow!("Unknown IMSI"))?;
 
         debug!(self.logger, "SQN for challenge: {:02x?}", auth_params.sqn);
+
+        // Generate a new KSI for each challenge.  KSI is a number in the range 0-6.
+        self.ue.ksi = (self.ue.ksi + 1) % 7;
 
         let challenge = security::generate_challenge(
             &auth_params.sim_creds.ki,

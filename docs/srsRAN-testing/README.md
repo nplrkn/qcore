@@ -61,7 +61,7 @@ cp ~/qcore/docs/srsRAN-testing/ue.conf ~/srsRAN_4G/build/srsue/src
 
 ```sh
 cd
-sudo tcpdump -w srsran_test.pcap -i any port 38472 or port 2152 or src 10.255.0.1 or dst 10.255.0.1
+sudo tcpdump -w srsran_test.pcap -i any sctp or port 2152 or host 10.255.0.1
 ```
 
 #### Terminal 2 - QCore
