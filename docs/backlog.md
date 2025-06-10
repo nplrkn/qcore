@@ -61,6 +61,7 @@ Tidying + refactoring
 
 Regression tests
 - should check there are no further messages when a mock is dropped
+- userplane testing of 18 bit PDCP sequence number
 - using real AUTS calculation (to catch SQN handling changes).
 - downlink packet checking of fields e.g. GTP payload length
 - dl delivery status packet with / without payload

@@ -5,7 +5,7 @@ use anyhow::{Result, anyhow, ensure};
 use async_std::channel::Sender;
 use async_std::prelude::*;
 use clap::Parser;
-use qcore::{AmfIds, Config, PlmnIdentity, QCore, SubscriberDb};
+use qcore::{AmfIds, Config, PdcpSequenceNumberLength, PlmnIdentity, QCore, SubscriberDb};
 use signal_hook::consts::signal::*;
 use signal_hook_async_std::Signals;
 use slog::{Drain, Logger, o};
@@ -83,6 +83,8 @@ async fn main() -> Result<()> {
             n6_interface_name: args.n6_interface_name,
             tun_interface_name: args.tun_interface_name,
             ue_subnet: args.ue_subnet,
+            pdcp_sn_length: PdcpSequenceNumberLength::EighteenBits,
+            five_qi: 7,
         },
         logger,
         sub_db,

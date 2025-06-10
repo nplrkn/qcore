@@ -3,6 +3,8 @@
 use asn1_per::{NonEmpty, nonempty};
 use rrc::*;
 
+use crate::{PdcpSequenceNumberLength, data::PduSession};
+
 pub fn setup(rrc_transaction_identifier: u8, master_cell_group: Vec<u8>) -> Box<DlCcchMessage> {
     Box::new(DlCcchMessage {
         message: DlCcchMessageType::C1(C1_1::RrcSetup(RrcSetup {
@@ -71,9 +73,18 @@ pub fn reconfiguration(
     rrc_transaction_identifier: u8,
     nas_messages: Option<NonEmpty<Vec<u8>>>,
     cell_group_config: Vec<u8>,
-    session_id: u8,
+    session: &PduSession,
 ) -> Box<DlDcchMessage> {
     let dedicated_nas_message_list = nas_messages.map(|x| (x.map(DedicatedNasMessage)));
+
+    let (pdcp_sn_size_ul, pdcp_sn_size_dl) = match session.userplane_info.pdcp_sn_length {
+        PdcpSequenceNumberLength::TwelveBits => {
+            (Some(PdcpSnSizeUl::Len12bits), Some(PdcpSnSizeDl::Len12bits))
+        }
+        PdcpSequenceNumberLength::EighteenBits => {
+            (Some(PdcpSnSizeUl::Len18bits), Some(PdcpSnSizeDl::Len18bits))
+        }
+    };
 
     // TODO - lots of hardcoding here
 
@@ -92,12 +103,14 @@ pub fn reconfiguration(
                     srb_3_to_release: None,
                     drb_to_add_mod_list: Some(DrbToAddModList(nonempty![DrbToAddMod {
                         cn_association: Some(CnAssociation::SdapConfig(SdapConfig {
-                            pdu_session: PduSessionId(session_id),
+                            pdu_session: PduSessionId(session.id),
                             // SRS RAN UE does not support SdapHeaderDl::Present
                             sdap_header_dl: SdapHeaderDl::Absent,
                             sdap_header_ul: SdapHeaderUl::Present,
                             default_drb: true,
-                            mapped_qos_flows_to_add: Some(nonempty![Qfi(1)]),
+                            mapped_qos_flows_to_add: Some(nonempty![Qfi(session
+                                .userplane_info
+                                .qfi)]),
                             mapped_qos_flows_to_release: None
                         })),
                         drb_identity: DrbIdentity(1),
@@ -106,8 +119,8 @@ pub fn reconfiguration(
                         pdcp_config: Some(PdcpConfig {
                             drb: Some(Drb {
                                 discard_timer: Some(DiscardTimer::Ms10),
-                                pdcp_sn_size_ul: Some(PdcpSnSizeUl::Len12bits),
-                                pdcp_sn_size_dl: Some(PdcpSnSizeDl::Len12bits),
+                                pdcp_sn_size_ul,
+                                pdcp_sn_size_dl,
                                 header_compression: HeaderCompression::NotUsed,
                                 integrity_protection: None,
                                 status_report_required: None,

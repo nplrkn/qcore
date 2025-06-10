@@ -46,11 +46,17 @@ impl GtpExtDlUserData {
 // need to be more flexible in future.
 pub const GTP_EXT_DL_DATA_DELIVERY_STATUS_LEN: usize = 12;
 
+// PDCP - TS38.323
+// 6.2.2.2 - Data PDU for DRBs with 12 bits PDCP SN
 #[repr(C, packed)]
-pub struct PdcpHdr {
-    pub byte0: u8,
-    pub byte1: u8,
+pub struct PdcpHdr12BitSn(pub [u8; 2]);
+impl PdcpHdr12BitSn {
+    pub const LEN: usize = mem::size_of::<PdcpHdr12BitSn>();
 }
-impl PdcpHdr {
-    pub const LEN: usize = mem::size_of::<PdcpHdr>();
+
+// 6.2.2.3 - Data PDU for DRBs with 18 bits PDCP SN
+#[repr(C, packed)]
+pub struct PdcpHdr18BitSn(pub [u8; 3]);
+impl PdcpHdr18BitSn {
+    pub const LEN: usize = mem::size_of::<PdcpHdr18BitSn>();
 }

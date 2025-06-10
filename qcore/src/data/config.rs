@@ -40,6 +40,18 @@ pub struct Config {
 
     // /24 UE subnet.
     pub ue_subnet: Ipv4Addr,
+
+    // PDCP sequence number length
+    pub pdcp_sn_length: PdcpSequenceNumberLength,
+
+    // 5QI
+    pub five_qi: u8,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum PdcpSequenceNumberLength {
+    TwelveBits,
+    EighteenBits,
 }
 
 impl Config {

@@ -23,7 +23,7 @@ impl<'a, A: HandlerApi> SessionEstablishmentProcedure<'a, A> {
         let session_id = hdr.pdu_session_identity;
         let session = PduSession {
             id: session_id,
-            snssai: Snssai(self.config().sst, None),
+            snssai: Snssai(self.config().sst, Some([0, 0, 0])),
             userplane_info: self.api.reserve_userplane_session(self.logger).await?,
             dnn: dnn.unwrap_or(b"internet".to_vec()),
         };
@@ -43,7 +43,7 @@ impl<'a, A: HandlerApi> SessionEstablishmentProcedure<'a, A> {
         self.ue.pdu_sessions.push(session);
 
         self.log_message("<< NasPduSessionEstablishmentAccept");
-        self.perform_rrc_reconfiguration(accept, cell_group_config, session_id)
+        self.perform_rrc_reconfiguration(accept, cell_group_config, self.ue.pdu_sessions.len() - 1)
             .await
     }
 
@@ -68,13 +68,13 @@ impl<'a, A: HandlerApi> SessionEstablishmentProcedure<'a, A> {
         &mut self,
         nas: Vec<u8>,
         cell_group_config: CellGroupConfig,
-        pdu_session_id: u8,
+        session_index: usize,
     ) -> Result<()> {
         let rrc_reconfiguration = crate::rrc::build::reconfiguration(
             0,
             Some(nonempty![nas]),
             cell_group_config.0,
-            pdu_session_id,
+            &self.ue.pdu_sessions[session_index],
         );
         self.log_message("<< RrcReconfiguration(Nas)");
         let response = self.rrc_request(SrbId(1), &rrc_reconfiguration).await?;

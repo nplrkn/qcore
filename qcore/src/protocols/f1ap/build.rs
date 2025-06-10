@@ -1,5 +1,5 @@
 //! build_f1ap - construction of F1AP messages
-use crate::{PduSession, UeContext};
+use crate::{PdcpSequenceNumberLength, PduSession, UeContext};
 use anyhow::Result;
 use asn1_per::*;
 use f1ap::*;
@@ -7,7 +7,7 @@ use rrc::{
     CellReselectionInfoCommon, CellReselectionPriority, CellReselectionServingFreqInfo,
     IntraFreqCellReselectionInfo, QHyst, QRxLevMin,
 };
-use xxap::{GtpTunnel, PduSessionId, Snssai, TransportLayerAddress};
+use xxap::{GtpTunnel, PduSessionId, TransportLayerAddress};
 
 pub fn f1_setup_response(
     r: F1SetupRequest,
@@ -141,12 +141,27 @@ fn served_cell_to_activated(
 }
 
 pub fn drb_to_be_setup_item(
-    snssai: Snssai,
-    gtp_tunnel: GtpTunnel,
-    pdu_session_id: u8,
-    qfi: u8,
-    five_qi: u8,
+    transport_layer_address: TransportLayerAddress,
+    session: &PduSession,
 ) -> DrbsToBeSetupItem {
+    let gtp_tunnel = GtpTunnel {
+        transport_layer_address,
+        gtp_teid: session.userplane_info.uplink_gtp_teid.clone(),
+    };
+
+    let five_qi = session.userplane_info.five_qi;
+    let qfi = session.userplane_info.qfi;
+    let (dlpdcpsn_length, ulpdcpsn_length) = match session.userplane_info.pdcp_sn_length {
+        PdcpSequenceNumberLength::TwelveBits => (
+            Some(PdcpsnLength::TwelveBits),
+            Some(PdcpsnLength::TwelveBits),
+        ),
+        PdcpSequenceNumberLength::EighteenBits => (
+            Some(PdcpsnLength::EighteenBits),
+            Some(PdcpsnLength::EighteenBits),
+        ),
+    };
+
     DrbsToBeSetupItem {
         drb_id: DrbId(1),
         qos_information: QosInformation::DrbInformation(DrbInformation {
@@ -166,13 +181,13 @@ pub fn drb_to_be_setup_item(
                 },
                 gbr_qos_flow_information: None,
                 reflective_qos_attribute: None,
-                pdu_session_id: Some(PduSessionId(pdu_session_id)),
+                pdu_session_id: Some(PduSessionId(session.id)),
                 ulpdu_session_aggregate_maximum_bit_rate: None,
                 qos_monitoring_request: None,
                 pdcp_terminating_node_dl_tnl_addr_info: None,
                 pdu_set_qos_parameters: None,
             },
-            snssai: snssai.into(),
+            snssai: session.snssai.into(),
             notification_control: None,
             flows_mapped_to_drb_list: FlowsMappedToDrbList(nonempty![FlowsMappedToDrbItem {
                 qos_flow_identifier: QosFlowIdentifier(qfi),
@@ -218,8 +233,8 @@ pub fn drb_to_be_setup_item(
         duplication_activation: None,
         dc_based_duplication_configured: None,
         dc_based_duplication_activation: None,
-        dlpdcpsn_length: Some(PdcpsnLength::TwelveBits),
-        ulpdcpsn_length: Some(PdcpsnLength::TwelveBits),
+        dlpdcpsn_length,
+        ulpdcpsn_length,
         additional_pdcp_duplication_tnl_list: None,
         rlc_duplication_information: None,
         sdtrlc_bearer_configuration: None,
@@ -244,14 +259,8 @@ pub fn ue_context_setup_request(
     let gnb_du_ue_ambr_ul = Some(BitRate(1_000_000));
 
     let drbs_to_be_setup_list = Some(DrbsToBeSetupList(nonempty![drb_to_be_setup_item(
-        session.snssai,
-        GtpTunnel {
-            transport_layer_address,
-            gtp_teid: session.userplane_info.uplink_gtp_teid.clone()
-        },
-        session.id,
-        session.userplane_info.qfi,
-        session.userplane_info.five_qi
+        transport_layer_address,
+        session,
     )]));
 
     Ok(Box::new(UeContextSetupRequest {

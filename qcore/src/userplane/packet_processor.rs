@@ -3,6 +3,7 @@ use super::stats::dump_stats;
 //use super::aya_log::EbpfLogger;
 use super::MAX_UES;
 use crate::UserplaneSession;
+use crate::data::PdcpSequenceNumberLength;
 use anyhow::{Result, bail, ensure};
 use async_std::{net::IpAddr, sync::Mutex};
 use aya::maps::{Array, MapData, PerCpuArray};
@@ -101,7 +102,12 @@ impl PacketProcessor {
         Ok(ebpf)
     }
 
-    pub async fn reserve_userplane_session(&self, _logger: &Logger) -> Result<UserplaneSession> {
+    pub async fn reserve_userplane_session(
+        &self,
+        five_qi: u8,
+        pdcp_sn_length: PdcpSequenceNumberLength,
+        _logger: &Logger,
+    ) -> Result<UserplaneSession> {
         let idx = self.index_pool.lock().await.new_id();
         ensure!(idx < MAX_UES, "No more slots available");
         let idx = idx as u8;
@@ -117,8 +123,14 @@ impl PacketProcessor {
         ue_addr_octets[3] = idx;
         let ue_ipv4_addr = Ipv4Addr::from(ue_addr_octets);
 
+        let pdcp_header_length = match pdcp_sn_length {
+            PdcpSequenceNumberLength::TwelveBits => 2,
+            PdcpSequenceNumberLength::EighteenBits => 3,
+        };
+
         let v = UlForwardingEntry {
             teid_top_bytes: teid[0..3].try_into().unwrap(),
+            pdcp_header_length,
         };
         let mut array = self.uplink_forwarding_table.lock().await;
         array.set(idx as u32, v, 0)?;
@@ -127,7 +139,8 @@ impl PacketProcessor {
             uplink_gtp_teid: GtpTeid(teid),
             ue_ip_addr: IpAddr::V4(ue_ipv4_addr),
             qfi: 1,
-            five_qi: 82,
+            five_qi,
+            pdcp_sn_length,
         })
     }
 
@@ -160,11 +173,17 @@ impl PacketProcessor {
         // We use the least significant byte of the UE address as the index.
         let idx = ue_ipv4.octets()[3];
 
+        let pdcp_header_length = match session.pdcp_sn_length {
+            PdcpSequenceNumberLength::TwelveBits => 2,
+            PdcpSequenceNumberLength::EighteenBits => 3,
+        };
+
         let v = DlForwardingEntry {
             next_pdcp_seq_num: 0,
             next_nr_seq_num: 0,
             teid: u32::from_be_bytes(remote_tunnel_info.gtp_teid.0),
             remote_gtp_addr: u32::from_be_bytes(gtp_remote_ipv4.octets()),
+            pdcp_header_length,
         };
         let mut array = self.downlink_forwarding_table.lock().await;
         if let Err(e) = array.set(idx as u32, v, 0) {

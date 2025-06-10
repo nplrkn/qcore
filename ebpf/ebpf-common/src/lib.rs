@@ -4,6 +4,11 @@
 #[derive(Clone, Copy, Default)]
 pub struct UlForwardingEntry {
     pub teid_top_bytes: [u8; 3],
+
+    // PDCP header length in bytes.
+    // Set to 2 to use 12 bit PDCP sequence numbers
+    // Set to 3 to use 18 bit PDCP sequence numbers
+    pub pdcp_header_length: u8,
 }
 #[cfg(feature = "user")]
 unsafe impl aya::Pod for UlForwardingEntry {}
@@ -19,6 +24,11 @@ pub struct DlForwardingEntry {
 
     // Remote IP in HOST byte order
     pub remote_gtp_addr: u32,
+
+    // PDCP header length in bytes.
+    // Set to 2 to use 12 bit PDCP sequence numbers
+    // Set to 3 to use 18 bit PDCP sequence numbers
+    pub pdcp_header_length: u8,
 }
 #[cfg(feature = "user")]
 unsafe impl aya::Pod for DlForwardingEntry {}
@@ -64,7 +74,6 @@ pub enum CounterIndex {
 }
 
 pub const MAX_GTP_EXTENSION_HEADERS: usize = 2;
-pub const PDCP_HEADER_LEN: usize = 2;
 pub const SDAP_HEADER_LEN: usize = 1;
 pub const GTP_MESSAGE_TYPE_GPDU: u8 = 255; // TS29.281, table 6.1-1
 pub const GTPU_PORT: u16 = 2152; // TS29.281

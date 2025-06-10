@@ -303,7 +303,7 @@ impl HandlerApi for QCore {
 
     async fn reserve_userplane_session(&self, logger: &Logger) -> Result<UserplaneSession> {
         self.packet_processor
-            .reserve_userplane_session(logger)
+            .reserve_userplane_session(self.config().five_qi, self.config().pdcp_sn_length, logger)
             .await
     }
 

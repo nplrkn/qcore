@@ -39,17 +39,22 @@ pub fn tc_downlink(ctx: TcContext) -> i32 {
         let entry: *mut DlForwardingEntry =
             map_lookup(&raw mut DL_FORWARDING_TABLE, forwarding_idx);
         ensure!(!entry.is_null(), DlDropUnknownUe);
+        let pdcp_hdr_len = (*entry).pdcp_header_length as u16;
 
-        const OUTER_HEADERS_LEN: u16 = (Ipv4Hdr::LEN
+        const OUTER_HEADERS_EXCL_PDCP_LEN: u16 = (Ipv4Hdr::LEN
             + UdpHdr::LEN
             + GtpHdr::LEN
             + GtpHdrOptionalFields::LEN
-            + GtpExtDlUserData::LEN
-            + PdcpHdr::LEN) as u16;
-        const REQUIRED_MIN_LEN: usize = OUTER_HEADERS_LEN as usize + EthHdr::LEN;
+            + GtpExtDlUserData::LEN) as u16;
+
+        // This is 1 byte larger than required in the case of a 12bit sequence number.
+        const REQUIRED_MIN_LEN: usize =
+            OUTER_HEADERS_EXCL_PDCP_LEN as usize + PdcpHdr18BitSn::LEN + EthHdr::LEN;
+
+        let outer_header_length = OUTER_HEADERS_EXCL_PDCP_LEN + pdcp_hdr_len;
 
         ensure!(
-            ctx.adjust_room(OUTER_HEADERS_LEN as i32, BPF_ADJ_ROOM_MAC, 0)
+            ctx.adjust_room(outer_header_length as i32, BPF_ADJ_ROOM_MAC, 0)
                 .is_ok(),
             DlInternalError
         );
@@ -111,7 +116,7 @@ pub fn tc_downlink(ctx: TcContext) -> i32 {
         (*ipv4hdr).set_version(4);
         (*ipv4hdr).set_ihl(5);
         (*ipv4hdr).tos = 0;
-        (*ipv4hdr).set_total_len(OUTER_HEADERS_LEN + inner_ip_length);
+        (*ipv4hdr).set_total_len(outer_header_length + inner_ip_length);
         (*ipv4hdr).set_id(0);
         (*ipv4hdr).frag_off = [0, 0];
         (*ipv4hdr).ttl = 64;
@@ -143,7 +148,7 @@ pub fn tc_downlink(ctx: TcContext) -> i32 {
         // UDP header
         ensure!(is_long_enough(&ctx, REQUIRED_MIN_LEN), DlInternalError);
         let udphdr: *mut UdpHdr = ptr_at(&ctx, EthHdr::LEN + Ipv4Hdr::LEN);
-        (*udphdr).set_len(inner_ip_length + OUTER_HEADERS_LEN - Ipv4Hdr::LEN as u16);
+        (*udphdr).set_len(inner_ip_length + outer_header_length - Ipv4Hdr::LEN as u16);
         (*udphdr).set_source(GTPU_PORT);
         (*udphdr).set_dest(GTPU_PORT);
         (*udphdr).set_check(0);
@@ -154,7 +159,7 @@ pub fn tc_downlink(ctx: TcContext) -> i32 {
         (*gtphdr).byte0 = 0b001_1_0_1_0_0; // version=1, PT=1, R, E=1, S=0, PN=0
         (*gtphdr).message_type = GTP_MESSAGE_TYPE_GPDU;
         let gtp_payload_length = inner_ip_length
-            + (GtpHdrOptionalFields::LEN + GtpExtDlUserData::LEN + PdcpHdr::LEN) as u16;
+            + (GtpHdrOptionalFields::LEN + GtpExtDlUserData::LEN + PdcpHdr12BitSn::LEN) as u16;
         (*gtphdr).message_length = gtp_payload_length.to_be_bytes();
         (*gtphdr).teid = teid.to_be_bytes();
         ensure!(is_long_enough(&ctx, REQUIRED_MIN_LEN), DlInternalError);
@@ -184,19 +189,34 @@ pub fn tc_downlink(ctx: TcContext) -> i32 {
         (*nr_ran_container).pad = 0;
         (*nr_ran_container).next_extension_header_type = 0;
 
-        // // --- PDCP Data PDU for DRB with 12 bit PDCP SN ---
+        // Add a 2 or 3 byte PDCP header.
         ensure!(is_long_enough(&ctx, REQUIRED_MIN_LEN), DlInternalError);
-        let pdcphdr: *mut PdcpHdr = ptr_at(
-            &ctx,
-            EthHdr::LEN
-                + Ipv4Hdr::LEN
-                + UdpHdr::LEN
-                + GtpHdr::LEN
-                + GtpHdrOptionalFields::LEN
-                + GtpExtDlUserData::LEN,
-        );
-        (*pdcphdr).byte0 = 0b1_0_0_0_0000 | (((pdcp_seq_num & 0x0f00) >> 8) as u8); // D/C, R,R,R, SN
-        (*pdcphdr).byte1 = (pdcp_seq_num & 0xff) as u8; // SN
+        if pdcp_hdr_len == 2 {
+            let pdcphdr: *mut PdcpHdr12BitSn = ptr_at(
+                &ctx,
+                EthHdr::LEN
+                    + Ipv4Hdr::LEN
+                    + UdpHdr::LEN
+                    + GtpHdr::LEN
+                    + GtpHdrOptionalFields::LEN
+                    + GtpExtDlUserData::LEN,
+            );
+            (*pdcphdr).0[0] = 0b1_0_0_0_0000 | (((pdcp_seq_num & 0x0f00) >> 8) as u8); // D/C, R,R,R, SN
+            (*pdcphdr).0[1] = (pdcp_seq_num & 0xff) as u8; // SN cont
+        } else {
+            let pdcphdr: *mut PdcpHdr18BitSn = ptr_at(
+                &ctx,
+                EthHdr::LEN
+                    + Ipv4Hdr::LEN
+                    + UdpHdr::LEN
+                    + GtpHdr::LEN
+                    + GtpHdrOptionalFields::LEN
+                    + GtpExtDlUserData::LEN,
+            );
+            (*pdcphdr).0[0] = 0b1_0_0_0_0_0_00 | (((pdcp_seq_num & 0x03000) >> 16) as u8); // D/C, R,R,R,R,R, SN
+            (*pdcphdr).0[1] = (pdcp_seq_num & 0xff00 >> 8) as u8; // SN cont
+            (*pdcphdr).0[2] = (pdcp_seq_num & 0xff) as u8; // SN cont
+        }
 
         add(DlPayloadBytes, inner_ip_length as u64);
 

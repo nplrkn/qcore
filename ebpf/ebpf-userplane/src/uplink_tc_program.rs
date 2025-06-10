@@ -75,8 +75,36 @@ pub fn tc_uplink(ctx: TcContext) -> i32 {
         );
         offset += GtpHdr::LEN;
 
+        // Look up by TEID, using the least significant byte as the index into the forwarding table.
+        let forwarding_idx = (*gtphdr).teid[3] as u32;
+        let entry: *const UlForwardingEntry =
+            map_lookup(&raw mut UL_FORWARDING_TABLE, forwarding_idx);
+        ensure!(!entry.is_null(), UlInternalError);
+        let pdcp_header_length = (*entry).pdcp_header_length as usize;
+
+        // Optimization - use u32 operations.
+        ensure!((*entry).teid_top_bytes != [0, 0, 0], UlDropUnknownTeid1);
+        ensure!(
+            (&(*gtphdr).teid)[0..3] == (*entry).teid_top_bytes,
+            UlDropUnknownTeid2
+        );
+
+        // This is for a known TEID.
+
         if (*gtphdr).byte0 != GtpHdr::GTP_VERSION_1_WITHOUT_OPTIONAL_FIELDS {
             // Process optional fields
+
+            // This should not be needed, but the verifier seems to have forgotten about
+            // the previous check - perhaps because it reused registers in the intervening
+            // code.
+            ensure!(
+                is_long_enough(
+                    &ctx,
+                    offset + GtpHdrOptionalFields::LEN + GTP_EXT_DL_DATA_DELIVERY_STATUS_LEN
+                ),
+                UlDropTooShort
+            );
+
             let gtp_ext: *const GtpHdrOptionalFields = ptr_at(&ctx, offset);
             let mut extension_type = (*gtp_ext).next_extension_header_type;
             offset += GtpHdrOptionalFields::LEN;
@@ -108,20 +136,20 @@ pub fn tc_uplink(ctx: TcContext) -> i32 {
         }
 
         ensure!(
-            is_long_enough(
-                &ctx,
-                offset + PDCP_HEADER_LEN + SDAP_HEADER_LEN + Ipv4Hdr::LEN,
-            ),
+            is_long_enough(&ctx, offset + PdcpHdr18BitSn::LEN + SDAP_HEADER_LEN,),
             UlDropTooShortExt
         );
 
-        // Now for the PDCP header, which starts with the D/C bit.  TS38.323, 6.2.1.
-        // PDCP control packets are not implemented.
+        // Now for the PDCP header, TS38.323, 6.2.1.
+        // This starts with the D/C bit.  PDCP control packets are not implemented.
         ensure!(byte_at(&ctx, offset) & 0x80 != 0, UlDropPdcpControl);
 
-        // This is a PDCP Data PDU for DRBs with 12 bit sequence number - TS38.323, 6.2.2.2.
         // Skip over the PDCP header.
-        offset += PDCP_HEADER_LEN;
+        if pdcp_header_length == 2 {
+            offset += PdcpHdr12BitSn::LEN;
+        } else {
+            offset += PdcpHdr18BitSn::LEN;
+        }
 
         // 1-byte UL SDAP header - TS37.624, 6.2.2.3
         // | D/C |  R  |              QFI                 |
@@ -132,22 +160,14 @@ pub fn tc_uplink(ctx: TcContext) -> i32 {
         offset += SDAP_HEADER_LEN;
 
         // Inner IPv4 header.
+        ensure!(
+            is_long_enough(&ctx, offset + Ipv4Hdr::LEN,),
+            UlDropTooShortExt
+        );
         let inner_ip_hdr: *const Ipv4Hdr = ptr_at(&ctx, offset);
         ensure!((*inner_ip_hdr).version() == 4, UlDropNotIpv4);
 
         // The packet is well formed.
-
-        // Look up by TEID, using the least significant byte as the index into the forwarding table.
-        let forwarding_idx = (*gtphdr).teid[3] as u32;
-        let entry: *const UlForwardingEntry =
-            map_lookup(&raw mut UL_FORWARDING_TABLE, forwarding_idx);
-        ensure!(!entry.is_null(), UlInternalError);
-
-        ensure!((*entry).teid_top_bytes != [0, 0, 0], UlDropUnknownTeid1);
-        ensure!(
-            (&(*gtphdr).teid)[0..3] == (*entry).teid_top_bytes,
-            UlDropUnknownTeid2
-        );
 
         // TODO - check that inner_ip_hdr's source IP is indeed the IP of the UE.  This requires
         // the UE IP prefix to be programmed (global / map) and we can then derive the suffix
