@@ -149,9 +149,7 @@ fn session_ambr() -> NasSessionAmbr {
     ])
 }
 
-const QFI_1: u8 = 0b00_000001;
-
-fn authorized_qos_rules() -> NasQosRules {
+fn authorized_qos_rules(qfi: u8) -> NasQosRules {
     NasQosRules::new(vec![
         // TS24.501, 9.11.4.13
         0x01, // Qos Rule Identifier = 1
@@ -164,18 +162,18 @@ fn authorized_qos_rules() -> NasQosRules {
         // Packet filter 1 contents
         0b00000001, // Packet filter type = match all
         0xff,       // QoS rule precedence,
-        QFI_1,      // spare; QFI 1
+        qfi,        // spare; QFI 1
     ])
 }
 
-fn authorized_qos_flow_descriptions(five_qi: u8) -> NasQosFlowDescriptions {
+fn authorized_qos_flow_descriptions(qfi: u8, five_qi: u8) -> NasQosFlowDescriptions {
     NasQosFlowDescriptions::new(vec![
         // TS24.501, 9.11.4.12
-        QFI_1, // QFI 1
-        0x20,  // Create new
-        0x41,  // 1 parameter supplied
-        0x01,  // Param type = 5QI
-        0x01,  // Length 1
+        qfi,  // QFI 1
+        0x20, // Create new
+        0x41, // 1 parameter supplied
+        0x01, // Param type = 5QI
+        0x01, // Length 1
         five_qi,
     ])
 }
@@ -208,6 +206,7 @@ pub fn pdu_session_establishment_accept(
     };
 
     let five_qi = pdu_session.userplane_info.five_qi;
+    let qfi = pdu_session.userplane_info.qfi;
     let dns_primary = &[0x08, 0x08, 0x08, 0x08];
     let dns_secondary = &[0x08, 0x08, 0x04, 0x04];
 
@@ -220,37 +219,38 @@ pub fn pdu_session_establishment_accept(
         value: 0b0000_0001,      // session type IPv4
     };
 
-    let inner_message =
-        Nas5gsMessage::new_5gsm(
-            Nas5gsmMessageType::PduSessionEstablishmentAccept,
-            Nas5gsmMessage::PduSessionEstablishmentAccept(NasPduSessionEstablishmentAccept {
-                selected_pdu_session_type: ssc_mode_and_selected_session_type,
-                authorized_qos_rules: authorized_qos_rules(),
-                session_ambr: session_ambr(),
-                fgsm_cause: None,
-                pdu_address: Some(nas_pdu_address(&ue_ipv4.octets())),
-                rq_timer_value: None,
-                s_nssai: Some(snssai(sst)),
-                always_on_pdu_session_indication: None,
-                mapped_eps_bearer_contexts: None,
-                eap_message: None,
-                authorized_qos_flow_descriptions: Some(authorized_qos_flow_descriptions(five_qi)),
-                extended_protocol_configuration_options: Some(
-                    extended_protocol_configuration_options(dns_primary, dns_secondary, true),
-                ),
-                dnn: Some(nas_dnn(&pdu_session.dnn)),
-                fgsm_network_feature_support: None,
-                serving_plmn_rate_control: None,
-                atsss_container: None,
-                control_plane_only_indication: None,
-                ip_header_compression_configuration: None,
-                ethernet_header_compression_configuration: None,
-                service_level_aa_container: None,
-                received_mbs_container: None,
-            }),
-            pdu_session.id,
-            pti,
-        );
+    let inner_message = Nas5gsMessage::new_5gsm(
+        Nas5gsmMessageType::PduSessionEstablishmentAccept,
+        Nas5gsmMessage::PduSessionEstablishmentAccept(NasPduSessionEstablishmentAccept {
+            selected_pdu_session_type: ssc_mode_and_selected_session_type,
+            authorized_qos_rules: authorized_qos_rules(qfi),
+            session_ambr: session_ambr(),
+            fgsm_cause: None,
+            pdu_address: Some(nas_pdu_address(&ue_ipv4.octets())),
+            rq_timer_value: None,
+            s_nssai: Some(snssai(sst)),
+            always_on_pdu_session_indication: None,
+            mapped_eps_bearer_contexts: None,
+            eap_message: None,
+            authorized_qos_flow_descriptions: Some(authorized_qos_flow_descriptions(qfi, five_qi)),
+            extended_protocol_configuration_options: Some(extended_protocol_configuration_options(
+                dns_primary,
+                dns_secondary,
+                true,
+            )),
+            dnn: Some(nas_dnn(&pdu_session.dnn)),
+            fgsm_network_feature_support: None,
+            serving_plmn_rate_control: None,
+            atsss_container: None,
+            control_plane_only_indication: None,
+            ip_header_compression_configuration: None,
+            ethernet_header_compression_configuration: None,
+            service_level_aa_container: None,
+            received_mbs_container: None,
+        }),
+        pdu_session.id,
+        pti,
+    );
     let inner_message = encode_nas_5gs_message(&inner_message)?;
     let outer_message = Nas5gsMessage::new_5gmm(
         Nas5gmmMessageType::DlNasTransport,
