@@ -47,7 +47,7 @@ Note that this configuration is lost on reboot.
 #### Terminal 1 - tcpdump
 ```sh
 cd
-sudo tcpdump -w oai_test.pcap -i any port 38472 or port 2152 or src 10.255.0.1 or dst 10.255.0.1
+sudo tcpdump -w oai_test.pcap -i any sctp or port 2152 or host 10.255.0.1
 ```
 
 #### Terminal 2 - QCore

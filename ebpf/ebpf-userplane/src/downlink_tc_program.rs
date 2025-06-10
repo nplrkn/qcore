@@ -39,7 +39,7 @@ pub fn tc_downlink(ctx: TcContext) -> i32 {
         let entry: *mut DlForwardingEntry =
             map_lookup(&raw mut DL_FORWARDING_TABLE, forwarding_idx);
         ensure!(!entry.is_null(), DlDropUnknownUe);
-        let pdcp_hdr_len = (*entry).pdcp_header_length as u16;
+        let pdcp_header_length = (*entry).pdcp_header_length as u16;
 
         const OUTER_HEADERS_EXCL_PDCP_LEN: u16 = (Ipv4Hdr::LEN
             + UdpHdr::LEN
@@ -51,7 +51,7 @@ pub fn tc_downlink(ctx: TcContext) -> i32 {
         const REQUIRED_MIN_LEN: usize =
             OUTER_HEADERS_EXCL_PDCP_LEN as usize + PdcpHdr18BitSn::LEN + EthHdr::LEN;
 
-        let outer_header_length = OUTER_HEADERS_EXCL_PDCP_LEN + pdcp_hdr_len;
+        let outer_header_length = OUTER_HEADERS_EXCL_PDCP_LEN + pdcp_header_length;
 
         ensure!(
             ctx.adjust_room(outer_header_length as i32, BPF_ADJ_ROOM_MAC, 0)
@@ -159,7 +159,8 @@ pub fn tc_downlink(ctx: TcContext) -> i32 {
         (*gtphdr).byte0 = 0b001_1_0_1_0_0; // version=1, PT=1, R, E=1, S=0, PN=0
         (*gtphdr).message_type = GTP_MESSAGE_TYPE_GPDU;
         let gtp_payload_length = inner_ip_length
-            + (GtpHdrOptionalFields::LEN + GtpExtDlUserData::LEN + PdcpHdr12BitSn::LEN) as u16;
+            + (GtpHdrOptionalFields::LEN + GtpExtDlUserData::LEN) as u16
+            + pdcp_header_length;
         (*gtphdr).message_length = gtp_payload_length.to_be_bytes();
         (*gtphdr).teid = teid.to_be_bytes();
         ensure!(is_long_enough(&ctx, REQUIRED_MIN_LEN), DlInternalError);
@@ -191,7 +192,7 @@ pub fn tc_downlink(ctx: TcContext) -> i32 {
 
         // Add a 2 or 3 byte PDCP header.
         ensure!(is_long_enough(&ctx, REQUIRED_MIN_LEN), DlInternalError);
-        if pdcp_hdr_len == 2 {
+        if pdcp_header_length == 2 {
             let pdcphdr: *mut PdcpHdr12BitSn = ptr_at(
                 &ctx,
                 EthHdr::LEN
@@ -214,7 +215,7 @@ pub fn tc_downlink(ctx: TcContext) -> i32 {
                     + GtpExtDlUserData::LEN,
             );
             (*pdcphdr).0[0] = 0b1_0_0_0_0_0_00 | (((pdcp_seq_num & 0x03000) >> 16) as u8); // D/C, R,R,R,R,R, SN
-            (*pdcphdr).0[1] = (pdcp_seq_num & 0xff00 >> 8) as u8; // SN cont
+            (*pdcphdr).0[1] = ((pdcp_seq_num & 0xff00) >> 8) as u8; // SN cont
             (*pdcphdr).0[2] = (pdcp_seq_num & 0xff) as u8; // SN cont
         }
 
