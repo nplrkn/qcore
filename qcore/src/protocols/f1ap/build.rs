@@ -162,6 +162,13 @@ pub fn drb_to_be_setup_item(
         ),
     };
 
+    // Temp code
+    let rlc_mode = if five_qi == 9 {
+        RlcMode::RlcAm
+    } else {
+        RlcMode::RlcUmBidirectional
+    };
+
     DrbsToBeSetupItem {
         drb_id: DrbId(1),
         qos_information: QosInformation::DrbInformation(DrbInformation {
@@ -228,7 +235,7 @@ pub fn drb_to_be_setup_item(
                 drb_mapping_info: None
             },
         ]),
-        rlc_mode: RlcMode::RlcUmBidirectional,
+        rlc_mode,
         ul_configuration: None,
         duplication_activation: None,
         dc_based_duplication_configured: None,
