@@ -6,13 +6,13 @@ use rrc::{C1_6, UlDcchMessage, UlDcchMessageType};
 define_ue_procedure!(RrcReconfigurationProcedure);
 
 impl<'a, A: HandlerApi> RrcReconfigurationProcedure<'a, A> {
-    pub async fn run(mut self, nas: Vec<u8>, session_index: usize) -> Result<()> {
+    pub async fn run(
+        mut self,
+        nas: Vec<u8>,
+        session_index: usize,
+        cell_group_config: Vec<u8>,
+    ) -> Result<()> {
         let session = &mut self.ue.pdu_sessions[session_index];
-        let cell_group_config = session
-            .cell_group_config
-            .take()
-            .map(|x| x.0)
-            .ok_or(anyhow!("Cell group config missing"))?;
         let rrc_reconfiguration =
             crate::rrc::build::reconfiguration(0, Some(nonempty![nas]), session, cell_group_config);
         self.log_message("<< RrcReconfiguration(Nas)");

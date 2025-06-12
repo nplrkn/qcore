@@ -2,7 +2,8 @@
 use anyhow::Result;
 use asn1_per::*;
 use ngap::*;
-use xxap::{PlmnIdentity, Snssai};
+use xxap::{GtpTunnel, PduSessionId, PlmnIdentity, Snssai, TransportLayerAddress};
+use crate::data::PduSession;
 
 pub fn ng_setup_response(
     guami: &Guami,
@@ -137,4 +138,79 @@ pub fn downlink_nas_transport(
         end_indication: None,
         ue_radio_capability_id: None,
     })
+}
+
+pub fn pdu_session_resource_setup_request(
+    amf_ue_ngap_id: AmfUeNgapId,
+    ran_ue_ngap_id: RanUeNgapId,
+    pdu_session: &PduSession,
+    transport_layer_address: TransportLayerAddress,
+    nas: Vec<u8>,
+) -> Result<Box<PduSessionResourceSetupRequest>> {
+    let pdu_session_resource_setup_request_transfer = PduSessionResourceSetupRequestTransfer {
+        pdu_session_aggregate_maximum_bit_rate: Some(PduSessionAggregateMaximumBitRate {
+            pdu_session_aggregate_maximum_bit_rate_dl: BitRate(768_000_000),
+            pdu_session_aggregate_maximum_bit_rate_ul: BitRate(768_000_000),
+        }),
+        ul_ngu_up_tnl_information: UpTransportLayerInformation::GtpTunnel(GtpTunnel {
+            transport_layer_address,
+            gtp_teid: pdu_session.userplane_info.uplink_gtp_teid,
+        }),
+        additional_ul_ngu_up_tnl_information: None,
+        data_forwarding_not_possible: None,
+        pdu_session_type: PduSessionType::Ipv4,
+        security_indication: None,
+        network_instance: None,
+        qos_flow_setup_request_list: QosFlowSetupRequestList(nonempty![QosFlowSetupRequestItem {
+            qos_flow_identifier: QosFlowIdentifier(1),
+            qos_flow_level_qos_parameters: QosFlowLevelQosParameters {
+                qos_characteristics: QosCharacteristics::NonDynamic5qi(NonDynamic5qiDescriptor {
+                    five_qi: FiveQi(pdu_session.userplane_info.five_qi),
+                    priority_level_qos: None,
+                    averaging_window: None,
+                    maximum_data_burst_volume: None,
+                    cn_packet_delay_budget_dl: None,
+                    cn_packet_delay_budget_ul: None
+                }),
+                allocation_and_retention_priority: AllocationAndRetentionPriority {
+                    priority_level_arp: PriorityLevelArp(8),
+                    pre_emption_capability: PreEmptionCapability::ShallNotTriggerPreEmption,
+                    pre_emption_vulnerability: PreEmptionVulnerability::PreEmptable
+                },
+                gbr_qos_information: None,
+                reflective_qos_attribute: None,
+                additional_qos_flow_information: None,
+                qos_monitoring_request: None,
+                qos_monitoring_reporting_frequency: None
+            },
+            e_rab_id: None,
+            tsc_traffic_characteristics: None,
+            redundant_qos_flow_indicator: None
+        }]),
+        common_network_instance: None,
+        direct_forwarding_path_availability: None,
+        redundant_ul_ngu_up_tnl_information: None,
+        additional_redundant_ul_ngu_up_tnl_information: None,
+        redundant_common_network_instance: None,
+        redundant_pdu_session_information: None,
+    }
+    .as_bytes()?;
+    Ok(Box::new(PduSessionResourceSetupRequest {
+        amf_ue_ngap_id,
+        ran_ue_ngap_id,
+        ran_paging_priority: None,
+        nas_pdu: None,
+        pdu_session_resource_setup_list_su_req: PduSessionResourceSetupListSuReq(nonempty![
+            PduSessionResourceSetupItemSuReq {
+                pdu_session_id: PduSessionId(pdu_session.id),
+                pdu_session_nas_pdu: Some(NasPdu(nas)),
+                snssai: pdu_session.snssai.into(),
+                pdu_session_resource_setup_request_transfer
+            }
+        ]),
+        ue_aggregate_maximum_bit_rate: Some(UeAggregateMaximumBitRate {
+            ue_aggregate_maximum_bit_rate_dl: BitRate(768_000_000),
+            ue_aggregate_maximum_bit_rate_ul: BitRate(768_000_000),
+        }),
+    }))
 }

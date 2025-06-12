@@ -1,6 +1,5 @@
-use crate::data::PduSession;
-
 use super::prelude::*;
+use crate::data::PduSession;
 use f1ap::{
     CellGroupConfig, DlUpTnlInformationToBeSetupItem, DuToCuRrcInformation, UeContextSetupResponse,
     UpTransportLayerInformation,
@@ -9,7 +8,10 @@ use xxap::GtpTunnel;
 
 define_ue_procedure!(UeContextSetupProcedure);
 impl<'a, A: HandlerApi> UeContextSetupProcedure<'a, A> {
-    pub async fn run(self, session: &mut PduSession) -> Result<UeProcedure<'a, A>> {
+    pub async fn run(
+        self,
+        session: &mut PduSession,
+    ) -> Result<(UeProcedure<'a, A>, CellGroupConfig)> {
         let ue_context_setup_request = crate::f1ap::build::ue_context_setup_request(
             self.ue,
             self.config().ip_addr.into(),
@@ -21,9 +23,8 @@ impl<'a, A: HandlerApi> UeContextSetupProcedure<'a, A> {
             .await?;
         self.log_message(">> UeContextSetupResponse");
         let (cell_group_config, gtp_tunnel) = self.check_ue_context_setup_response(rsp)?;
-        session.cell_group_config = Some(cell_group_config);
         session.userplane_info.remote_tunnel_info = Some(gtp_tunnel);
-        Ok(self.0)
+        Ok((self.0, cell_group_config))
     }
 
     fn check_ue_context_setup_response(

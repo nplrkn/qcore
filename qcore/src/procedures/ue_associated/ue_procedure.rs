@@ -6,17 +6,17 @@ use crate::{
         UeMessage,
         ue_associated::{
             F1apBase, InitialContextSetupProcedure, InitialUeMessageProcedure, NasBase,
-            RrcReconfigurationProcedure, RrcSecurityModeProcedure, RrcSetupProcedure,
-            UeContextReleaseProcedure, UeContextSetupProcedure, UlInformationTransferProcedure,
-            UplinkNasTransportProcedure,
+            PduSessionResourceSetupProcedure, RrcReconfigurationProcedure,
+            RrcSecurityModeProcedure, RrcSetupProcedure, UeContextReleaseProcedure,
+            UeContextSetupProcedure, UlInformationTransferProcedure, UplinkNasTransportProcedure,
         },
     },
 };
 use asn1_per::SerDes;
 use async_std::channel::{Receiver, Sender};
 use f1ap::{
-    DlRrcMessageTransferProcedure, F1apPdu, InitiatingMessage, RrcContainer, SrbId,
-    UlRrcMessageTransfer,
+    CellGroupConfig, DlRrcMessageTransferProcedure, F1apPdu, InitiatingMessage, RrcContainer,
+    SrbId, UlRrcMessageTransfer,
 };
 use ngap::{AmfUeNgapId, NgapPdu, UplinkNasTransport};
 use oxirush_nas::{Nas5gsMessage, messages::Nas5gsSecurityHeader};
@@ -38,6 +38,11 @@ impl<'a, A: HandlerApi> std::ops::Deref for UeProcedure<'a, A> {
     fn deref(&self) -> &Self::Target {
         &self.base
     }
+}
+
+pub enum RanSessionSetupState {
+    Ngap,
+    F1ap(CellGroupConfig, Vec<u8>),
 }
 
 impl<'a, A: HandlerApi> UeProcedure<'a, A> {
@@ -64,23 +69,42 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         }
     }
 
-    pub async fn ran_session_setup_phase1(self, session: &mut PduSession) -> Result<Self> {
-        let inner = if self.ngap_mode() {
-            todo!()
+    pub async fn ran_session_setup_phase1(
+        self,
+        session: &mut PduSession,
+        nas_accept: Vec<u8>,
+    ) -> Result<(Self, RanSessionSetupState)> {
+        if self.ngap_mode() {
+            self.log_message("<< Nas PduSessionEstablishmentAccept");
+            PduSessionResourceSetupProcedure::new(self)
+                .run(session, nas_accept)
+                .await
+                .map(|inner| (inner, RanSessionSetupState::Ngap))
         } else {
-            UeContextSetupProcedure::new(self).run(session).await
-        }?;
-        assert!(session.userplane_info.remote_tunnel_info.is_some());
-        Ok(inner)
+            UeContextSetupProcedure::new(self).run(session).await.map(
+                |(inner, cell_group_config)| {
+                    (
+                        inner,
+                        RanSessionSetupState::F1ap(cell_group_config, nas_accept),
+                    )
+                },
+            )
+        }
     }
 
-    pub async fn ran_session_setup_phase2(self, nas: Vec<u8>, session_index: usize) -> Result<()> {
-        if self.ngap_mode() {
-            todo!()
-        } else {
-            RrcReconfigurationProcedure::new(self)
-                .run(nas, session_index)
-                .await
+    pub async fn ran_session_setup_phase2(
+        self,
+        session_index: usize,
+        ran_session_setup_state: RanSessionSetupState,
+    ) -> Result<()> {
+        match ran_session_setup_state {
+            RanSessionSetupState::Ngap => Ok(()),
+            RanSessionSetupState::F1ap(cell_group_config, nas) => {
+                self.log_message("<< NasPduSessionEstablishmentAccept");
+                RrcReconfigurationProcedure::new(self)
+                    .run(nas, session_index, cell_group_config.0)
+                    .await
+            }
         }
     }
 

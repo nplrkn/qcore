@@ -20,10 +20,7 @@ impl<'a, A: HandlerApi> SessionEstablishmentProcedure<'a, A> {
             snssai: Snssai(self.config().sst, Some([0, 0, 0])),
             userplane_info: self.api.reserve_userplane_session(self.logger).await?,
             dnn: dnn.unwrap_or(b"internet".to_vec()),
-            cell_group_config: None,
         };
-
-        self.0 = self.0.ran_session_setup_phase1(&mut session).await?;
 
         let accept = crate::nas::build::pdu_session_establishment_accept(
             &session,
@@ -32,12 +29,19 @@ impl<'a, A: HandlerApi> SessionEstablishmentProcedure<'a, A> {
         )?;
         let accept = self.ue.nas.encode(accept)?;
 
+        let (inner, ran_session_setup_state) = self
+            .0
+            .ran_session_setup_phase1(&mut session, accept)
+            .await?;
+        self.0 = inner;
+
         self.commit_userplane_session(&session.userplane_info, self.logger)
             .await?;
         self.ue.pdu_sessions.push(session);
         let session_index = self.ue.pdu_sessions.len() - 1;
 
-        self.log_message("<< NasPduSessionEstablishmentAccept");
-        self.0.ran_session_setup_phase2(accept, session_index).await
+        self.0
+            .ran_session_setup_phase2(session_index, ran_session_setup_state)
+            .await
     }
 }
