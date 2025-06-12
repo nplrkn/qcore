@@ -21,7 +21,7 @@ use std::net::IpAddr;
 use std::ops::Deref;
 use std::sync::Arc;
 use xxap::{
-    GtpTunnel, Indication, IndicationHandler, Procedure, RequestError, RequestProvider,
+    Indication, IndicationHandler, Procedure, RequestError, RequestProvider,
     SctpTransportProvider, ShutdownHandle, Stack,
 };
 
@@ -310,11 +310,10 @@ impl HandlerApi for QCore {
     async fn commit_userplane_session(
         &self,
         session: &UserplaneSession,
-        remote_tunnel_info: GtpTunnel,
         logger: &Logger,
     ) -> Result<()> {
         self.packet_processor
-            .commit_userplane_session(session, remote_tunnel_info, logger)
+            .commit_userplane_session(session, logger)
             .await
     }
 

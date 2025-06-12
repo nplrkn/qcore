@@ -1,12 +1,14 @@
 use super::prelude::*;
 use crate::{
     NasContext, UeContext,
+    data::PduSession,
     procedures::{
         UeMessage,
         ue_associated::{
             F1apBase, InitialContextSetupProcedure, InitialUeMessageProcedure, NasBase,
-            RrcSecurityModeProcedure, RrcSetupProcedure, UeContextReleaseProcedure,
-            UlInformationTransferProcedure,
+            RrcReconfigurationProcedure, RrcSecurityModeProcedure, RrcSetupProcedure,
+            UeContextReleaseProcedure, UeContextSetupProcedure, UlInformationTransferProcedure,
+            UplinkNasTransportProcedure,
         },
     },
 };
@@ -54,11 +56,31 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         }
     }
 
-    pub async fn perform_ran_ue_registration_actions(self, kgnb: &[u8; 32]) -> Result<Self> {
+    pub async fn ran_ue_registration(self, kgnb: &[u8; 32]) -> Result<Self> {
         if self.ngap_mode() {
             InitialContextSetupProcedure::new(self).run(kgnb).await
         } else {
             RrcSecurityModeProcedure::new(self).run(&kgnb).await
+        }
+    }
+
+    pub async fn ran_session_setup_phase1(self, session: &mut PduSession) -> Result<Self> {
+        let inner = if self.ngap_mode() {
+            todo!()
+        } else {
+            UeContextSetupProcedure::new(self).run(session).await
+        }?;
+        assert!(session.userplane_info.remote_tunnel_info.is_some());
+        Ok(inner)
+    }
+
+    pub async fn ran_session_setup_phase2(self, nas: Vec<u8>, session_index: usize) -> Result<()> {
+        if self.ngap_mode() {
+            todo!()
+        } else {
+            RrcReconfigurationProcedure::new(self)
+                .run(nas, session_index)
+                .await
         }
     }
 
@@ -81,13 +103,17 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
     async fn ngap_dispatch(self, pdu: Box<NgapPdu>) -> Result<()> {
         match *pdu {
             NgapPdu::InitiatingMessage(ngap::InitiatingMessage::InitialUeMessage(r)) => {
-                self.log_message(">> Ngap InitialUeMessage");
                 InitialUeMessageProcedure::new(self)
                     .run(Box::new(r))
                     .await?
             }
+            NgapPdu::InitiatingMessage(ngap::InitiatingMessage::UplinkNasTransport(r)) => {
+                UplinkNasTransportProcedure::new(self)
+                    .run(Box::new(r))
+                    .await?
+            }
             pdu => {
-                bail!("Unsupported F1apPdu {pdu:?}");
+                bail!("Unsupported NgapPdu {pdu:?}");
             }
         }
         Ok(())

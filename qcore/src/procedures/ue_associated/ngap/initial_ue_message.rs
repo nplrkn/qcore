@@ -7,6 +7,7 @@ define_ue_procedure!(InitialUeMessageProcedure);
 
 impl<'a, A: HandlerApi> InitialUeMessageProcedure<'a, A> {
     pub async fn run(mut self, r: Box<InitialUeMessage>) -> Result<()> {
+        self.log_message(">> Ngap InitialUeMessage");
         let nas_bytes = r.nas_pdu.0;
         if let Ok((nas_message, security_header)) = self.nas_decode_with_security_header(&nas_bytes)
         {

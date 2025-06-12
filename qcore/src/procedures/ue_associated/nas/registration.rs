@@ -49,8 +49,8 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                 triggered the AS SMC to be sent as freshness parameter in the derivation of the initial KgNB/KeNB.           */
                 debug!(self.logger, "UL NAS COUNT {}", self.ue.nas.ul_nas_count());
                 let kgnb = security::derive_kgnb(&self.ue.kamf, self.ue.nas.ul_nas_count());
-                let inner = self.0.perform_ran_ue_registration_actions(&kgnb).await?;
-                RegistrationProcedure(inner).accept_registration().await?;
+                self.0 = self.0.ran_ue_registration(&kgnb).await?;
+                self.accept_registration().await?;
             }
             Err(cause) => self.reject_registration(cause).await?,
         }

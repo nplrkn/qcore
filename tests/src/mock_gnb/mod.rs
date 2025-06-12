@@ -2,7 +2,7 @@
 
 use super::userplane::MockUserplane;
 use crate::mock::{Mock, Pdu, ReceivedPdu};
-use anyhow::{Result, bail};
+use anyhow::{Result, bail, ensure};
 use asn1_per::{Msb0, bitvec};
 use async_net::IpAddr;
 use ngap::*;
@@ -90,6 +90,31 @@ impl MockGnb {
             bail!("Unexpected Ngap message {:?}", pdu)
         };
         info!(self.logger, "NgSetupResponse <<");
+        Ok(())
+    }
+
+    pub async fn handle_pdu_session_resource_setup_with_session_accept(&self) -> Result<()> {
+        let pdu = self.receive_pdu().await?;
+        let NgapPdu::InitiatingMessage(InitiatingMessage::PduSessionResourceSetupRequest(
+            PduSessionResourceSetupRequest {
+                amf_ue_ngap_id,
+                ran_ue_ngap_id,
+                nas_pdu,
+                ..
+            },
+        )) = *pdu
+        else {
+            bail!("Unexpected Ngap message {:?}", pdu)
+        };
+        info!(self.logger, "PduSessionResourceSetupRequest <<");
+        ensure!(nas_pdu.is_some(), "Expected NAS PDU");
+        let pdu = build_ngap::pdu_session_resource_setup_response(
+            amf_ue_ngap_id,
+            ran_ue_ngap_id,
+            &self.local_ip,
+        )?;
+        info!(self.logger, "PduSessionResourceSetupResponse >>");
+        self.send(&pdu, None).await;
         Ok(())
     }
 

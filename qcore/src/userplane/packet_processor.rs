@@ -4,7 +4,7 @@ use super::stats::dump_stats;
 use super::MAX_UES;
 use crate::UserplaneSession;
 use crate::data::PdcpSequenceNumberLength;
-use anyhow::{Result, bail, ensure};
+use anyhow::{Result, anyhow, bail, ensure};
 use async_std::{net::IpAddr, sync::Mutex};
 use aya::maps::{Array, MapData, PerCpuArray};
 use aya::programs::{SchedClassifier, TcAttachType, tc};
@@ -17,7 +17,7 @@ use slog::{Logger, info, warn};
 use std::ffi::CString;
 use std::net::Ipv4Addr;
 use std::sync::Arc;
-use xxap::{GtpTeid, GtpTunnel};
+use xxap::GtpTeid;
 
 #[derive(Clone)]
 pub struct PacketProcessor {
@@ -141,15 +141,20 @@ impl PacketProcessor {
             qfi: 1,
             five_qi,
             pdcp_sn_length,
+            remote_tunnel_info: None,
         })
     }
 
     pub async fn commit_userplane_session(
         &self,
         session: &UserplaneSession,
-        remote_tunnel_info: GtpTunnel,
         logger: &Logger,
     ) -> Result<()> {
+        let remote_tunnel_info = session
+            .remote_tunnel_info
+            .clone()
+            .ok_or(anyhow!("Missing tunnel info"))?;
+
         info!(
             logger,
             "Set up userplane session {}, remote {}-{}",
