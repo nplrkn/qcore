@@ -256,7 +256,7 @@ pub fn ue_context_setup_request(
     session: &PduSession,
 ) -> Result<Box<UeContextSetupRequest>> {
     // TODO: avoid hardcoding
-    let gnb_du_ue_ambr_ul = Some(BitRate(1_000_000));
+    let gnb_du_ue_ambr_ul = Some(BitRate(768_000_000));
 
     let drbs_to_be_setup_list = Some(DrbsToBeSetupList(nonempty![drb_to_be_setup_item(
         transport_layer_address,

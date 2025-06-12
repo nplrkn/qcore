@@ -142,14 +142,15 @@ fn session_ambr() -> NasSessionAmbr {
     // TODO - make configurable
     NasSessionAmbr::new(vec![
         // TS24.501, 9.11.4.14
-        0b00000110, // Unit for downlink = Mbps
-        0x00, 0x01,       // Downlink session AMBR = 1 Mbps
-        0b00000110, // Unit for uplink = Mbps
-        0x00, 0x01, // Uplink session AMBR = 1 Mbps
+        0x0a, // Unit for downlink = 256Mbps
+        0x00, 0x03, // Downlink session AMBR = 768Mbps
+        0x0a, // Unit for uplink = 256Mbps
+        0x00, 0x03, // Uplink session AMBR = 768Mbps
     ])
 }
 
 fn authorized_qos_rules(qfi: u8) -> NasQosRules {
+    let packet_filter_identifier = 0b0001 as u8;
     NasQosRules::new(vec![
         // TS24.501, 9.11.4.13
         0x01, // Qos Rule Identifier = 1
@@ -157,8 +158,8 @@ fn authorized_qos_rules(qfi: u8) -> NasQosRules {
         0x06,         // Length of QoS rule
         0b001_1_0001, // Rule operation code 001 (create new); default Qos Rule 1; number of packet filters = 1,
         // Packet filter 1
-        0b00_11_1111, // Packet filter direction = 11 (bidirectional); packet filter identifier = 1111
-        0x01,         // Length of packet filter contents
+        0b00_11_0000 | packet_filter_identifier, // Packet filter direction = 11 (bidirectional); packet filter identifier = 0001
+        0x01,                                    // Length of packet filter contents
         // Packet filter 1 contents
         0b00000001, // Packet filter type = match all
         0xff,       // QoS rule precedence,
@@ -307,7 +308,7 @@ fn extended_protocol_configuration_options(
     epco.extend_from_slice(&[
         0x00, 0x10, // Link MTU
         0x02, // Length
-        0x05, 0xdc, // 1500
+        0x05, 0x78, // 1400
     ]);
     NasExtendedProtocolConfigurationOptions::new(epco)
 }
