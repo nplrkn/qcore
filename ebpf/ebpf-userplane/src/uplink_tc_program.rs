@@ -199,3 +199,171 @@ pub fn tc_uplink(ctx: TcContext) -> i32 {
         redirect_to_linux_routing()
     }
 }
+
+// To be commonized
+#[classifier]
+pub fn tc_uplink_n3(ctx: TcContext) -> i32 {
+    unsafe {
+        if !is_long_enough(&ctx, EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN) {
+            return TC_ACT_OK;
+        }
+
+        let ethhdr: *const EthHdr = ptr_at(&ctx, 0);
+        match (*ethhdr).ether_type {
+            EtherType::Ipv4 => {}
+            _ => return TC_ACT_OK,
+        }
+
+        let ipv4hdr: *const Ipv4Hdr = ptr_at(&ctx, EthHdr::LEN);
+        match (*ipv4hdr).proto {
+            IpProto::Udp => {}
+            _ => return TC_ACT_OK,
+        }
+        let ip_len = (*ipv4hdr).total_len();
+
+        if (*ipv4hdr).dst_addr != read_local_ipv4() {
+            return TC_ACT_OK;
+        }
+
+        let udphdr: *const UdpHdr = ptr_at(&ctx, EthHdr::LEN + Ipv4Hdr::LEN);
+        if (*udphdr).dest() != GTPU_PORT {
+            return TC_ACT_OK;
+        }
+
+        // This packet is addressed to our GTP-U port.
+        inc(UlRxPkts);
+
+        // The shortest valid packet is a zero payload IPv4 packet.
+        ensure!(
+            is_long_enough(
+                &ctx,
+                EthHdr::LEN
+                    + Ipv4Hdr::LEN
+                    + UdpHdr::LEN
+                    + GtpHdr::LEN
+                    + GtpHdrOptionalFields::LEN
+                    + GTP_EXT_PDU_SESSION_CONTAINER_LEN
+                    + Ipv4Hdr::LEN
+            ),
+            UlDropTooShort
+        );
+
+        let gtphdr: *const GtpHdr = ptr_at(&ctx, EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN);
+        ensure!(
+            (*gtphdr).message_type == GTP_MESSAGE_TYPE_GPDU,
+            UlDropGtpMessageType
+        );
+
+        // Look up by TEID, using the least significant byte as the index into the forwarding table.
+        let forwarding_idx = (*gtphdr).teid[3] as u32;
+        let entry: *const UlForwardingEntry =
+            map_lookup(&raw mut UL_FORWARDING_TABLE, forwarding_idx);
+        ensure!(!entry.is_null(), UlInternalError);
+        let pdcp_header_length = (*entry).pdcp_header_length as usize;
+
+        // Optimization - use u32 operations.
+        ensure!((*entry).teid_top_bytes != [0, 0, 0], UlDropUnknownTeid1);
+        ensure!(
+            (&(*gtphdr).teid)[0..3] == (*entry).teid_top_bytes,
+            UlDropUnknownTeid2
+        );
+
+        ensure!(
+            (*gtphdr).byte0 == GtpHdr::GTP_VERSION_1_WITH_EXTENSION,
+            UlDropUnsupportedExtension
+        );
+        ensure!(
+            is_long_enough(
+                &ctx,
+                EthHdr::LEN
+                    + Ipv4Hdr::LEN
+                    + UdpHdr::LEN
+                    + GtpHdr::LEN
+                    + GtpHdrOptionalFields::LEN
+                    + GtpExtPduSessionContainer::LEN
+            ),
+            UlDropTooShort
+        );
+
+        let gtp_ext: *const GtpHdrOptionalFields =
+            ptr_at(&ctx, EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + GtpHdr::LEN);
+        ensure!(
+            (*gtp_ext).next_extension_header_type == GTP_EXT_PDU_SESSSION_CONTAINER,
+            UlDropUnsupportedExtension
+        );
+        let session_container: *const GtpExtPduSessionContainer = ptr_at(
+            &ctx,
+            EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + GtpHdr::LEN + GtpHdrOptionalFields::LEN,
+        );
+
+        // Exactly one extension header is supported, of length 4
+        ensure!(
+            (*session_container).len == (GtpExtPduSessionContainer::LEN / 4) as u8,
+            UlDropExtLength
+        );
+        ensure!(
+            (*session_container).next_extension_type == 0,
+            UlDropUnsupportedExtension
+        );
+
+        // Inner IPv4 header.
+        ensure!(
+            is_long_enough(
+                &ctx,
+                EthHdr::LEN
+                    + Ipv4Hdr::LEN
+                    + UdpHdr::LEN
+                    + GtpHdr::LEN
+                    + GtpHdrOptionalFields::LEN
+                    + GtpExtPduSessionContainer::LEN
+                    + Ipv4Hdr::LEN,
+            ),
+            UlDropTooShortExt
+        );
+        let inner_ip_hdr: *const Ipv4Hdr = ptr_at(
+            &ctx,
+            EthHdr::LEN
+                + Ipv4Hdr::LEN
+                + UdpHdr::LEN
+                + GtpHdr::LEN
+                + GtpHdrOptionalFields::LEN
+                + GtpExtPduSessionContainer::LEN,
+        );
+        ensure!((*inner_ip_hdr).version() == 4, UlDropNotIpv4);
+
+        // The packet is well formed.
+
+        // TODO - check that inner_ip_hdr's source IP is indeed the IP of the UE.  This requires
+        // the UE IP prefix to be programmed (global / map) and we can then derive the suffix
+        // from the GTP TEID.
+
+        // All clear to forward this.
+
+        // Remove the outer packet encapsulation, meaning that the original Ethernet header
+        // now sits on top of the inner IP header.
+        //
+        // This is inefficient because it involves a memmove under the covers (bpf_skb_generic_pop())
+        // as part of the guardrails that eBPF imposes on TC programs.
+        let new_ethhdr_offset = (Ipv4Hdr::LEN
+            + UdpHdr::LEN
+            + GtpHdr::LEN
+            + GtpHdrOptionalFields::LEN
+            + GtpExtPduSessionContainer::LEN) as i32;
+        let ret = ctx.adjust_room(-new_ethhdr_offset, BPF_ADJ_ROOM_MAC, 0);
+        ensure!(ret.is_ok(), UlInternalError);
+
+        // We don't need to update the Ethernet header.  This is going out a tun interface
+        // and it seems Linux only looks at the L3 header part of the SKB.
+
+        // In our bandwidth counters we distinguish between
+        // - header bytes: the outer IP, UDP, GTP, and PDCP headers - i.e. the overhead that we have just
+        //   stripped off
+        // - payload bytes: the IP packet as sent out on N6
+        add(UlRxHeaderBytes, new_ethhdr_offset as u64);
+        add(UlPayloadBytes, ip_len as u64);
+
+        // Emit the packet as if it comes from the "ue" tun.
+        // Even though this has an Ethernet header - which is wrong for an L3 interface - Linux is ok to process it
+        redirect_to_linux_routing()
+    }
+}

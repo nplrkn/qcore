@@ -21,8 +21,8 @@ use std::net::IpAddr;
 use std::ops::Deref;
 use std::sync::Arc;
 use xxap::{
-    Indication, IndicationHandler, Procedure, RequestError, RequestProvider,
-    SctpTransportProvider, ShutdownHandle, Stack,
+    Indication, IndicationHandler, Procedure, RequestError, RequestProvider, SctpTransportProvider,
+    ShutdownHandle, Stack,
 };
 
 #[derive(Clone)]
@@ -69,6 +69,7 @@ impl QCore {
     ) -> Result<ProgramHandle> {
         let local_ip = config.ip_addr;
         let mut ebpf = PacketProcessor::install_ebpf(
+            ngap_mode,
             local_ip,
             &config.f1u_interface_name,
             &config.n6_interface_name,

@@ -53,6 +53,7 @@ impl PacketProcessor {
     }
 
     pub fn install_ebpf(
+        ngap_mode: bool,
         local_ip: IpAddr,
         f1u_if_name: &str,
         n6_if_name: &str,
@@ -89,8 +90,14 @@ impl PacketProcessor {
         //     warn!(logger, "failed to initialize eBPF logger: {e}");
         // }
 
+        let uplink_program = if ngap_mode {
+            "tc_uplink_n3"
+        } else {
+            "tc_uplink"
+        };
+
         let _ = tc::qdisc_add_clsact(f1u_if_name);
-        let program: &mut SchedClassifier = ebpf.program_mut("tc_uplink").unwrap().try_into()?;
+        let program: &mut SchedClassifier = ebpf.program_mut(uplink_program).unwrap().try_into()?;
         program.load()?;
         program.attach(f1u_if_name, TcAttachType::Ingress)?;
 

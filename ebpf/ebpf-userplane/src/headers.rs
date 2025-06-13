@@ -11,7 +11,8 @@ pub struct GtpHdr {
 
 impl GtpHdr {
     pub const LEN: usize = mem::size_of::<GtpHdr>();
-    pub const GTP_VERSION_1_WITHOUT_OPTIONAL_FIELDS: u8 = 0x30;
+    pub const GTP_VERSION_1_WITHOUT_OPTIONAL_FIELDS: u8 = 0b001_1_0_0_0_0;
+    pub const GTP_VERSION_1_WITH_EXTENSION: u8 = 0b001_1_0_1_0_0;
 }
 #[repr(C, packed)]
 pub struct GtpHdrOptionalFields {
@@ -23,7 +24,19 @@ impl GtpHdrOptionalFields {
     pub const LEN: usize = mem::size_of::<GtpHdrOptionalFields>();
 }
 
+#[repr(C, packed)]
+pub struct GtpExtPduSessionContainer {
+    pub len: u8,
+    pub byte2: u8, // PDU type, QMP, DL delay, UL delay, SNP
+    pub byte3: u8, // N3 delay, new IE, QFI
+    pub next_extension_type: u8,
+}
+impl GtpExtPduSessionContainer {
+    pub const LEN: usize = mem::size_of::<GtpExtPduSessionContainer>();
+}
+
 pub const GTP_EXT_NR_RAN_CONTAINER: u8 = 0x84;
+pub const GTP_EXT_PDU_SESSSION_CONTAINER: u8 = 0x85;
 
 // DL USER DATA (TS38.425 - 5.5.2.1), wrapped in a GTP NR Ran Container extension header.
 #[repr(C, packed)]
@@ -41,6 +54,10 @@ impl GtpExtDlUserData {
     pub const LEN: usize = mem::size_of::<GtpExtDlUserData>();
 }
 
+// For N3
+pub const GTP_EXT_PDU_SESSION_CONTAINER_LEN: usize = 4;
+
+// For F1-U
 // DL DATA DELIVERY STATUS - 5.5.2.1
 // This is a potentially much larger structure so this will likely
 // need to be more flexible in future.
