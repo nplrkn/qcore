@@ -108,7 +108,7 @@ impl MockUserplane {
         self.send_gtp(pkt, remote_gtpu_ip, gtp_teid, false).await
     }
 
-    pub async fn recv_data_packet(&self, _gtp_teid: &GtpTeid) -> Result<Vec<u8>> {
+    pub async fn recv_gtp(&self, _gtp_teid: &GtpTeid) -> Result<Vec<u8>> {
         let mut buf = vec![0u8; 2000];
         let future_result = self.gtpu_socket.recv_from(&mut buf);
 
@@ -119,12 +119,6 @@ impl MockUserplane {
 
         // TODO - check the TEID is as expected (at [4..8])
 
-        // Extract and return the inner IP packet.  This is at offset 11, after
-        // - an 8-byte GTP header
-        // - a 2-byte PDCP header
-        // - a 1-byte SDAP header
-        let inner = buf[11..bytes_received].to_vec();
-
-        Ok(inner)
+        Ok(buf[0..bytes_received].to_vec())
     }
 }

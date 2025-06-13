@@ -27,5 +27,9 @@ async fn ngap_attach() -> anyhow::Result<()> {
 
     // Userplane packet passthrough
     pass_through_uplink_ipv4(&ue, &dn).await?;
+
+    // There is a timing window here, where the core hasn't yet processed our PDU session
+    // resource setup response so drops the downlink packet.
+    async_std::task::sleep(std::time::Duration::new(0, 5000000)).await;
     pass_through_downlink_ipv4(&dn, &ue).await
 }

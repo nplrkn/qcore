@@ -259,7 +259,6 @@ pub fn tc_uplink_n3(ctx: TcContext) -> i32 {
         let entry: *const UlForwardingEntry =
             map_lookup(&raw mut UL_FORWARDING_TABLE, forwarding_idx);
         ensure!(!entry.is_null(), UlInternalError);
-        let pdcp_header_length = (*entry).pdcp_header_length as usize;
 
         // Optimization - use u32 operations.
         ensure!((*entry).teid_top_bytes != [0, 0, 0], UlDropUnknownTeid1);
@@ -298,11 +297,11 @@ pub fn tc_uplink_n3(ctx: TcContext) -> i32 {
 
         // Exactly one extension header is supported, of length 4
         ensure!(
-            (*session_container).len == (GtpExtPduSessionContainer::LEN / 4) as u8,
+            (*session_container).len_div_4 == (GtpExtPduSessionContainer::LEN / 4) as u8,
             UlDropExtLength
         );
         ensure!(
-            (*session_container).next_extension_type == 0,
+            (*session_container).next_extension_header_type == 0,
             UlDropUnsupportedExtension
         );
 

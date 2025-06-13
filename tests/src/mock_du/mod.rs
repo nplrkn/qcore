@@ -387,7 +387,8 @@ impl MockDu {
     }
 
     pub async fn recv_f1u_data_packet(&self, ue: &UeContext) -> Result<Vec<u8>> {
-        let drb = ue.drb.as_ref().ok_or(anyhow!("No pdu session"))?;
-        self.userplane.recv_data_packet(&drb.local_teid).await
+        self.userplane
+            .recv_gtp(&ue.drb.as_ref().unwrap().local_teid)
+            .await
     }
 }

@@ -266,4 +266,10 @@ impl MockGnb {
 
         Ok(())
     }
+
+    pub async fn recv_n3_data_packet(&self, ue: &UeContext) -> Result<Vec<u8>> {
+        self.userplane
+            .recv_gtp(&ue.session.as_ref().unwrap().local_teid)
+            .await
+    }
 }

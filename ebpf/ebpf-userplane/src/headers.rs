@@ -26,10 +26,10 @@ impl GtpHdrOptionalFields {
 
 #[repr(C, packed)]
 pub struct GtpExtPduSessionContainer {
-    pub len: u8,
-    pub byte2: u8, // PDU type, QMP, DL delay, UL delay, SNP
-    pub byte3: u8, // N3 delay, new IE, QFI
-    pub next_extension_type: u8,
+    pub len_div_4: u8,
+    pub byte1: u8, // PDU type, QMP, DL delay, UL delay, SNP
+    pub byte2: u8, // N3 delay, new IE, QFI
+    pub next_extension_header_type: u8,
 }
 impl GtpExtPduSessionContainer {
     pub const LEN: usize = mem::size_of::<GtpExtPduSessionContainer>();

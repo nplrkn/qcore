@@ -62,7 +62,7 @@ impl<'a> Transport for UeNgapMode<'a> {
     }
 
     async fn receive_userplane_packet(&self) -> Result<Vec<u8>> {
-        todo!()
+        self.gnb.recv_n3_data_packet(&self.gnb_ue_context).await
     }
 }
 

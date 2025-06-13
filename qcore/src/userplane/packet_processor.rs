@@ -90,10 +90,10 @@ impl PacketProcessor {
         //     warn!(logger, "failed to initialize eBPF logger: {e}");
         // }
 
-        let uplink_program = if ngap_mode {
-            "tc_uplink_n3"
+        let (uplink_program, downlink_program) = if ngap_mode {
+            ("tc_uplink_n3", "tc_downlink_n3")
         } else {
-            "tc_uplink"
+            ("tc_uplink", "tc_downlink")
         };
 
         let _ = tc::qdisc_add_clsact(f1u_if_name);
@@ -102,7 +102,8 @@ impl PacketProcessor {
         program.attach(f1u_if_name, TcAttachType::Ingress)?;
 
         let _ = tc::qdisc_add_clsact(n6_if_name);
-        let program: &mut SchedClassifier = ebpf.program_mut("tc_downlink").unwrap().try_into()?;
+        let program: &mut SchedClassifier =
+            ebpf.program_mut(downlink_program).unwrap().try_into()?;
         program.load()?;
         program.attach(n6_if_name, TcAttachType::Ingress)?;
 
