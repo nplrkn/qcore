@@ -1,14 +1,10 @@
 use crate::{
     DuUeContext, MockDu, MockUe,
     mock_ue::{Transport, build_rrc},
+    packet::Packet,
 };
 use anyhow::{Result, anyhow, bail};
 use async_trait::async_trait;
-use oxirush_nas::{
-    Nas5gmmMessage, Nas5gsMessage, Nas5gsmMessage, NasPduAddress, NasPduSessionType,
-    decode_nas_5gs_message,
-    messages::{NasDlNasTransport, NasPduSessionEstablishmentAccept},
-};
 use rrc::*;
 use slog::{Logger, info};
 use std::{
@@ -94,8 +90,9 @@ impl<'a> Transport for UeF1apMode<'a> {
         src_port: u16,
         dst_port: u16,
     ) -> Result<()> {
+        let packet = Packet::new_ue_udp(src_ip, dst_ip, src_port, dst_port);
         self.du
-            .send_f1u_data_packet(&self.du_ue_context, src_ip, dst_ip, src_port, dst_port)
+            .send_f1u_data_packet(&self.du_ue_context, packet)
             .await
     }
     async fn receive_userplane_packet(&self) -> Result<Vec<u8>> {
@@ -162,44 +159,7 @@ impl<'a> MockUeF1ap<'a> {
 
     pub async fn handle_rrc_reconfiguration_with_session_accept(&mut self) -> Result<()> {
         let nas_bytes = self.handle_rrc_reconfiguration().await?;
-        let nas = decode_nas_5gs_message(&nas_bytes)?;
-        let Nas5gsMessage::SecurityProtected(_header, nas_gmm) = nas else {
-            bail!("Expected security protected message, got {nas:?}")
-        };
-        let Nas5gsMessage::Gmm(
-            _header,
-            Nas5gmmMessage::DlNasTransport(NasDlNasTransport {
-                payload_container, ..
-            }),
-        ) = *nas_gmm
-        else {
-            bail!("Expected NasDlNasTransport, got {nas_gmm:?}")
-        };
-
-        let nas_gsm = decode_nas_5gs_message(&payload_container.value)?;
-        let Nas5gsMessage::Gsm(
-            _header,
-            Nas5gsmMessage::PduSessionEstablishmentAccept(NasPduSessionEstablishmentAccept {
-                selected_pdu_session_type: NasPduSessionType { value: 1, .. },
-                pdu_address:
-                    Some(NasPduAddress {
-                        value: nas_pdu_address_ie,
-                        ..
-                    }),
-                ..
-            }),
-        ) = nas_gsm
-        else {
-            bail!("Expected NasPduSessionEstablishmentAccept, got {nas_gsm:?}");
-        };
-
-        self.ipv4_addr = Ipv4Addr::new(
-            nas_pdu_address_ie[1],
-            nas_pdu_address_ie[2],
-            nas_pdu_address_ie[3],
-            nas_pdu_address_ie[4],
-        );
-        Ok(())
+        self.handle_session_accept(nas_bytes)
     }
 
     async fn handle_rrc_reconfiguration(&mut self) -> Result<Vec<u8>> {

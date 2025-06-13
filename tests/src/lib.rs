@@ -4,6 +4,7 @@ mod mock;
 mod mock_du;
 mod mock_gnb;
 mod mock_ue;
+mod packet;
 mod userplane;
 
 pub use data_network::DataNetwork;

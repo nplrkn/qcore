@@ -100,7 +100,7 @@ pub async fn pass_through_uplink_ipv4<'a, T: Transport>(
     let IpAddr::V4(dst_ip) = dst_udp_server.ip() else {
         bail!("Expected IPv4 address");
     };
-    ue.send_f1u_data_packet(&dst_ip, TEST_UDP_PORT, dst_udp_server.port())
+    ue.send_userplane_packet(&dst_ip, TEST_UDP_PORT, dst_udp_server.port())
         .await?;
     dn.receive_n6_udp_packet().await
 }
@@ -110,7 +110,7 @@ pub async fn pass_through_ue_to_ue_ipv4<'a, T: Transport>(
     dst_ue: &MockUe<T>,
 ) -> Result<()> {
     src_ue
-        .send_f1u_data_packet(&dst_ue.ipv4_addr, TEST_UDP_PORT, TEST_UDP_PORT)
+        .send_userplane_packet(&dst_ue.ipv4_addr, TEST_UDP_PORT, TEST_UDP_PORT)
         .await?;
     let _ip_packet = dst_ue.recv_f1u_data_packet().await?;
     Ok(())

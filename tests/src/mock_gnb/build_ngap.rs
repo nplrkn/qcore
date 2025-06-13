@@ -105,6 +105,7 @@ pub fn pdu_session_resource_setup_response(
     amf_ue_ngap_id: AmfUeNgapId,
     ran_ue_ngap_id: RanUeNgapId,
     local_ip: &String,
+    local_teid: &[u8; 4],
 ) -> Result<Box<NgapPdu>> {
     let transport_layer_address = TransportLayerAddress::try_from(local_ip)?;
 
@@ -112,7 +113,7 @@ pub fn pdu_session_resource_setup_response(
         dl_qos_flow_per_tnl_information: QosFlowPerTnlInformation {
             up_transport_layer_information: UpTransportLayerInformation::GtpTunnel(GtpTunnel {
                 transport_layer_address,
-                gtp_teid: GtpTeid([1, 2, 3, 4]),
+                gtp_teid: GtpTeid(local_teid.clone()),
             }),
             associated_qos_flow_list: AssociatedQosFlowList(nonempty![AssociatedQosFlowItem {
                 qos_flow_identifier: ngap::QosFlowIdentifier(1),
