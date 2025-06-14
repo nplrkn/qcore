@@ -165,10 +165,12 @@ impl PacketProcessor {
 
         info!(
             logger,
-            "Set up userplane session {}, remote {}-{}",
+            "Set up userplane session {}, remote {}-{}, 5QI={}, sn-length={}",
             session,
             remote_tunnel_info.transport_layer_address,
             remote_tunnel_info.gtp_teid,
+            session.five_qi,
+            session.pdcp_sn_length
         );
 
         // TODO: Once we implement downlink buffering, could split this into a command that starts buffering downlink packets, and

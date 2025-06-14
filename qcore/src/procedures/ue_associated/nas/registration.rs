@@ -61,6 +61,11 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     async fn accept_registration(&mut self) -> Result<()> {
         let tmsi = Tmsi(rand::random()); // TODO: 0xffffffff is not a valid TMSI (TS23.003, 2.4))
         debug!(self.logger, "Assigned {}", tmsi);
+        debug!(
+            self.logger,
+            "Allowed NSSAIs: SST {} with and without SD 0",
+            self.config().sst
+        );
         let r = crate::nas::build::registration_accept(
             self.config().sst,
             &self.config().plmn,
