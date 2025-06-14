@@ -82,7 +82,7 @@ async fn start_qcore(
 const TEST_UDP_PORT: u16 = 23215;
 
 /// Send a downlink packet from the DN to an arbitrary UDP port on the UE.
-pub async fn pass_through_downlink_ipv4<'a, T: Transport>(
+pub async fn pass_through_downlink_ipv4<T: Transport>(
     dn: &DataNetwork,
     ue: &MockUe<T>,
 ) -> Result<()> {
@@ -92,7 +92,7 @@ pub async fn pass_through_downlink_ipv4<'a, T: Transport>(
     Ok(())
 }
 
-pub async fn pass_through_uplink_ipv4<'a, T: Transport>(
+pub async fn pass_through_uplink_ipv4<T: Transport>(
     ue: &MockUe<T>,
     dn: &DataNetwork,
 ) -> Result<()> {
@@ -105,7 +105,7 @@ pub async fn pass_through_uplink_ipv4<'a, T: Transport>(
     dn.receive_n6_udp_packet().await
 }
 
-pub async fn pass_through_ue_to_ue_ipv4<'a, T: Transport>(
+pub async fn pass_through_ue_to_ue_ipv4<T: Transport>(
     src_ue: &MockUe<T>,
     dst_ue: &MockUe<T>,
 ) -> Result<()> {

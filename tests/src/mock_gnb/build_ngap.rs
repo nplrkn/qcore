@@ -113,7 +113,7 @@ pub fn pdu_session_resource_setup_response(
         dl_qos_flow_per_tnl_information: QosFlowPerTnlInformation {
             up_transport_layer_information: UpTransportLayerInformation::GtpTunnel(GtpTunnel {
                 transport_layer_address,
-                gtp_teid: GtpTeid(local_teid.clone()),
+                gtp_teid: GtpTeid(*local_teid),
             }),
             associated_qos_flow_list: AssociatedQosFlowList(nonempty![AssociatedQosFlowItem {
                 qos_flow_identifier: ngap::QosFlowIdentifier(1),

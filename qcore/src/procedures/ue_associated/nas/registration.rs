@@ -314,7 +314,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         }
 
         // Integrity protected GUTI registration
-        if guami_matches && self.restore_existing_nas_security_context(&tmsi).await {
+        if guami_matches && self.restore_existing_nas_security_context(tmsi).await {
             // Successful GUTI registration.  We can accept the registration.
             return Ok(false);
         }
@@ -475,7 +475,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
 
     fn configure_nas_security(&mut self, ue_security_capabilities: &NasUeSecurityCapability) {
         self.ue.security_capabilities =
-            crate::nas::parse::nas_ue_security_capability(&ue_security_capabilities);
+            crate::nas::parse::nas_ue_security_capability(ue_security_capabilities);
 
         // TS33.501, 6.7.2: AMF starts integrity protection before transmitting SecurityModeCommand.
         let knasint = security::derive_knasint(&self.ue.kamf);

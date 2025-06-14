@@ -65,7 +65,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         if self.ngap_mode() {
             InitialContextSetupProcedure::new(self).run(kgnb).await
         } else {
-            RrcSecurityModeProcedure::new(self).run(&kgnb).await
+            RrcSecurityModeProcedure::new(self).run(kgnb).await
         }
     }
 
