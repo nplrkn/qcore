@@ -1,4 +1,7 @@
-use std::net::{IpAddr, Ipv4Addr};
+use std::{
+    fmt::Display,
+    net::{IpAddr, Ipv4Addr},
+};
 
 use asn1_per::*;
 use ngap::{AmfPointer, AmfRegionId, AmfSetId};
@@ -52,6 +55,14 @@ pub struct Config {
 pub enum PdcpSequenceNumberLength {
     TwelveBits,
     EighteenBits,
+}
+impl Display for PdcpSequenceNumberLength {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::TwelveBits => write!(f, "12"),
+            Self::EighteenBits => write!(f, "18"),
+        }
+    }
 }
 
 impl Config {

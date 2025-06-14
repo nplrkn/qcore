@@ -62,7 +62,8 @@ pub enum CounterIndex {
     UlDropNotIpv4,
     UlDropUnknownTeid1,
     UlDropUnknownTeid2,
-    UlDropUnsupportedExtension,
+    UlDropUnsupportedExt,
+    UlDropGtpExtMissing,
     UlInternalError,
 
     DlDropIpv4Header,

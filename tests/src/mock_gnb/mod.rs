@@ -1,9 +1,12 @@
 //! mock_du - enables a test script to assume the role of the GNB-DU on the F1 reference point
 
 use super::userplane::MockUserplane;
-use crate::mock::{Mock, Pdu, ReceivedPdu};
+use crate::{
+    mock::{Mock, Pdu, ReceivedPdu},
+    packet::Packet,
+};
 use anyhow::{Result, bail};
-use asn1_per::{Msb0, bitvec};
+use asn1_per::{Msb0, NonEmpty, SerDes, bitvec};
 use async_net::IpAddr;
 use ngap::*;
 use slog::{Logger, info, o};
@@ -19,13 +22,19 @@ impl Pdu for NgapPdu {}
 pub struct MockGnb {
     mock: Mock<NgapPdu>,
     local_ip: String,
-    _userplane: MockUserplane,
+    userplane: MockUserplane,
 }
 
 pub struct UeContext {
     ue_id: u32,
     amf_ue_ngap_id: Option<AmfUeNgapId>,
     pub binding: Binding,
+    pub session: Option<Session>,
+}
+
+pub struct Session {
+    remote_tunnel_info: GtpTunnel,
+    local_teid: GtpTeid,
 }
 
 impl Deref for MockGnb {
@@ -49,7 +58,7 @@ impl MockGnb {
         Ok(MockGnb {
             mock,
             local_ip: local_ip.to_string(),
-            _userplane: MockUserplane::new(local_ip, logger.clone()).await?,
+            userplane: MockUserplane::new(local_ip, logger.clone()).await?,
         })
     }
 
@@ -69,6 +78,7 @@ impl MockGnb {
                 .transport
                 .new_ue_binding_from_ip(&worker_ip.to_string())
                 .await?,
+            session: None,
         })
     }
 
@@ -91,6 +101,58 @@ impl MockGnb {
         };
         info!(self.logger, "NgSetupResponse <<");
         Ok(())
+    }
+
+    pub async fn handle_pdu_session_resource_setup_with_session_accept(
+        &self,
+        ue: &mut UeContext,
+    ) -> Result<Vec<u8>> {
+        let pdu = self.receive_pdu().await?;
+        let NgapPdu::InitiatingMessage(InitiatingMessage::PduSessionResourceSetupRequest(
+            PduSessionResourceSetupRequest {
+                amf_ue_ngap_id,
+                ran_ue_ngap_id,
+                pdu_session_resource_setup_list_su_req:
+                    PduSessionResourceSetupListSuReq(NonEmpty {
+                        head:
+                            PduSessionResourceSetupItemSuReq {
+                                pdu_session_nas_pdu: Some(NasPdu(nas_bytes)),
+                                pdu_session_resource_setup_request_transfer,
+                                ..
+                            },
+                        tail: _,
+                    }),
+                ..
+            },
+        )) = *pdu
+        else {
+            bail!(
+                "Unexpected Ngap PduSessionResourceSetupRequest with Nas Pdu, got {:?}",
+                pdu
+            )
+        };
+        info!(self.logger, "Ngap PduSessionResourceSetupRequest <<");
+
+        let xfer = PduSessionResourceSetupRequestTransfer::from_bytes(
+            &pdu_session_resource_setup_request_transfer,
+        )?;
+        let UpTransportLayerInformation::GtpTunnel(remote_tunnel_info) =
+            xfer.ul_ngu_up_tnl_information;
+        let local_teid = [0, 1, 0, 1];
+        let pdu = build_ngap::pdu_session_resource_setup_response(
+            amf_ue_ngap_id,
+            ran_ue_ngap_id,
+            &self.local_ip,
+            &local_teid,
+        )?;
+        ue.session = Some(Session {
+            remote_tunnel_info,
+            local_teid: GtpTeid(local_teid),
+        });
+
+        info!(self.logger, "Ngap PduSessionResourceSetupResponse >>");
+        self.send(&pdu, None).await;
+        Ok(nas_bytes)
     }
 
     pub async fn send_nas(
@@ -182,5 +244,32 @@ impl MockGnb {
             bail!("Unexpected Ngap message {:?}", pdu)
         };
         Ok(())
+    }
+
+    pub async fn send_n3_data_packet(&self, ue: &UeContext, pkt: Packet) -> Result<()> {
+        let Some(Session {
+            remote_tunnel_info:
+                GtpTunnel {
+                    ref transport_layer_address,
+                    gtp_teid,
+                },
+            ..
+        }) = ue.session
+        else {
+            bail!("Session missing");
+        };
+
+        let transport_layer_address = transport_layer_address.clone().try_into()?;
+        self.userplane
+            .send_n3_data_packet(pkt, transport_layer_address, &gtp_teid.0)
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn recv_n3_data_packet(&self, ue: &UeContext) -> Result<Vec<u8>> {
+        self.userplane
+            .recv_gtp(&ue.session.as_ref().unwrap().local_teid)
+            .await
     }
 }

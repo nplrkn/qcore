@@ -1,6 +1,10 @@
 use anyhow::{Result, anyhow, bail};
 use async_trait::async_trait;
-use oxirush_nas::{Nas5gsMessage, decode_nas_5gs_message};
+use oxirush_nas::{
+    Nas5gmmMessage, Nas5gsMessage, Nas5gsmMessage, NasPduAddress, NasPduSessionType,
+    decode_nas_5gs_message,
+    messages::{NasDlNasTransport, NasPduSessionEstablishmentAccept},
+};
 use slog::{Logger, info, o};
 use std::net::Ipv4Addr;
 
@@ -167,7 +171,7 @@ impl<T: Transport> MockUe<T> {
         self.send_nas(nas_deregistration_request).await
     }
 
-    pub async fn send_f1u_data_packet(
+    pub async fn send_userplane_packet(
         &self,
         dst_ip: &Ipv4Addr,
         src_port: u16,
@@ -197,6 +201,47 @@ impl<T: Transport> MockUe<T> {
 
     pub async fn receive_nas_5gmm_status(&mut self) -> Result<()> {
         ensure_nas!(FGmmStatus, self.receive_nas().await?);
+        Ok(())
+    }
+
+    pub fn handle_session_accept(&mut self, nas_bytes: Vec<u8>) -> Result<()> {
+        let nas = decode_nas_5gs_message(&nas_bytes)?;
+        let Nas5gsMessage::SecurityProtected(_header, nas_gmm) = nas else {
+            bail!("Expected security protected message, got {nas:?}")
+        };
+        let Nas5gsMessage::Gmm(
+            _header,
+            Nas5gmmMessage::DlNasTransport(NasDlNasTransport {
+                payload_container, ..
+            }),
+        ) = *nas_gmm
+        else {
+            bail!("Expected NasDlNasTransport, got {nas_gmm:?}")
+        };
+
+        let nas_gsm = decode_nas_5gs_message(&payload_container.value)?;
+        let Nas5gsMessage::Gsm(
+            _header,
+            Nas5gsmMessage::PduSessionEstablishmentAccept(NasPduSessionEstablishmentAccept {
+                selected_pdu_session_type: NasPduSessionType { value: 1, .. },
+                pdu_address:
+                    Some(NasPduAddress {
+                        value: nas_pdu_address_ie,
+                        ..
+                    }),
+                ..
+            }),
+        ) = nas_gsm
+        else {
+            bail!("Expected NasPduSessionEstablishmentAccept, got {nas_gsm:?}");
+        };
+
+        self.ipv4_addr = Ipv4Addr::new(
+            nas_pdu_address_ie[1],
+            nas_pdu_address_ie[2],
+            nas_pdu_address_ie[3],
+            nas_pdu_address_ie[4],
+        );
         Ok(())
     }
 }

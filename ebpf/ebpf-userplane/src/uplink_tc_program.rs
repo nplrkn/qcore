@@ -19,161 +19,260 @@ use network_types::{
 static mut UL_FORWARDING_TABLE: Array<UlForwardingEntry> =
     Array::with_max_entries(FORWARDING_TABLE_SIZE, 0);
 
+const GTP_TEID_OFFSET: usize = EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + 4;
+
 /// This classifier is attached to the lo interface and handles incoming Ethernet packets
 /// directed to QCore's F1-U GTP port.
 #[classifier]
 pub fn tc_uplink(ctx: TcContext) -> i32 {
+    match try_tc_uplink(ctx) {
+        Ok(rc) => rc,
+        Err(rc) => rc,
+    }
+}
+
+#[inline(always)]
+pub fn try_tc_uplink(ctx: TcContext) -> Result<i32, i32> {
     unsafe {
-        if !is_long_enough(&ctx, EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN) {
-            return TC_ACT_OK;
-        }
+        check_udp_dest_port(&ctx)?;
+        let extension_header_type = parse_gtp_header(&ctx)?;
+        let entry = lookup_entry(&ctx)?;
+        let offset = process_gtp_extension_headers(&ctx, extension_header_type)?;
+        let offset = process_pdcp_and_sdap_headers(&ctx, (*entry).pdcp_header_length, offset)?;
+        output_inner_ipv4_packet(&ctx, offset)
+    }
+}
 
-        let ethhdr: *const EthHdr = ptr_at(&ctx, 0);
-        match (*ethhdr).ether_type {
-            EtherType::Ipv4 => {}
-            _ => return TC_ACT_OK,
-        }
+#[classifier]
+pub fn tc_uplink_n3(ctx: TcContext) -> i32 {
+    match try_uplink_n3(ctx) {
+        Ok(rc) => rc,
+        Err(rc) => rc,
+    }
+}
 
-        let ipv4hdr: *const Ipv4Hdr = ptr_at(&ctx, EthHdr::LEN);
-        match (*ipv4hdr).proto {
-            IpProto::Udp => {}
-            _ => return TC_ACT_OK,
-        }
-        let ip_len = (*ipv4hdr).total_len();
+#[inline(always)]
+fn try_uplink_n3(ctx: TcContext) -> Result<i32, i32> {
+    check_udp_dest_port(&ctx)?;
+    let extension_header_type = parse_gtp_header(&ctx)?;
+    let _entry = lookup_entry(&ctx)?;
+    let offset = parse_gtp_ext_pdu_session_container(&ctx, extension_header_type)?;
+    output_inner_ipv4_packet(&ctx, offset)
+}
 
-        if (*ipv4hdr).dst_addr != read_local_ipv4() {
-            return TC_ACT_OK;
-        }
-
-        let udphdr: *const UdpHdr = ptr_at(&ctx, EthHdr::LEN + Ipv4Hdr::LEN);
-        if (*udphdr).dest() != GTPU_PORT {
-            return TC_ACT_OK;
-        }
-
-        // This packet is addressed to our GTP-U port.
-        inc(UlRxPkts);
-
-        // The shortest valid packet is a DL Data Report.
-        ensure!(
-            is_long_enough(
-                &ctx,
-                EthHdr::LEN
-                    + Ipv4Hdr::LEN
-                    + UdpHdr::LEN
-                    + GtpHdr::LEN
-                    + GtpHdrOptionalFields::LEN
-                    + GTP_EXT_DL_DATA_DELIVERY_STATUS_LEN
-            ),
-            UlDropTooShort
-        );
-
-        let mut offset = EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN;
-        let gtphdr: *const GtpHdr = ptr_at(&ctx, offset);
-        ensure!(
-            (*gtphdr).message_type == GTP_MESSAGE_TYPE_GPDU,
-            UlDropGtpMessageType
-        );
-        offset += GtpHdr::LEN;
-
-        // Look up by TEID, using the least significant byte as the index into the forwarding table.
-        let forwarding_idx = (*gtphdr).teid[3] as u32;
-        let entry: *const UlForwardingEntry =
-            map_lookup(&raw mut UL_FORWARDING_TABLE, forwarding_idx);
-        ensure!(!entry.is_null(), UlInternalError);
-        let pdcp_header_length = (*entry).pdcp_header_length as usize;
-
-        // Optimization - use u32 operations.
-        ensure!((*entry).teid_top_bytes != [0, 0, 0], UlDropUnknownTeid1);
-        ensure!(
-            (&(*gtphdr).teid)[0..3] == (*entry).teid_top_bytes,
-            UlDropUnknownTeid2
-        );
-
-        // This is for a known TEID.
-
-        if (*gtphdr).byte0 != GtpHdr::GTP_VERSION_1_WITHOUT_OPTIONAL_FIELDS {
-            // Process optional fields
-
-            // This should not be needed, but the verifier seems to have forgotten about
-            // the previous check - perhaps because it reused registers in the intervening
-            // code.
-            ensure!(
-                is_long_enough(
-                    &ctx,
-                    offset + GtpHdrOptionalFields::LEN + GTP_EXT_DL_DATA_DELIVERY_STATUS_LEN
-                ),
-                UlDropTooShort
-            );
-
-            let gtp_ext: *const GtpHdrOptionalFields = ptr_at(&ctx, offset);
-            let mut extension_type = (*gtp_ext).next_extension_header_type;
-            offset += GtpHdrOptionalFields::LEN;
-
-            // We support 0 or 1 extension header of type NR RAN container and
-            // length 12.
-            if extension_type == GTP_EXT_NR_RAN_CONTAINER {
-                ensure!(
-                    byte_at(&ctx, offset) <= (GTP_EXT_DL_DATA_DELIVERY_STATUS_LEN / 4) as u8,
-                    UlDropExtLength
-                );
-
-                offset += GTP_EXT_DL_DATA_DELIVERY_STATUS_LEN;
-                extension_type = byte_at(&ctx, offset - 1);
-            }
-
-            // If this fails then
-            // - either the first extension is not an NR RAN extension header.
-            // - or there is a second extension following an NR RAN extension header.
-            ensure!(extension_type == 0, UlDropUnsupportedExtension);
-
-            // If we just reached the end of the packet, then record an status only packet and
-            // drop.
-            ensure!(
-                u16::from_be_bytes((*gtphdr).message_length)
-                    != (GtpHdrOptionalFields::LEN + GTP_EXT_DL_DATA_DELIVERY_STATUS_LEN) as u16,
-                UlRxStatusOnlyPkts
-            );
-        }
-
-        ensure!(
-            is_long_enough(&ctx, offset + PdcpHdr18BitSn::LEN + SDAP_HEADER_LEN,),
+#[inline(always)]
+fn process_pdcp_and_sdap_headers(
+    ctx: &TcContext,
+    pdcp_header_length: u8,
+    mut offset: usize,
+) -> Result<usize, i32> {
+    unsafe {
+        ensure2!(
+            is_long_enough(ctx, offset + PdcpHdr18BitSn::LEN + SDAP_HEADER_LEN),
             UlDropTooShortExt
         );
 
-        // Now for the PDCP header, TS38.323, 6.2.1.
+        // Skip over the PDCP header. TS38.323, 6.2.1.
         // This starts with the D/C bit.  PDCP control packets are not implemented.
-        ensure!(byte_at(&ctx, offset) & 0x80 != 0, UlDropPdcpControl);
-
-        // Skip over the PDCP header.
+        ensure2!(byte_at(ctx, offset) & 0x80 != 0, UlDropPdcpControl);
         if pdcp_header_length == 2 {
             offset += PdcpHdr12BitSn::LEN;
         } else {
             offset += PdcpHdr18BitSn::LEN;
         }
 
-        // 1-byte UL SDAP header - TS37.624, 6.2.2.3
+        // Skip over the 1-byte UL SDAP header - TS37.624, 6.2.2.3
         // | D/C |  R  |              QFI                 |
         // SDAP control packets are not implemented
-        ensure!(byte_at(&ctx, offset) & 0x80 != 0, UlDropSdapControl);
-
-        // Skip over the SDAP header.
+        ensure2!(byte_at(ctx, offset) & 0x80 != 0, UlDropSdapControl);
         offset += SDAP_HEADER_LEN;
+        Ok(offset)
+    }
+}
 
+#[inline(always)]
+fn lookup_entry(ctx: &TcContext) -> Result<*const UlForwardingEntry, i32> {
+    unsafe {
+        ensure2!(is_long_enough(ctx, GTP_TEID_OFFSET + 3), UlDropTooShort);
+        let teid_byte0 = byte_at(ctx, GTP_TEID_OFFSET + 0);
+        let teid_byte1 = byte_at(ctx, GTP_TEID_OFFSET + 1);
+        let teid_byte2 = byte_at(ctx, GTP_TEID_OFFSET + 2);
+        let teid_byte3 = byte_at(ctx, GTP_TEID_OFFSET + 3);
+
+        // Look up by TEID, using the least significant byte as the index into the forwarding table.
+        let entry: *const UlForwardingEntry =
+            map_lookup(&raw mut UL_FORWARDING_TABLE, teid_byte3 as u32);
+        ensure2!(!entry.is_null(), UlInternalError);
+
+        // Optimization - use u32 operations.
+        ensure2!((*entry).teid_top_bytes != [0, 0, 0], UlDropUnknownTeid1);
+        ensure2!(
+            teid_byte0 == (*entry).teid_top_bytes[0]
+                && teid_byte1 == (*entry).teid_top_bytes[1]
+                && teid_byte2 == (*entry).teid_top_bytes[2],
+            UlDropUnknownTeid2
+        );
+        Ok(entry)
+    }
+}
+
+#[inline(always)]
+fn check_udp_dest_port(ctx: &TcContext) -> Result<(), i32> {
+    unsafe {
+        if !is_long_enough(ctx, EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN) {
+            return Err(TC_ACT_OK);
+        }
+
+        let ethhdr: *const EthHdr = ptr_at(ctx, 0);
+        match (*ethhdr).ether_type {
+            EtherType::Ipv4 => {}
+            _ => return Err(TC_ACT_OK),
+        }
+
+        let ipv4hdr: *const Ipv4Hdr = ptr_at(ctx, EthHdr::LEN);
+        match (*ipv4hdr).proto {
+            IpProto::Udp => {}
+            _ => return Err(TC_ACT_OK),
+        }
+
+        if (*ipv4hdr).dst_addr != read_local_ipv4() {
+            return Err(TC_ACT_OK);
+        }
+
+        let udphdr: *const UdpHdr = ptr_at(ctx, EthHdr::LEN + Ipv4Hdr::LEN);
+        if (*udphdr).dest() != GTPU_PORT {
+            return Err(TC_ACT_OK);
+        }
+
+        // This packet was sent to us.
+        inc(UlRxPkts);
+    }
+    Ok(())
+}
+
+#[inline(always)]
+fn parse_gtp_ext_pdu_session_container(
+    ctx: &TcContext,
+    extension_header_type: u8,
+) -> Result<usize, i32> {
+    unsafe {
+        const INNER_IP_OFFSET: usize = EthHdr::LEN
+            + Ipv4Hdr::LEN
+            + UdpHdr::LEN
+            + GtpExtendedHdr::LEN
+            + GtpExtPduSessionContainer::LEN;
+
+        ensure2!(
+            extension_header_type == GTP_EXT_PDU_SESSION_CONTAINER,
+            UlDropGtpExtMissing
+        );
+
+        ensure2!(is_long_enough(ctx, INNER_IP_OFFSET), UlDropTooShort);
+        let session_container: *const GtpExtPduSessionContainer = ptr_at(
+            ctx,
+            EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + GtpExtendedHdr::LEN,
+        );
+        ensure2!(
+            (*session_container).len_div_4 == (GtpExtPduSessionContainer::LEN / 4) as u8,
+            UlDropExtLength
+        );
+        ensure2!(
+            (*session_container).next_extension_header_type == 0,
+            UlDropUnsupportedExt
+        );
+        Ok(INNER_IP_OFFSET)
+    }
+}
+
+#[inline(always)]
+// Returns PDCP header offset, if caller should continue processing
+fn process_gtp_extension_headers(ctx: &TcContext, extension_header_type: u8) -> Result<usize, i32> {
+    unsafe {
+        const PDCP_HEADER_OFFSET: usize = EthHdr::LEN
+            + Ipv4Hdr::LEN
+            + UdpHdr::LEN
+            + GtpExtendedHdr::LEN
+            + GtpExtDlDataDeliveryStatus::LEN;
+
+        if extension_header_type == 0 {
+            return Ok(EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + GtpHdr::LEN);
+        };
+
+        ensure2!(
+            extension_header_type == GTP_EXT_NR_RAN_CONTAINER,
+            UlDropUnsupportedExt
+        );
+
+        ensure2!(is_long_enough(ctx, PDCP_HEADER_OFFSET), UlDropTooShort);
+        let delivery_status: *const GtpExtDlDataDeliveryStatus = ptr_at(
+            ctx,
+            EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + GtpExtendedHdr::LEN,
+        );
+        ensure2!(
+            (*delivery_status).len_div_4 == (GtpExtDlDataDeliveryStatus::LEN / 4) as u8,
+            UlDropExtLength
+        );
+        ensure2!(
+            (*delivery_status).next_extension_header_type == 0,
+            UlDropUnsupportedExt
+        );
+
+        // If we just reached the end of the packet, then record an status only packet and
+        // drop.
+        ensure2!(
+            is_long_enough(ctx, PDCP_HEADER_OFFSET + 1),
+            UlRxStatusOnlyPkts
+        );
+
+        Ok(PDCP_HEADER_OFFSET)
+    }
+}
+
+#[inline(always)]
+// Returns extension_header_type on success
+fn parse_gtp_header(ctx: &TcContext) -> Result<u8, i32> {
+    unsafe {
+        ensure2!(
+            is_long_enough(
+                &ctx,
+                EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + GtpExtendedHdr::LEN
+            ),
+            UlDropTooShort
+        );
+
+        let gtphdr: *const GtpExtendedHdr = ptr_at(&ctx, EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN);
+        ensure2!(
+            (*gtphdr).base.message_type == GTP_MESSAGE_TYPE_GPDU,
+            UlDropGtpMessageType
+        );
+
+        let extension_header_type =
+            if (*gtphdr).base.byte0 != GtpHdr::GTP_VERSION_1_WITHOUT_OPTIONAL_FIELDS {
+                (*gtphdr).optional.next_extension_header_type
+            } else {
+                0
+            };
+
+        Ok(extension_header_type)
+    }
+}
+
+#[inline(always)]
+pub fn output_inner_ipv4_packet(ctx: &TcContext, offset: usize) -> Result<i32, i32> {
+    unsafe {
         // Inner IPv4 header.
-        ensure!(
-            is_long_enough(&ctx, offset + Ipv4Hdr::LEN,),
+        ensure2!(
+            is_long_enough(ctx, offset + Ipv4Hdr::LEN),
             UlDropTooShortExt
         );
         let inner_ip_hdr: *const Ipv4Hdr = ptr_at(&ctx, offset);
-        ensure!((*inner_ip_hdr).version() == 4, UlDropNotIpv4);
-
-        // The packet is well formed.
+        ensure2!((*inner_ip_hdr).version() == 4, UlDropNotIpv4);
 
         // TODO - check that inner_ip_hdr's source IP is indeed the IP of the UE.  This requires
         // the UE IP prefix to be programmed (global / map) and we can then derive the suffix
         // from the GTP TEID.
 
-        // All clear to forward this.
+        // The packet is well formed - all clear to forward it.
 
         // Remove the outer packet encapsulation, meaning that the original Ethernet header
         // now sits on top of the inner IP header.
@@ -182,7 +281,7 @@ pub fn tc_uplink(ctx: TcContext) -> i32 {
         // as part of the guardrails that eBPF imposes on TC programs.
         let new_ethhdr_offset = (offset - EthHdr::LEN) as i32;
         let ret = ctx.adjust_room(-new_ethhdr_offset, BPF_ADJ_ROOM_MAC, 0);
-        ensure!(ret.is_ok(), UlInternalError);
+        ensure2!(ret.is_ok(), UlInternalError);
 
         // We don't need to update the Ethernet header.  This is going out a tun interface
         // and it seems Linux only looks at the L3 header part of the SKB.
@@ -192,10 +291,10 @@ pub fn tc_uplink(ctx: TcContext) -> i32 {
         //   stripped off
         // - payload bytes: the IP packet as sent out on N6
         add(UlRxHeaderBytes, new_ethhdr_offset as u64);
-        add(UlPayloadBytes, ip_len as u64);
+        add(UlPayloadBytes, ctx.len() as u64 - EthHdr::LEN as u64);
 
         // Emit the packet as if it comes from the "ue" tun.
         // Even though this has an Ethernet header - which is wrong for an L3 interface - Linux is ok to process it
-        redirect_to_linux_routing()
+        Ok(redirect_to_linux_routing())
     }
 }

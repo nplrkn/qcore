@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use f1ap::F1apPdu;
 use ngap::NgapPdu;
 use slog::Logger;
-use xxap::{GtpTunnel, Indication, Procedure, RequestError};
+use xxap::{Indication, Procedure, RequestError};
 
 #[derive(Debug)]
 pub enum UeMessage {
@@ -55,7 +55,6 @@ pub trait HandlerApi: Send + Sync + Clone + 'static {
     async fn commit_userplane_session(
         &self,
         session: &UserplaneSession,
-        remote_tunnel_info: GtpTunnel,
         logger: &Logger,
     ) -> Result<()>;
     async fn delete_userplane_session(&self, session: &UserplaneSession, logger: &Logger);

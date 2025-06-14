@@ -1,7 +1,10 @@
 //! mock_du - enables a test script to assume the role of the GNB-DU on the F1 reference point
 
 use super::userplane::MockUserplane;
-use crate::mock::{Mock, Pdu, ReceivedPdu};
+use crate::{
+    mock::{Mock, Pdu, ReceivedPdu},
+    packet::Packet,
+};
 use anyhow::{Result, anyhow, bail, ensure};
 use asn1_per::SerDes;
 use async_net::IpAddr;
@@ -12,10 +15,7 @@ use rrc::{
     UlDcchMessage,
 };
 use slog::{Logger, debug, info, o};
-use std::{
-    net::Ipv4Addr,
-    ops::{Deref, DerefMut},
-};
+use std::ops::{Deref, DerefMut};
 use xxap::*;
 mod build_f1ap;
 
@@ -370,14 +370,7 @@ impl MockDu {
         Ok(())
     }
 
-    pub async fn send_f1u_data_packet(
-        &self,
-        ue: &UeContext,
-        src_ip: &Ipv4Addr,
-        dst_ip: &Ipv4Addr,
-        src_port: u16,
-        dst_port: u16,
-    ) -> Result<()> {
+    pub async fn send_f1u_data_packet(&self, ue: &UeContext, pkt: Packet) -> Result<()> {
         let drb = ue.drb.as_ref().ok_or(anyhow!("No pdu session"))?;
 
         let GtpTunnel {
@@ -386,37 +379,16 @@ impl MockDu {
         } = &drb.remote_tunnel_info;
 
         let transport_layer_address = transport_layer_address.clone().try_into()?;
-        let src_ip = src_ip.octets();
-        let dst_ip = dst_ip.octets();
-        let src_port = src_port.to_be_bytes();
-        let dst_port = dst_port.to_be_bytes();
-        let ipv4_udp_address_bytes = [
-            src_ip[0],
-            src_ip[1],
-            src_ip[2],
-            src_ip[3],
-            dst_ip[0],
-            dst_ip[1],
-            dst_ip[2],
-            dst_ip[3],
-            src_port[0],
-            src_port[1],
-            dst_port[0],
-            dst_port[1],
-        ];
         self.userplane
-            .send_f1u_data_packet(
-                transport_layer_address,
-                gtp_teid.clone(),
-                &ipv4_udp_address_bytes,
-            )
+            .send_f1u_data_packet(pkt, transport_layer_address, &gtp_teid.0)
             .await?;
 
         Ok(())
     }
 
     pub async fn recv_f1u_data_packet(&self, ue: &UeContext) -> Result<Vec<u8>> {
-        let drb = ue.drb.as_ref().ok_or(anyhow!("No pdu session"))?;
-        self.userplane.recv_data_packet(&drb.local_teid).await
+        self.userplane
+            .recv_gtp(&ue.drb.as_ref().unwrap().local_teid)
+            .await
     }
 }

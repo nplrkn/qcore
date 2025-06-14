@@ -4,7 +4,7 @@ use super::stats::dump_stats;
 use super::MAX_UES;
 use crate::UserplaneSession;
 use crate::data::PdcpSequenceNumberLength;
-use anyhow::{Result, bail, ensure};
+use anyhow::{Result, anyhow, bail, ensure};
 use async_std::{net::IpAddr, sync::Mutex};
 use aya::maps::{Array, MapData, PerCpuArray};
 use aya::programs::{SchedClassifier, TcAttachType, tc};
@@ -17,7 +17,7 @@ use slog::{Logger, info, warn};
 use std::ffi::CString;
 use std::net::Ipv4Addr;
 use std::sync::Arc;
-use xxap::{GtpTeid, GtpTunnel};
+use xxap::GtpTeid;
 
 #[derive(Clone)]
 pub struct PacketProcessor {
@@ -53,6 +53,7 @@ impl PacketProcessor {
     }
 
     pub fn install_ebpf(
+        ngap_mode: bool,
         local_ip: IpAddr,
         f1u_if_name: &str,
         n6_if_name: &str,
@@ -89,13 +90,20 @@ impl PacketProcessor {
         //     warn!(logger, "failed to initialize eBPF logger: {e}");
         // }
 
+        let (uplink_program, downlink_program) = if ngap_mode {
+            ("tc_uplink_n3", "tc_downlink_n3")
+        } else {
+            ("tc_uplink", "tc_downlink")
+        };
+
         let _ = tc::qdisc_add_clsact(f1u_if_name);
-        let program: &mut SchedClassifier = ebpf.program_mut("tc_uplink").unwrap().try_into()?;
+        let program: &mut SchedClassifier = ebpf.program_mut(uplink_program).unwrap().try_into()?;
         program.load()?;
         program.attach(f1u_if_name, TcAttachType::Ingress)?;
 
         let _ = tc::qdisc_add_clsact(n6_if_name);
-        let program: &mut SchedClassifier = ebpf.program_mut("tc_downlink").unwrap().try_into()?;
+        let program: &mut SchedClassifier =
+            ebpf.program_mut(downlink_program).unwrap().try_into()?;
         program.load()?;
         program.attach(n6_if_name, TcAttachType::Ingress)?;
 
@@ -141,21 +149,28 @@ impl PacketProcessor {
             qfi: 1,
             five_qi,
             pdcp_sn_length,
+            remote_tunnel_info: None,
         })
     }
 
     pub async fn commit_userplane_session(
         &self,
         session: &UserplaneSession,
-        remote_tunnel_info: GtpTunnel,
         logger: &Logger,
     ) -> Result<()> {
+        let remote_tunnel_info = session
+            .remote_tunnel_info
+            .clone()
+            .ok_or(anyhow!("Missing tunnel info"))?;
+
         info!(
             logger,
-            "Set up userplane session {}, remote {}-{}",
+            "Set up userplane session {}, remote {}-{}, 5QI={}, sn-length={}",
             session,
             remote_tunnel_info.transport_layer_address,
             remote_tunnel_info.gtp_teid,
+            session.five_qi,
+            session.pdcp_sn_length
         );
 
         // TODO: Once we implement downlink buffering, could split this into a command that starts buffering downlink packets, and

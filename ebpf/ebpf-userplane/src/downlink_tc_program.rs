@@ -17,6 +17,7 @@ use network_types::{
     udp::UdpHdr,
 };
 
+// TODO - replace with a N3 variant that has QFI in
 #[map]
 static mut DL_FORWARDING_TABLE: Array<DlForwardingEntry> =
     Array::with_max_entries(FORWARDING_TABLE_SIZE, 0);
@@ -218,6 +219,127 @@ pub fn tc_downlink(ctx: TcContext) -> i32 {
             (*pdcphdr).0[1] = ((pdcp_seq_num & 0xff00) >> 8) as u8; // SN cont
             (*pdcphdr).0[2] = (pdcp_seq_num & 0xff) as u8; // SN cont
         }
+
+        add(DlPayloadBytes, inner_ip_length as u64);
+
+        redirect_to_linux_routing()
+    }
+}
+
+#[classifier]
+pub fn tc_downlink_n3(ctx: TcContext) -> i32 {
+    unsafe {
+        inc(DlRxPkts);
+
+        ensure!(
+            is_long_enough(&ctx, EthHdr::LEN + Ipv4Hdr::LEN),
+            DlInternalError
+        );
+        let ipv4hdr: *const Ipv4Hdr = ptr_at(&ctx, EthHdr::LEN);
+        ensure!((*ipv4hdr).version() == 4, DlDropIpv4Header);
+        let inner_ip_length = (*ipv4hdr).total_len();
+
+        let forwarding_idx = (*ipv4hdr).dst_addr[3] as u32;
+        let entry: *mut DlForwardingEntry =
+            map_lookup(&raw mut DL_FORWARDING_TABLE, forwarding_idx);
+        ensure!(!entry.is_null(), DlDropUnknownUe);
+
+        const OUTER_HEADERS_LEN: usize = Ipv4Hdr::LEN
+            + UdpHdr::LEN
+            + GtpHdr::LEN
+            + GtpHdrOptionalFields::LEN
+            + GtpExtPduSessionContainer::LEN;
+
+        const INNER_PACKET_OFFSET: usize = EthHdr::LEN + OUTER_HEADERS_LEN;
+
+        ensure!(
+            ctx.adjust_room(OUTER_HEADERS_LEN as i32, BPF_ADJ_ROOM_MAC, 0)
+                .is_ok(),
+            DlInternalError
+        );
+
+        // Get TEID and remote address.
+        let teid = (*entry).teid;
+        ensure!(teid != 0, DlDropUnknownUe);
+
+        let remote_ip = (*entry).remote_gtp_addr;
+        ensure!(remote_ip != 0, DlDropUnknownUe);
+
+        // We now need to populate the outer IP, UDP, GTP and PDCP headers.
+        // Optimization: avoid repeating this test by using a single pointer to fill in all of
+        // the new fields.
+        ensure!(is_long_enough(&ctx, INNER_PACKET_OFFSET), DlInternalError);
+
+        // The original Ethernet header is still in place at the start of the packet.
+
+        let ipv4hdr: *mut Ipv4Hdr = ptr_at(&ctx, EthHdr::LEN);
+        (*ipv4hdr).set_version(4);
+        (*ipv4hdr).set_ihl(5);
+        (*ipv4hdr).tos = 0;
+        (*ipv4hdr).set_total_len(OUTER_HEADERS_LEN as u16 + inner_ip_length);
+        (*ipv4hdr).set_id(0);
+        (*ipv4hdr).frag_off = [0, 0];
+        (*ipv4hdr).ttl = 64;
+        (*ipv4hdr).proto = IpProto::Udp;
+        (*ipv4hdr).check = [0, 0];
+        (*ipv4hdr).src_addr = read_local_ipv4();
+        (*ipv4hdr).dst_addr = remote_ip.to_be_bytes();
+
+        // Do the IP checksum.
+        // Optimization: the only thing that varies is the length.  We can precompute the rest
+        // of the checksum in a global.
+        let x = bpf_csum_diff(
+            0 as *mut u32,
+            0,
+            ipv4hdr as *mut u32,
+            Ipv4Hdr::LEN as u32,
+            0,
+        );
+
+        let csum = (x & 0xffff) + (x >> 16);
+        let csum = (csum & 0xffff) + (csum >> 16);
+        let csum = !(csum as u16);
+
+        // The checksum was calculated without running `ntohs` on each u16, so equally the result
+        // doesn't need `htons` to be called on it.  In Rust terms that means we want a 'native enddianness'
+        // u16->byte conversion.
+        (*ipv4hdr).check = csum.to_ne_bytes();
+
+        // UDP header
+        ensure!(is_long_enough(&ctx, INNER_PACKET_OFFSET), DlInternalError);
+        let udphdr: *mut UdpHdr = ptr_at(&ctx, EthHdr::LEN + Ipv4Hdr::LEN);
+        (*udphdr).set_len(inner_ip_length + (OUTER_HEADERS_LEN - Ipv4Hdr::LEN) as u16);
+        (*udphdr).set_source(GTPU_PORT);
+        (*udphdr).set_dest(GTPU_PORT);
+        (*udphdr).set_check(0);
+
+        // --- GTP header with optional fields present
+        ensure!(is_long_enough(&ctx, INNER_PACKET_OFFSET), DlInternalError);
+        let gtphdr: *mut GtpHdr = ptr_at(&ctx, EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN);
+        (*gtphdr).byte0 = 0b001_1_0_1_0_0; // version=1, PT=1, R, E=1, S=0, PN=0
+        (*gtphdr).message_type = GTP_MESSAGE_TYPE_GPDU;
+        let gtp_payload_length =
+            inner_ip_length + (GtpHdrOptionalFields::LEN + GtpExtPduSessionContainer::LEN) as u16;
+        (*gtphdr).message_length = gtp_payload_length.to_be_bytes();
+        (*gtphdr).teid = teid.to_be_bytes();
+        ensure!(is_long_enough(&ctx, INNER_PACKET_OFFSET), DlInternalError);
+        let gtpexthdr: *mut GtpHdrOptionalFields =
+            ptr_at(&ctx, EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + GtpHdr::LEN);
+        (*gtpexthdr).sequence_number = [0, 0];
+        (*gtpexthdr).npdu_number = 0;
+        // Next extension header type = 0x84 = NR RAN container (TS29.281, 5.2.1.3)
+        (*gtpexthdr).next_extension_header_type = GTP_EXT_PDU_SESSION_CONTAINER;
+
+        // --- GTP extension header - Pdu Session Container ---
+        ensure!(is_long_enough(&ctx, INNER_PACKET_OFFSET), DlInternalError);
+        let session_container: *mut GtpExtPduSessionContainer = ptr_at(
+            &ctx,
+            EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + GtpHdr::LEN + GtpHdrOptionalFields::LEN,
+        );
+        (*session_container).len_div_4 = (GtpExtPduSessionContainer::LEN / 4) as u8;
+        (*session_container).byte1 = 0b0000_0_0_0_0; // PDU type = DL PDU SESSION INFORMATION, QMP, SNP, MSNP, Spare
+        (*session_container).byte2 = 0b0_0_000001; // PPP, RQI, QFI=1,
+        (*session_container).next_extension_header_type = 0;
 
         add(DlPayloadBytes, inner_ip_length as u64);
 

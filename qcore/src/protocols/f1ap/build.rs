@@ -146,7 +146,7 @@ pub fn drb_to_be_setup_item(
 ) -> DrbsToBeSetupItem {
     let gtp_tunnel = GtpTunnel {
         transport_layer_address,
-        gtp_teid: session.userplane_info.uplink_gtp_teid.clone(),
+        gtp_teid: session.userplane_info.uplink_gtp_teid,
     };
 
     let five_qi = session.userplane_info.five_qi;

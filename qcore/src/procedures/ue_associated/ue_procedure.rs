@@ -1,20 +1,22 @@
 use super::prelude::*;
 use crate::{
     NasContext, UeContext,
+    data::PduSession,
     procedures::{
         UeMessage,
         ue_associated::{
             F1apBase, InitialContextSetupProcedure, InitialUeMessageProcedure, NasBase,
+            PduSessionResourceSetupProcedure, RrcReconfigurationProcedure,
             RrcSecurityModeProcedure, RrcSetupProcedure, UeContextReleaseProcedure,
-            UlInformationTransferProcedure,
+            UeContextSetupProcedure, UlInformationTransferProcedure, UplinkNasTransportProcedure,
         },
     },
 };
 use asn1_per::SerDes;
 use async_std::channel::{Receiver, Sender};
 use f1ap::{
-    DlRrcMessageTransferProcedure, F1apPdu, InitiatingMessage, RrcContainer, SrbId,
-    UlRrcMessageTransfer,
+    CellGroupConfig, DlRrcMessageTransferProcedure, F1apPdu, InitiatingMessage, RrcContainer,
+    SrbId, UlRrcMessageTransfer,
 };
 use ngap::{AmfUeNgapId, NgapPdu, UplinkNasTransport};
 use oxirush_nas::{Nas5gsMessage, messages::Nas5gsSecurityHeader};
@@ -38,6 +40,11 @@ impl<'a, A: HandlerApi> std::ops::Deref for UeProcedure<'a, A> {
     }
 }
 
+pub enum RanSessionSetupState {
+    Ngap,
+    F1ap(CellGroupConfig, Vec<u8>),
+}
+
 impl<'a, A: HandlerApi> UeProcedure<'a, A> {
     pub fn new(
         api: &'a A,
@@ -54,11 +61,50 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         }
     }
 
-    pub async fn perform_ran_ue_registration_actions(self, kgnb: &[u8; 32]) -> Result<Self> {
+    pub async fn ran_ue_registration(self, kgnb: &[u8; 32]) -> Result<Self> {
         if self.ngap_mode() {
             InitialContextSetupProcedure::new(self).run(kgnb).await
         } else {
-            RrcSecurityModeProcedure::new(self).run(&kgnb).await
+            RrcSecurityModeProcedure::new(self).run(kgnb).await
+        }
+    }
+
+    pub async fn ran_session_setup_phase1(
+        self,
+        session: &mut PduSession,
+        nas_accept: Vec<u8>,
+    ) -> Result<(Self, RanSessionSetupState)> {
+        if self.ngap_mode() {
+            self.log_message("<< Nas PduSessionEstablishmentAccept");
+            PduSessionResourceSetupProcedure::new(self)
+                .run(session, nas_accept)
+                .await
+                .map(|inner| (inner, RanSessionSetupState::Ngap))
+        } else {
+            UeContextSetupProcedure::new(self).run(session).await.map(
+                |(inner, cell_group_config)| {
+                    (
+                        inner,
+                        RanSessionSetupState::F1ap(cell_group_config, nas_accept),
+                    )
+                },
+            )
+        }
+    }
+
+    pub async fn ran_session_setup_phase2(
+        self,
+        session_index: usize,
+        ran_session_setup_state: RanSessionSetupState,
+    ) -> Result<()> {
+        match ran_session_setup_state {
+            RanSessionSetupState::Ngap => Ok(()),
+            RanSessionSetupState::F1ap(cell_group_config, nas) => {
+                self.log_message("<< NasPduSessionEstablishmentAccept");
+                RrcReconfigurationProcedure::new(self)
+                    .run(nas, session_index, cell_group_config.0)
+                    .await
+            }
         }
     }
 
@@ -81,13 +127,17 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
     async fn ngap_dispatch(self, pdu: Box<NgapPdu>) -> Result<()> {
         match *pdu {
             NgapPdu::InitiatingMessage(ngap::InitiatingMessage::InitialUeMessage(r)) => {
-                self.log_message(">> Ngap InitialUeMessage");
                 InitialUeMessageProcedure::new(self)
                     .run(Box::new(r))
                     .await?
             }
+            NgapPdu::InitiatingMessage(ngap::InitiatingMessage::UplinkNasTransport(r)) => {
+                UplinkNasTransportProcedure::new(self)
+                    .run(Box::new(r))
+                    .await?
+            }
             pdu => {
-                bail!("Unsupported F1apPdu {pdu:?}");
+                bail!("Unsupported NgapPdu {pdu:?}");
             }
         }
         Ok(())

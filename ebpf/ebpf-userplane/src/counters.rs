@@ -27,3 +27,13 @@ macro_rules! ensure {
         }
     };
 }
+
+// Variant which return Err
+macro_rules! ensure2 {
+    ($cond:expr, $stat:ident) => {
+        if !$cond {
+            inc($stat);
+            return Err(aya_ebpf::bindings::TC_ACT_SHOT);
+        }
+    };
+}

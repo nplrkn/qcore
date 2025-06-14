@@ -33,7 +33,7 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
                 dnn,
                 ..
             }) => {
-                self.log_message(">> UlNasTransport");
+                self.log_message(">> Nas UlNasTransport");
                 let dnn = if let Some(dnn) = dnn {
                     let dnn = crate::nas::parse::dnn(dnn)?;
                     if !self.check_dnn(&dnn).await? {

@@ -2,7 +2,7 @@ use anyhow::{Result, bail};
 use asn1_per::{Msb0, SerDes, bitvec, nonempty};
 use f1ap::*;
 use rrc::CellGroupId;
-use xxap::{GtpTunnel, TransportLayerAddress, PlmnIdentity};
+use xxap::{GtpTunnel, PlmnIdentity, TransportLayerAddress};
 
 use super::UeContext;
 
@@ -143,7 +143,7 @@ pub fn ue_context_setup_response(ue: &UeContext, local_ip: &String) -> Result<Bo
                     DlUpTnlInformationToBeSetupItem {
                         dl_up_tnl_information: UpTransportLayerInformation::GtpTunnel(GtpTunnel {
                             transport_layer_address,
-                            gtp_teid: drb.local_teid.clone(),
+                            gtp_teid: drb.local_teid,
                         },),
                     },
                 ]),

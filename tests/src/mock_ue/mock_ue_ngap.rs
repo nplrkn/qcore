@@ -6,7 +6,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use crate::{GnbUeContext, MockGnb, MockUe, mock_ue::Transport};
+use crate::{GnbUeContext, MockGnb, MockUe, mock_ue::Transport, packet::Packet};
 
 pub struct MockUeNgap<'a> {
     base: MockUe<UeNgapMode<'a>>,
@@ -50,15 +50,19 @@ impl<'a> Transport for UeNgapMode<'a> {
 
     async fn send_userplane_packet(
         &self,
-        _src_ip: &Ipv4Addr,
-        _dst_ip: &Ipv4Addr,
-        _src_port: u16,
-        _dst_port: u16,
+        src_ip: &Ipv4Addr,
+        dst_ip: &Ipv4Addr,
+        src_port: u16,
+        dst_port: u16,
     ) -> Result<()> {
-        todo!()
+        let packet = Packet::new_ue_udp(src_ip, dst_ip, src_port, dst_port);
+        self.gnb
+            .send_n3_data_packet(&self.gnb_ue_context, packet)
+            .await
     }
+
     async fn receive_userplane_packet(&self) -> Result<Vec<u8>> {
-        todo!()
+        self.gnb.recv_n3_data_packet(&self.gnb_ue_context).await
     }
 }
 

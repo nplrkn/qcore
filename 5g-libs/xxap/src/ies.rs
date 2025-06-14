@@ -73,7 +73,7 @@ impl PerCodec for TransportLayerAddress {
     }
 }
 // GtpTeid
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub struct GtpTeid(pub [u8; 4]);
 
 impl GtpTeid {
@@ -164,7 +164,7 @@ impl PerCodec for GtpTunnel {
     }
 }
 // PduSessionId
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PduSessionId(pub u8);
 
 impl PduSessionId {

@@ -150,7 +150,7 @@ fn session_ambr() -> NasSessionAmbr {
 }
 
 fn authorized_qos_rules(qfi: u8) -> NasQosRules {
-    let packet_filter_identifier = 0b0001 as u8;
+    let packet_filter_identifier = 0b0001;
     NasQosRules::new(vec![
         // TS24.501, 9.11.4.13
         0x01, // Qos Rule Identifier = 1

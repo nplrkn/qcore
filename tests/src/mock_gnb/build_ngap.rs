@@ -1,8 +1,7 @@
-use asn1_per::{Msb0, bitvec, nonempty};
+use anyhow::Result;
+use asn1_per::{Msb0, SerDes, bitvec, nonempty};
 use ngap::*;
 use xxap::*;
-
-//use super::UeContext;
 
 pub fn ng_setup_request() -> Box<NgapPdu> {
     Box::new(NgapPdu::InitiatingMessage(
@@ -100,4 +99,50 @@ pub fn initial_context_setup_response(
             criticality_diagnostics: None,
         }),
     ))
+}
+
+pub fn pdu_session_resource_setup_response(
+    amf_ue_ngap_id: AmfUeNgapId,
+    ran_ue_ngap_id: RanUeNgapId,
+    local_ip: &String,
+    local_teid: &[u8; 4],
+) -> Result<Box<NgapPdu>> {
+    let transport_layer_address = TransportLayerAddress::try_from(local_ip)?;
+
+    let pdu_session_resource_setup_response_transfer = PduSessionResourceSetupResponseTransfer {
+        dl_qos_flow_per_tnl_information: QosFlowPerTnlInformation {
+            up_transport_layer_information: UpTransportLayerInformation::GtpTunnel(GtpTunnel {
+                transport_layer_address,
+                gtp_teid: GtpTeid(*local_teid),
+            }),
+            associated_qos_flow_list: AssociatedQosFlowList(nonempty![AssociatedQosFlowItem {
+                qos_flow_identifier: ngap::QosFlowIdentifier(1),
+                qos_flow_mapping_indication: None,
+                current_qos_para_set_index: None,
+            }]),
+        },
+        additional_dl_qos_flow_per_tnl_information: None,
+        security_result: None,
+        qos_flow_failed_to_setup_list: None,
+        redundant_dl_qos_flow_per_tnl_information: None,
+        additional_redundant_dl_qos_flow_per_tnl_information: None,
+        used_rsn_information: None,
+        global_ran_node_id: None,
+    }
+    .as_bytes()?;
+
+    Ok(Box::new(NgapPdu::SuccessfulOutcome(
+        SuccessfulOutcome::PduSessionResourceSetupResponse(PduSessionResourceSetupResponse {
+            amf_ue_ngap_id,
+            ran_ue_ngap_id,
+            pdu_session_resource_setup_list_su_res: Some(PduSessionResourceSetupListSuRes(
+                nonempty![PduSessionResourceSetupItemSuRes {
+                    pdu_session_id: PduSessionId(1),
+                    pdu_session_resource_setup_response_transfer
+                }],
+            )),
+            pdu_session_resource_failed_to_setup_list_su_res: None,
+            criticality_diagnostics: None,
+        }),
+    )))
 }

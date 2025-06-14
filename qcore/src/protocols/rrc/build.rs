@@ -72,8 +72,8 @@ pub fn dl_information_transfer(
 pub fn reconfiguration(
     rrc_transaction_identifier: u8,
     nas_messages: Option<NonEmpty<Vec<u8>>>,
-    cell_group_config: Vec<u8>,
     session: &PduSession,
+    cell_group_config: Vec<u8>,
 ) -> Box<DlDcchMessage> {
     let dedicated_nas_message_list = nas_messages.map(|x| (x.map(DedicatedNasMessage)));
 

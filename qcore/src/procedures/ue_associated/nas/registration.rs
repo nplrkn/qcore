@@ -49,8 +49,8 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                 triggered the AS SMC to be sent as freshness parameter in the derivation of the initial KgNB/KeNB.           */
                 debug!(self.logger, "UL NAS COUNT {}", self.ue.nas.ul_nas_count());
                 let kgnb = security::derive_kgnb(&self.ue.kamf, self.ue.nas.ul_nas_count());
-                let inner = self.0.perform_ran_ue_registration_actions(&kgnb).await?;
-                RegistrationProcedure(inner).accept_registration().await?;
+                self.0 = self.0.ran_ue_registration(&kgnb).await?;
+                self.accept_registration().await?;
             }
             Err(cause) => self.reject_registration(cause).await?,
         }
@@ -61,6 +61,11 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     async fn accept_registration(&mut self) -> Result<()> {
         let tmsi = Tmsi(rand::random()); // TODO: 0xffffffff is not a valid TMSI (TS23.003, 2.4))
         debug!(self.logger, "Assigned {}", tmsi);
+        debug!(
+            self.logger,
+            "Allowed NSSAIs: SST {} with and without SD 0",
+            self.config().sst
+        );
         let r = crate::nas::build::registration_accept(
             self.config().sst,
             &self.config().plmn,
@@ -314,7 +319,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         }
 
         // Integrity protected GUTI registration
-        if guami_matches && self.restore_existing_nas_security_context(&tmsi).await {
+        if guami_matches && self.restore_existing_nas_security_context(tmsi).await {
             // Successful GUTI registration.  We can accept the registration.
             return Ok(false);
         }
@@ -475,7 +480,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
 
     fn configure_nas_security(&mut self, ue_security_capabilities: &NasUeSecurityCapability) {
         self.ue.security_capabilities =
-            crate::nas::parse::nas_ue_security_capability(&ue_security_capabilities);
+            crate::nas::parse::nas_ue_security_capability(ue_security_capabilities);
 
         // TS33.501, 6.7.2: AMF starts integrity protection before transmitting SecurityModeCommand.
         let knasint = security::derive_knasint(&self.ue.kamf);
