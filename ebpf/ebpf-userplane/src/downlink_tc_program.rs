@@ -328,7 +328,7 @@ pub fn tc_downlink_n3(ctx: TcContext) -> i32 {
         (*gtpexthdr).sequence_number = [0, 0];
         (*gtpexthdr).npdu_number = 0;
         // Next extension header type = 0x84 = NR RAN container (TS29.281, 5.2.1.3)
-        (*gtpexthdr).next_extension_header_type = GTP_EXT_PDU_SESSSION_CONTAINER;
+        (*gtpexthdr).next_extension_header_type = GTP_EXT_PDU_SESSION_CONTAINER;
 
         // --- GTP extension header - Pdu Session Container ---
         ensure!(is_long_enough(&ctx, INNER_PACKET_OFFSET), DlInternalError);
