@@ -1,7 +1,6 @@
+use crate::data::PdcpSequenceNumberLength;
 use std::net::IpAddr;
 use xxap::{GtpTeid, GtpTunnel};
-
-use crate::data::PdcpSequenceNumberLength;
 
 #[derive(Debug)]
 pub struct UserplaneSession {
