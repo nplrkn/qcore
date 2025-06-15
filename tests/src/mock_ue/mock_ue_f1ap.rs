@@ -158,12 +158,18 @@ impl<'a> MockUeF1ap<'a> {
     }
 
     pub async fn handle_rrc_reconfiguration_with_session_accept(&mut self) -> Result<()> {
-        let nas_bytes = self.handle_rrc_reconfiguration().await?;
-        self.handle_session_accept(nas_bytes)
+        let rrc = self.transport.receive_rrc_dl_dcch().await?;
+        let nas = self.handle_rrc_reconfiguration(rrc).await?;
+        self.handle_session_accept(nas)
     }
 
-    async fn handle_rrc_reconfiguration(&mut self) -> Result<Vec<u8>> {
+    pub async fn handle_rrc_reconfiguration_with_session_release(&mut self) -> Result<()> {
         let rrc = self.transport.receive_rrc_dl_dcch().await?;
+        let nas = self.handle_rrc_reconfiguration(rrc).await?;
+        self.handle_session_release(nas).await
+    }
+
+    async fn handle_rrc_reconfiguration(&mut self, rrc: Box<DlDcchMessageType>) -> Result<Vec<u8>> {
         let nas_messages = match *rrc {
             DlDcchMessageType::C1(C1_2::RrcReconfiguration(RrcReconfiguration {
                 critical_extensions:
@@ -188,7 +194,6 @@ impl<'a> MockUeF1ap<'a> {
             )),
         }?;
         let nas = nas_messages.head.0;
-
         let rrc_reconfiguration_complete = Box::new(build_rrc::reconfiguration_complete(
             RrcTransactionIdentifier(0),
         ));

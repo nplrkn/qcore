@@ -179,6 +179,59 @@ pub fn ue_context_setup_response(ue: &UeContext, local_ip: &String) -> Result<Bo
     )))
 }
 
+pub fn ue_context_modification_response(ue: &UeContext) -> Result<Box<F1apPdu>> {
+    let Some(gnb_cu_ue_f1ap_id) = ue.gnb_cu_ue_f1ap_id else {
+        bail!("CU F1AP ID should be set on UE");
+    };
+    Ok(Box::new(F1apPdu::SuccessfulOutcome(
+        SuccessfulOutcome::UeContextModificationResponse(UeContextModificationResponse {
+            gnb_cu_ue_f1ap_id,
+            gnb_du_ue_f1ap_id: GnbDuUeF1apId(ue.ue_id),
+            resource_coordination_transfer_container: None,
+            du_to_cu_rrc_information: None,
+            drbs_setup_mod_list: None,
+            drbs_modified_list: None,
+            srbs_failed_to_be_setup_mod_list: None,
+            drbs_failed_to_be_setup_mod_list: None,
+            s_cell_failedto_setup_mod_list: None,
+            drbs_failed_to_be_modified_list: None,
+            inactivity_monitoring_response: None,
+            criticality_diagnostics: None,
+            c_rnti: None,
+            associated_s_cell_list: None,
+            srbs_setup_mod_list: None,
+            srbs_modified_list: None,
+            full_configuration: None,
+            bh_channels_setup_mod_list: None,
+            bh_channels_modified_list: None,
+            bh_channels_failed_to_be_setup_mod_list: None,
+            bh_channels_failed_to_be_modified_list: None,
+            sl_drbs_setup_mod_list: None,
+            sl_drbs_modified_list: None,
+            sl_drbs_failed_to_be_setup_mod_list: None,
+            sl_drbs_failed_to_be_modified_list: None,
+            requested_target_cell_global_id: None,
+            scg_activation_status: None,
+            uu_rlc_channel_setup_list: None,
+            uu_rlc_channel_failed_to_be_setup_list: None,
+            uu_rlc_channel_modified_list: None,
+            uu_rlc_channel_failed_to_be_modified_list: None,
+            pc5rlc_channel_setup_list: None,
+            pc5rlc_channel_failed_to_be_setup_list: None,
+            pc5rlc_channel_modified_list: None,
+            pc5rlc_channel_failed_to_be_modified_list: None,
+            sdt_bearer_configuration_info: None,
+            ue_multicast_mr_bs_setup_list: None,
+            serving_cell_mo_encoded_in_cgc_list: None,
+            dedicated_si_delivery_indication: None,
+            configured_bwp_list: None,
+            early_sync_information: None,
+            ltm_configuration: None,
+            s_cpac_configuration: None,
+        }),
+    )))
+}
+
 pub fn build_gnb_cu_configuration_update_acknowledge(
     transaction_id: TransactionId,
     transport_layer_address: TransportLayerAddress,

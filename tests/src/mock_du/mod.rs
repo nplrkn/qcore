@@ -200,8 +200,15 @@ impl MockDu {
         // TODO: check UE context to see if SRB2 is set up.  If so this should arrive on
         // SRB2 rather than SRB1.
         assert_eq!(dl_rrc_message_transfer.srb_id.0, 1);
+        self.decode_rrc_container(ue, dl_rrc_message_transfer.rrc_container)
+    }
 
-        let pdcp_packet = dl_rrc_message_transfer.rrc_container.0;
+    fn decode_rrc_container(
+        &self,
+        ue: &mut UeContext,
+        rrc: RrcContainer,
+    ) -> Result<Box<DlDcchMessageType>> {
+        let pdcp_packet = rrc.0;
 
         let pdcp_sequence_number = pdcp::sequence_number(&pdcp_packet);
         assert_eq!(
@@ -282,23 +289,58 @@ impl MockDu {
         Ok(())
     }
 
-    pub async fn handle_ue_context_release(&self, ue: &UeContext) -> Result<()> {
-        // Receive release command
+    pub async fn handle_ue_context_modification(
+        &self,
+        ue: &mut UeContext,
+    ) -> Result<Option<Box<DlDcchMessageType>>> {
+        let ReceivedPdu { pdu, assoc_id } = self.receive_pdu_with_assoc_id().await?;
+        let F1apPdu::InitiatingMessage(InitiatingMessage::UeContextModificationRequest(r)) = *pdu
+        else {
+            bail!("Unexpected F1ap message {:?}", pdu)
+        };
+        ensure!(ue.ue_id == r.gnb_du_ue_f1ap_id.0);
+        info!(&self.logger, "UeContextModificationRequest <<");
+
+        // Delete the DRB.  (Currently the only case where QCore sends a context modification request is in response
+        // to a PDU session deletion.)
+        ue.drb = None;
+
+        let ue_context_modification_response = build_f1ap::ue_context_modification_response(ue)?;
+        info!(&self.logger, "UeContextModificationResponse >>");
+        self.send(&ue_context_modification_response, Some(assoc_id))
+            .await;
+        let rrc = r
+            .rrc_container
+            .map(|x| self.decode_rrc_container(ue, x))
+            .transpose()?;
+
+        Ok(rrc)
+    }
+
+    pub async fn handle_ue_context_release(
+        &self,
+        ue: &mut UeContext,
+    ) -> Result<Option<Box<DlDcchMessageType>>> {
         let ReceivedPdu { pdu, assoc_id } = self.receive_pdu_with_assoc_id().await?;
         let F1apPdu::InitiatingMessage(InitiatingMessage::UeContextReleaseCommand(r)) = *pdu else {
             bail!("Unexpected F1ap message {:?}", pdu)
         };
+        ensure!(ue.ue_id == r.gnb_du_ue_f1ap_id.0);
         info!(&self.logger, "UeContextReleaseCommand <<");
 
-        ensure!(ue.ue_id == r.gnb_du_ue_f1ap_id.0);
+        // Delete the DRB.
+        ue.drb = None;
 
-        // Send release complete
         let ue_release_complete =
             build_f1ap::ue_context_release_complete(r.gnb_cu_ue_f1ap_id, r.gnb_du_ue_f1ap_id);
-
         info!(&self.logger, "UeContextReleaseComplete >>");
         self.send(&ue_release_complete, Some(assoc_id)).await;
-        Ok(())
+        let rrc = r
+            .rrc_container
+            .map(|x| self.decode_rrc_container(ue, x))
+            .transpose()?;
+
+        Ok(rrc)
     }
 
     pub async fn handle_cu_configuration_update(

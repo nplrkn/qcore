@@ -1,5 +1,12 @@
 In progress
 
+- Handle session release request
+
+- NGAP mode 
+  - Test with srsRAN
+  - clean up uplink pipeline
+  - use different forwarding tables for NGAP vs F1AP 
+
 -  Session establishment with real phone
    -  OnePlus
    -  Samsung

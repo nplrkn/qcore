@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gsMessage, Nas5gsmMessage, NasPduAddress, NasPduSessionType,
     decode_nas_5gs_message,
-    messages::{NasDlNasTransport, NasPduSessionEstablishmentAccept},
+    messages::{NasDlNasTransport, NasPduSessionEstablishmentAccept, NasPduSessionReleaseCommand},
 };
 use slog::{Logger, info, o};
 use std::net::Ipv4Addr;
@@ -205,35 +205,18 @@ impl<T: Transport> MockUe<T> {
     }
 
     pub fn handle_session_accept(&mut self, nas_bytes: Vec<u8>) -> Result<()> {
-        let nas = decode_nas_5gs_message(&nas_bytes)?;
-        let Nas5gsMessage::SecurityProtected(_header, nas_gmm) = nas else {
-            bail!("Expected security protected message, got {nas:?}")
-        };
-        let Nas5gsMessage::Gmm(
-            _header,
-            Nas5gmmMessage::DlNasTransport(NasDlNasTransport {
-                payload_container, ..
-            }),
-        ) = *nas_gmm
+        let message = decode_security_protected_sm(nas_bytes)?;
+        let Nas5gsmMessage::PduSessionEstablishmentAccept(NasPduSessionEstablishmentAccept {
+            selected_pdu_session_type: NasPduSessionType { value: 1, .. },
+            pdu_address:
+                Some(NasPduAddress {
+                    value: nas_pdu_address_ie,
+                    ..
+                }),
+            ..
+        }) = message
         else {
-            bail!("Expected NasDlNasTransport, got {nas_gmm:?}")
-        };
-
-        let nas_gsm = decode_nas_5gs_message(&payload_container.value)?;
-        let Nas5gsMessage::Gsm(
-            _header,
-            Nas5gsmMessage::PduSessionEstablishmentAccept(NasPduSessionEstablishmentAccept {
-                selected_pdu_session_type: NasPduSessionType { value: 1, .. },
-                pdu_address:
-                    Some(NasPduAddress {
-                        value: nas_pdu_address_ie,
-                        ..
-                    }),
-                ..
-            }),
-        ) = nas_gsm
-        else {
-            bail!("Expected NasPduSessionEstablishmentAccept, got {nas_gsm:?}");
+            bail!("Expected NasPduSessionEstablishmentAccept, got {message:?}");
         };
 
         self.ipv4_addr = Ipv4Addr::new(
@@ -244,4 +227,43 @@ impl<T: Transport> MockUe<T> {
         );
         Ok(())
     }
+
+    pub async fn send_nas_pdu_session_release(&mut self) -> Result<()> {
+        let nas_session_release_request = build_nas::pdu_session_release_request()?;
+        info!(&self.logger, "NAS Pdu Session Release request >>");
+        self.send_nas(nas_session_release_request).await
+    }
+
+    pub async fn handle_session_release(&mut self, nas_bytes: Vec<u8>) -> Result<()> {
+        let message = decode_security_protected_sm(nas_bytes)?;
+        let Nas5gsmMessage::PduSessionReleaseCommand(NasPduSessionReleaseCommand { .. }) = message
+        else {
+            bail!("Expected NasPduSessionReleaseCommand, got {message:?}");
+        };
+        let nas_session_release_complete = build_nas::pdu_session_release_complete()?;
+        info!(&self.logger, "NAS Pdu Session Release request >>");
+        self.send_nas(nas_session_release_complete).await
+    }
+}
+
+pub fn decode_security_protected_sm(nas_bytes: Vec<u8>) -> Result<Nas5gsmMessage> {
+    let nas = decode_nas_5gs_message(&nas_bytes)?;
+    let Nas5gsMessage::SecurityProtected(_header, nas_gmm) = nas else {
+        bail!("Expected security protected message, got {nas:?}")
+    };
+    let Nas5gsMessage::Gmm(
+        _header,
+        Nas5gmmMessage::DlNasTransport(NasDlNasTransport {
+            payload_container, ..
+        }),
+    ) = *nas_gmm
+    else {
+        bail!("Expected NasDlNasTransport, got {nas_gmm:?}")
+    };
+
+    let nas_gsm = decode_nas_5gs_message(&payload_container.value)?;
+    let Nas5gsMessage::Gsm(_header, message) = nas_gsm else {
+        bail!("Expected Gsm message, got {nas_gsm:?}");
+    };
+    Ok(message)
 }
