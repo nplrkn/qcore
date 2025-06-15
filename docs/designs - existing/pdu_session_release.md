@@ -7,8 +7,9 @@ sequenceDiagram
   participant GNB
   participant QC
   GNB->>QC: Nas Pdu Session Release Request
-  QC->>GNB: Ngap Pdu Session Resource Release Command + Nas Pdu Session Release Complete  
+  QC->>GNB: Ngap Pdu Session Resource Release Command + Nas Pdu Session Release Command  
   GNB->>QC: Ngap Pdu Session Resource Release Response
+  GNB->>QC: Nas Pdu Session Release Complete
 ```
 
 

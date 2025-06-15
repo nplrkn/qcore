@@ -26,5 +26,8 @@ async fn session_release() -> anyhow::Result<()> {
     ue.send_nas_pdu_session_release().await?;
     du.handle_ue_context_modification(ue.du_ue_context())
         .await?;
-    ue.handle_rrc_reconfiguration_with_session_release().await
+    ue.handle_rrc_reconfiguration_with_session_release().await?;
+
+    qc.wait_until_idle().await;
+    Ok(())
 }

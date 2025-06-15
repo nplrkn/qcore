@@ -5,10 +5,11 @@ use crate::{
     procedures::{
         UeMessage,
         ue_associated::{
-            F1apBase, InitialContextSetupProcedure, InitialUeMessageProcedure, NasBase,
-            PduSessionResourceSetupProcedure, RrcReconfigurationProcedure,
-            RrcSecurityModeProcedure, RrcSetupProcedure, UeContextReleaseProcedure,
-            UeContextSetupProcedure, UlInformationTransferProcedure, UplinkNasTransportProcedure,
+            F1apBase, F1apModeSessionReleaseProcedure, InitialContextSetupProcedure,
+            InitialUeMessageProcedure, NasBase, PduSessionResourceSetupProcedure,
+            RrcReconfigurationProcedure, RrcSecurityModeProcedure, RrcSetupProcedure,
+            UeContextReleaseProcedure, UeContextSetupProcedure, UlInformationTransferProcedure,
+            UplinkNasTransportProcedure,
         },
     },
 };
@@ -30,6 +31,7 @@ pub struct UeProcedure<'a, A: HandlerApi> {
     pub ue: &'a mut UeContext,
     receiver: &'a Receiver<UeMessage>,
     give_context: &'a mut Option<Sender<NasContext>>,
+    ping: &'a mut Option<Sender<()>>,
 }
 
 impl<'a, A: HandlerApi> std::ops::Deref for UeProcedure<'a, A> {
@@ -52,12 +54,14 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         logger: &'a Logger,
         receiver: &'a Receiver<UeMessage>,
         give_context: &'a mut Option<Sender<NasContext>>,
+        ping: &'a mut Option<Sender<()>>,
     ) -> Self {
         UeProcedure {
             base: Procedure::new(api, logger),
             ue,
             receiver,
             give_context,
+            ping,
         }
     }
 
@@ -101,10 +105,25 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
             RanSessionSetupState::Ngap => Ok(()),
             RanSessionSetupState::F1ap(cell_group_config, nas) => {
                 self.log_message("<< NasPduSessionEstablishmentAccept");
-                RrcReconfigurationProcedure::new(self)
-                    .run(nas, session_index, cell_group_config.0)
-                    .await
+                let _ = RrcReconfigurationProcedure::new(self)
+                    .add_session(nas, session_index, cell_group_config.0)
+                    .await;
+                Ok(())
             }
+        }
+    }
+
+    pub async fn ran_session_release(
+        self,
+        released_session: &PduSession,
+        nas: Vec<u8>,
+    ) -> Result<Self> {
+        if self.ngap_mode() {
+            bail!("Session deletion not yet implemented in NGAP mode")
+        } else {
+            F1apModeSessionReleaseProcedure::new(self)
+                .run(released_session, nas)
+                .await
         }
     }
 
@@ -119,6 +138,10 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
                 );
                 *self.give_context = Some(sender);
                 Err(anyhow!("Take context"))
+            }
+            UeMessage::Ping(sender) => {
+                *(self.ping) = Some(sender);
+                Ok(())
             }
         }
     }
@@ -178,16 +201,24 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         Ok(())
     }
 
-    // Returns the next F1AP PDU, and also handles TakeContext messages.
-    // The latter causes the self-destruction of the UE handler by returning
-    // an error.
-    async fn receive_f1ap_pdu(&mut self) -> Result<Box<F1apPdu>> {
-        match self.receiver.recv().await? {
-            UeMessage::F1ap(pdu) => Ok(pdu),
-            UeMessage::TakeContext(sender) => {
-                *self.give_context = Some(sender);
-                Err(anyhow!("Take context"))
+    async fn receive_pdu(&mut self) -> Result<UeMessage> {
+        loop {
+            match self.receiver.recv().await? {
+                UeMessage::TakeContext(sender) => {
+                    *self.give_context = Some(sender);
+                    bail!("Take context")
+                }
+                UeMessage::Ping(sender) => {
+                    *self.ping = Some(sender);
+                }
+                x => return Ok(x),
             }
+        }
+    }
+
+    async fn receive_f1ap_pdu(&mut self) -> Result<Box<F1apPdu>> {
+        match self.receive_pdu().await? {
+            UeMessage::F1ap(pdu) => Ok(pdu),
             _ => {
                 bail!("Unexpected UeMessage received");
             }
@@ -195,12 +226,8 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
     }
 
     async fn receive_ngap_pdu(&mut self) -> Result<Box<NgapPdu>> {
-        match self.receiver.recv().await? {
+        match self.receive_pdu().await? {
             UeMessage::Ngap(pdu) => Ok(pdu),
-            UeMessage::TakeContext(sender) => {
-                *self.give_context = Some(sender);
-                Err(anyhow!("Take context"))
-            }
             _ => {
                 bail!("Unexpected UeMessage received");
             }

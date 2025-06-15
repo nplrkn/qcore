@@ -40,15 +40,21 @@ impl<A: HandlerApi> UeMessageHandler<A> {
         give_context: &mut Option<Sender<NasContext>>,
     ) -> Result<()> {
         loop {
+            let mut ping = None;
             UeProcedure::new(
                 &self.api,
                 ue_context,
                 &self.logger,
                 &self.receiver,
                 give_context,
+                &mut ping,
             )
             .dispatch()
             .await?;
+
+            if let Some(sender) = ping {
+                let _ = sender.send(()).await;
+            }
         }
     }
 

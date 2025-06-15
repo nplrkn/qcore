@@ -1,6 +1,7 @@
 //! uplink_nas - transfer of a Nas message from UE to AMF
 use super::prelude::*;
 use super::{DeregistrationProcedure, RegistrationProcedure, SessionEstablishmentProcedure};
+use crate::procedures::ue_associated::SessionReleaseProcedure;
 use crate::protocols::nas::FGMM_CAUSE_DNN_NOT_SUPPORTED_OR_NOT_SUBSCRIBED_IN_THE_SLICE;
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gsMessage, Nas5gsmMessage, decode_nas_5gs_message,
@@ -55,7 +56,11 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
                             .await?;
                     }
                     // TODO: PduSessionModificationRequest(NasPduSessionModificationRequest)
-                    // TODO: PduSessionReleaseRequest(NasPduSessionReleaseRequest)
+                    Nas5gsMessage::Gsm(header, Nas5gsmMessage::PduSessionReleaseRequest(ref r)) => {
+                        SessionReleaseProcedure::new(self.0)
+                            .ue_requested(header, r)
+                            .await?;
+                    }
                     m => {
                         warn!(
                             self.logger,

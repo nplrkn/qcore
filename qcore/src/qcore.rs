@@ -155,6 +155,17 @@ impl QCore {
         }
     }
 
+    /// Testability API to wait until all UE message handlers have processed all pending
+    /// procedures.
+    pub async fn wait_until_idle(&self) {
+        let tasks = self.ue_tasks.iter();
+        for task in tasks {
+            let (sender, receiver) = channel::bounded(1);
+            let _ = task.send(UeMessage::Ping(sender)).await;
+            let _ = receiver.recv().await;
+        }
+    }
+
     pub fn ip_addr(&self) -> &IpAddr {
         &self.config.ip_addr
     }

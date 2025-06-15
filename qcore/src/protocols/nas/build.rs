@@ -6,14 +6,14 @@ use oxirush_nas::{
     NasAdditionalFGSecurityInformation, NasAuthenticationParameterAutn,
     NasAuthenticationParameterRand, NasDnn, NasExtendedProtocolConfigurationOptions, NasFGmmCause,
     NasFGsIdentityType, NasFGsMobileIdentity, NasFGsNetworkFeatureSupport,
-    NasFGsRegistrationResult, NasKeySetIdentifier, NasNssai, NasPayloadContainer,
+    NasFGsRegistrationResult, NasFGsmCause, NasKeySetIdentifier, NasNssai, NasPayloadContainer,
     NasPayloadContainerType, NasPduAddress, NasPduSessionIdentity2, NasPduSessionType,
     NasQosFlowDescriptions, NasQosRules, NasSNssai, NasSecurityAlgorithms, NasSessionAmbr,
     NasUeSecurityCapability, encode_nas_5gs_message,
     messages::{
         NasAuthenticationRequest, NasDlNasTransport, NasFGmmStatus, NasIdentityRequest,
-        NasPduSessionEstablishmentAccept, NasRegistrationAccept, NasRegistrationReject,
-        NasSecurityModeCommand,
+        NasPduSessionEstablishmentAccept, NasPduSessionReleaseCommand, NasRegistrationAccept,
+        NasRegistrationReject, NasSecurityModeCommand,
     },
 };
 use security::NAS_ABBA;
@@ -252,20 +252,47 @@ pub fn pdu_session_establishment_accept(
         pdu_session.id,
         pti,
     );
-    let inner_message = encode_nas_5gs_message(&inner_message)?;
-    let outer_message = Nas5gsMessage::new_5gmm(
+    wrap_in_dl_nas_transport(pdu_session.id, &inner_message)
+}
+
+pub fn pdu_session_release_command(
+    pdu_session: &PduSession,
+    cause: u8,
+) -> Result<Box<Nas5gsMessage>> {
+    let inner_message = Nas5gsMessage::new_5gsm(
+        Nas5gsmMessageType::PduSessionReleaseCommand,
+        Nas5gsmMessage::PduSessionReleaseCommand(NasPduSessionReleaseCommand {
+            fgsm_cause: NasFGsmCause::new(cause),
+            back_off_timer_value: None,
+            eap_message: None,
+            fgsm_congestion_re_attempt_indicator: None,
+            extended_protocol_configuration_options: None,
+            access_type: None,
+            service_level_aa_container: None,
+        }),
+        pdu_session.id,
+        0,
+    );
+    wrap_in_dl_nas_transport(pdu_session.id, &inner_message)
+}
+
+fn wrap_in_dl_nas_transport(
+    session_id: u8,
+    inner_message: &Nas5gsMessage,
+) -> Result<Box<Nas5gsMessage>> {
+    let inner_message = encode_nas_5gs_message(inner_message)?;
+    Ok(Box::new(Nas5gsMessage::new_5gmm(
         Nas5gmmMessageType::DlNasTransport,
         Nas5gmmMessage::DlNasTransport(NasDlNasTransport {
             payload_container_type: NasPayloadContainerType::new(0b0001), // 5GSM
             payload_container: NasPayloadContainer::new(inner_message),
-            pdu_session_id: Some(NasPduSessionIdentity2::new(pdu_session.id)),
+            pdu_session_id: Some(NasPduSessionIdentity2::new(session_id)),
             additional_information: None,
             fgmm_cause: None,
             back_off_timer_value: None,
             lower_bound_timer_value: None,
         }),
-    );
-    Ok(Box::new(outer_message))
+    )))
 }
 
 fn extended_protocol_configuration_options(

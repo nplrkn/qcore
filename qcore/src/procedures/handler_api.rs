@@ -12,6 +12,11 @@ pub enum UeMessage {
     F1ap(Box<F1apPdu>),
     Ngap(Box<NgapPdu>),
     TakeContext(Sender<NasContext>),
+
+    // Send this message to a message handler to get a notification when the current procedure has finished processing.
+    // Useful for testing purposes, to ensure that QCore has finished processing a response that the test framework
+    // has sent in.
+    Ping(Sender<()>),
 }
 
 /// Trait representing the collection of services needed by QCore procedure handlers.
