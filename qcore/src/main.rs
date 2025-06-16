@@ -64,6 +64,10 @@ struct Args {
     /// PDCP sequence number length: 18-bit (false) or 12-bit (true).
     #[arg(long, default_value_t = false)]
     pdcp_12bit_sn: bool,
+
+    /// NGAP mode - act as a 5G Core (rather than a combined 5G Core / CU).
+    #[arg(long, default_value_t = false)]
+    ngap_mode: bool,
 }
 
 #[async_std::main]
@@ -100,7 +104,7 @@ async fn main() -> Result<()> {
         },
         logger,
         sub_db,
-        false,
+        args.ngap_mode,
     )
     .await?;
 

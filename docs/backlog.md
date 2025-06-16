@@ -7,6 +7,9 @@ In progress
   - clean up uplink pipeline
   - use different forwarding tables for NGAP vs F1AP 
   - session release
+  - review main args (e.g. 'f1u-interface-name')
+  - log startup mode more explicitly
+  - handle UeRadioCapabilityInfoIndication
 
 -  Session establishment with real phone
    -  OnePlus
