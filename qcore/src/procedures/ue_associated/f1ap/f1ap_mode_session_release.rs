@@ -9,7 +9,7 @@ impl<'a, A: HandlerApi> F1apModeSessionReleaseProcedure<'a, A> {
         released_session: &PduSession,
         nas: Vec<u8>,
     ) -> Result<UeProcedure<'a, A>> {
-        // Send a UE context modification to delete the DRB and SRB2.
+        // Send a UE context modification to delete the DRB.
         let rsp = self
             .perform_f1_ue_context_modification(released_session)
             .await?;

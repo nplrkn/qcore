@@ -1,30 +1,16 @@
-When releasing a PDU session, we first update the UE via Rrc Reconfiguration and then modify the F1 context to 
-delete SRB2 and DRB 1.
-
-## NGAP mode
-```mermaid
-sequenceDiagram
-  participant GNB
-  participant QC
-  GNB->>QC: Nas Pdu Session Release Request
-  QC->>GNB: Ngap Pdu Session Resource Release Command + Nas Pdu Session Release Command  
-  GNB->>QC: Ngap Pdu Session Resource Release Response
-  GNB->>QC: Nas Pdu Session Release Complete
-```
-
-
-srsRAN does DU first and doesn't bundle rrc 
-
-## F1AP mode
 ```mermaid
 sequenceDiagram
   participant DU
-  participant QC
-  DU->>QC: Nas Pdu Session Release Request
-  QC->>DU: F1 Ue Context Modification (DRB+SRB2) 
-  DU->>QC: F1 Ue Context Modification Response (DU to CU Rrc Information)
-  QC->>DU: Rrc Reconfiguration + Nas Pdu Session Release Command 
-  DU->>QC: Rrc Reconfiguration Complete
-  DU->>QC: Nas Pdu Session Release Complete
+  participant CU
+  participant Core
+  DU->>CU: Nas Pdu Session Release Request
+  CU->>Core: Nas Pdu Session Release Request
+  Core->>CU: Ngap Pdu Session Resource Release Command + Nas Pdu Session Release Command  
+  CU->>DU: F1 Ue Context Modification (DRB+SRB2) 
+  DU->>CU: F1 Ue Context Modification Response (DU to CU Rrc Information)
+  CU->>DU: Rrc Reconfiguration + Nas Pdu Session Release Command 
+  CU->>Core: Ngap Pdu Session Resource Release Response
+  DU->>CU: Rrc Reconfiguration Complete
+  DU->>CU: Nas Pdu Session Release Complete
+  CU->>Core: Nas Pdu Session Release Complete
 ```
-
