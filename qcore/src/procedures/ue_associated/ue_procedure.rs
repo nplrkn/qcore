@@ -8,8 +8,8 @@ use crate::{
             F1apBase, F1apModeSessionReleaseProcedure, InitialContextSetupProcedure,
             InitialUeMessageProcedure, NasBase, PduSessionResourceSetupProcedure,
             RrcReconfigurationProcedure, RrcSecurityModeProcedure, RrcSetupProcedure,
-            UeContextReleaseProcedure, UeContextSetupProcedure, UlInformationTransferProcedure,
-            UplinkNasTransportProcedure,
+            RrcUeCapabilityEnquiryProcedure, UeContextReleaseProcedure, UeContextSetupProcedure,
+            UlInformationTransferProcedure, UplinkNasTransportProcedure,
         },
     },
 };
@@ -69,7 +69,16 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         if self.ngap_mode() {
             InitialContextSetupProcedure::new(self).run(kgnb).await
         } else {
-            RrcSecurityModeProcedure::new(self).run(kgnb).await
+            // TODO: this should be a procedure of its own.  This function should not contain the implementation of
+            // 'ran ue registration'.  It should just swtich to ngap::RanUeRegistration or f1ap::.
+            let s = RrcSecurityModeProcedure::new(self).run(kgnb).await?;
+
+            let s = if s.ue.rat_capabilities.is_none() {
+                RrcUeCapabilityEnquiryProcedure::new(s).run().await?
+            } else {
+                s
+            };
+            Ok(s)
         }
     }
 

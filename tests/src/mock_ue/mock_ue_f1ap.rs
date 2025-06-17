@@ -157,6 +157,20 @@ impl<'a> MockUeF1ap<'a> {
         self.transport.send_ul_rrc(&security_mode_complete).await
     }
 
+    pub async fn handle_capability_enquiry(&mut self) -> Result<()> {
+        let message = self.transport.receive_rrc_dl_dcch().await?;
+        let DlDcchMessageType::C1(C1_2::UeCapabilityEnquiry(enquiry)) = *message
+        else {
+            bail!("Expected Ue Capability Enquiry - got {:?}", message)
+        };
+        info!(&self.logger, "Rrc UeCapabilityEnquiry <<");
+        let information = Box::new(build_rrc::ue_capability_information(
+            enquiry.rrc_transaction_identifier,
+        ));
+        info!(&self.logger, "Rrc UeCapabilityInformation >>");
+        self.transport.send_ul_rrc(&information).await
+    }
+
     pub async fn handle_rrc_reconfiguration_with_session_accept(&mut self) -> Result<()> {
         let rrc = self.transport.receive_rrc_dl_dcch().await?;
         let nas = self.handle_rrc_reconfiguration(rrc, Some(1), None).await?;

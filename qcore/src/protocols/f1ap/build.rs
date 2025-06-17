@@ -278,7 +278,10 @@ pub fn ue_context_setup_request(
         sp_cell_ul_configured: Some(CellUlConfigured::None),
         cu_to_du_rrc_information: CuToDuRrcInformation {
             cg_config_info: None,
-            ue_capability_rat_container_list: None,
+            ue_capability_rat_container_list: ue
+                .rat_capabilities
+                .as_ref()
+                .map(|x| UeCapabilityRatContainerList(x.clone())),
             meas_config: None,
             handover_preparation_information: None,
             cell_group_config: None,

@@ -11,6 +11,7 @@ async fn authentication_failure() -> anyhow::Result<()> {
     ue.handle_nas_authentication().await?;
     ue.handle_nas_security_mode().await?;
     ue.handle_rrc_security_mode().await?;
+    ue.handle_capability_enquiry().await?;
     ue.handle_nas_registration_accept().await?;
 
     Ok(())

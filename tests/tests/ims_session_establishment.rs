@@ -13,6 +13,7 @@ async fn ims_session_establishment() -> anyhow::Result<()> {
     ue.handle_nas_authentication().await?;
     ue.handle_nas_security_mode().await?;
     ue.handle_rrc_security_mode().await?;
+    ue.handle_capability_enquiry().await?;
     ue.handle_nas_registration_accept().await?;
 
     // UE establishes PDU session with DNN = 'ims' and gets 5GMM status.

@@ -1,4 +1,4 @@
-use asn1_per::{Msb0, bitvec};
+use asn1_per::{bitvec, Msb0};
 use rrc::*;
 
 pub fn setup_request() -> UlCcchMessage {
@@ -55,6 +55,22 @@ pub fn ul_information_transfer(nas_bytes: Vec<u8>) -> UlDcchMessage {
             critical_extensions: CriticalExtensions37::UlInformationTransfer(
                 UlInformationTransferIEs {
                     dedicated_nas_message: Some(DedicatedNasMessage(nas_bytes)),
+                    late_non_critical_extension: None,
+                },
+            ),
+        })),
+    }
+}
+
+pub fn ue_capability_information(
+    rrc_transaction_identifier: RrcTransactionIdentifier,
+) -> UlDcchMessage {
+    UlDcchMessage {
+        message: UlDcchMessageType::C1(C1_6::UeCapabilityInformation(UeCapabilityInformation {
+            rrc_transaction_identifier,
+            critical_extensions: CriticalExtensions33::UeCapabilityInformation(
+                UeCapabilityInformationIEs {
+                    ue_capability_rat_container_list: None, // TODO: put something realistic in here
                     late_non_critical_extension: None,
                 },
             ),

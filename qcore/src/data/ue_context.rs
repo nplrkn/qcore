@@ -20,6 +20,7 @@ pub struct UeContext {
 
     // CU only data
     pub pdcp_tx: PdcpTx,
+    pub rat_capabilities: Option<Vec<u8>>, // ASN.1 encoded Rrc UE-CapabilityRAT-ContainerList
 }
 
 impl UeContext {
@@ -35,6 +36,7 @@ impl UeContext {
             ran_ue_id: 0,
             pdcp_tx: PdcpTx::default(),
             security_capabilities: UeSecurityCapabilities::default(),
+            rat_capabilities: None,
         }
     }
 

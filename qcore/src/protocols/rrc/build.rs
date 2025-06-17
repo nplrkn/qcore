@@ -163,3 +163,23 @@ pub fn reconfiguration(
         })),
     })
 }
+
+pub fn ue_capability_enquiry(rrc_transaction_identifier: u8) -> Box<DlDcchMessage> {
+    Box::new(DlDcchMessage {
+        message: DlDcchMessageType::C1(C1_2::UeCapabilityEnquiry(UeCapabilityEnquiry {
+            rrc_transaction_identifier: RrcTransactionIdentifier(rrc_transaction_identifier),
+            critical_extensions: CriticalExtensions32::UeCapabilityEnquiry(
+                UeCapabilityEnquiryIEs {
+                    ue_capability_rat_request_list: UeCapabilityRatRequestList(nonempty![
+                        UeCapabilityRatRequest {
+                            rat_type: RatType::Nr,
+                            capability_request_filter: None
+                        }
+                    ]),
+                    late_non_critical_extension: None,
+                    ue_capability_enquiry_ext: None,
+                },
+            ),
+        })),
+    })
+}

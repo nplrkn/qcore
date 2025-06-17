@@ -11,6 +11,7 @@ async fn guti_registration() -> anyhow::Result<()> {
     ue.handle_nas_authentication().await?;
     ue.handle_nas_security_mode().await?;
     ue.handle_rrc_security_mode().await?;
+    ue.handle_capability_enquiry().await?;
     ue.handle_nas_registration_accept().await?;
 
     // In the first variant, the UE message handler is not running.
@@ -24,6 +25,7 @@ async fn guti_registration() -> anyhow::Result<()> {
     // QCore skip NAS authentication + security and moves straight to RRC security.
     ue.perform_rrc_setup().await?;
     ue.handle_rrc_security_mode().await?;
+    ue.handle_capability_enquiry().await?;
     ue.handle_nas_registration_accept().await?;
 
     // In the second variant, the UE message handler is running.
@@ -31,6 +33,7 @@ async fn guti_registration() -> anyhow::Result<()> {
     // This is the case where the UE resets and its GUTI registration comes in using a new F1AP ID.
     ue.perform_rrc_setup().await?;
     ue.handle_rrc_security_mode().await?;
+    ue.handle_capability_enquiry().await?;
     ue.handle_nas_registration_accept().await?;
 
     Ok(())
