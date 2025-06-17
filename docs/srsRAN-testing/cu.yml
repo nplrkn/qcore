@@ -1,0 +1,27 @@
+cu_cp:
+  amf:
+    addr: 127.0.0.3                     # The address or hostname of the AMF.
+    bind_addr: 127.0.0.1                  # A local IP that the gNB binds to for traffic from the AMF.
+    supported_tracking_areas:             # Configure the TA associated with the CU-CP
+      - tac: 7
+        plmn_list:
+          - plmn: "00101"
+            tai_slice_support_list:
+              - sst: 1
+  f1ap:
+    bind_addr: 127.0.0.1                 # Configure the F1AP bind address, this will enable the CU-cp to connect to the DU
+
+cu_up:
+  ngu:
+    socket:
+      -
+        bind_addr: 127.0.1.1                 # Configure the F1AP bind address, this will enable the CU-cp to connect to the DU
+
+  f1u:
+    socket:                               # Define UDP/IP socket(s) for F1-U interface.
+      -                                     # Socket 1
+        bind_addr: 127.0.0.1                  # Sets the address that the F1-U socket will bind to.
+  # nru:
+  #   socket:
+  #     -
+  #       bind_addr: 127.0.10.1

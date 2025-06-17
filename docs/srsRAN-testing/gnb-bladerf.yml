@@ -1,0 +1,62 @@
+# This configuration file is adapted from the examples in the srsRAN project.  It creates a GNB that talks ZMQ to the
+# srsRAN simulated UE.
+
+cu_cp:
+  amf:
+    addr: 127.0.0.1                 # The address or hostname of the AMF.
+    port: 38412
+    bind_addr: 127.0.0.2            # A local IP that the gNB binds to for traffic from the AMF.
+    supported_tracking_areas:
+      - tac: 1
+        plmn_list:
+          - plmn: "00101"
+            tai_slice_support_list:
+              - sst: 1
+  inactivity_timer: 7200            # Sets the UE/PDU Session/DRB inactivity timer to 7200 seconds. Supported: [1 - 7200].
+
+ru_sdr:
+ device_driver: bladerf
+ clock: internal
+ srate: 23.04 
+ lo_offset: 0
+ tx_gain: 66
+ rx_gain: 30
+
+cell_cfg:
+ dl_arfcn: 640000
+ band: 78
+ channel_bandwidth_MHz: 20
+ common_scs: 30
+ plmn: "00101"
+ tac: 1
+ slicing:
+ - sst: 1
+   sd: 0
+ pci: 1
+ tdd_ul_dl_cfg:
+  dl_ul_tx_period: 10
+  nof_dl_slots: 6
+  nof_dl_symbols: 8
+  nof_ul_slots: 3
+  nof_ul_symbols: 0
+ nof_antennas_ul: 1
+ nof_antennas_dl: 1
+ pdsch:
+  mcs_table: qam256
+ pusch:
+  mcs_table: qam64
+  #olla_max_snr_offset: 8
+  #min_k2: 2
+ pucch:
+  sr_period_ms: 10
+  
+log:
+  filename: /tmp/gnb.log            # Path of the log file.
+  all_level: info                   # Logging level applied to all layers.
+  hex_max_size: 1024
+
+pcap:
+  mac_enable: false                 # Set to true to enable MAC-layer PCAPs.
+  mac_filename: /tmp/gnb_mac.pcap   # Path where the MAC PCAP is stored.
+  ngap_enable: false                # Set to true to enable NGAP PCAPs.
+  ngap_filename: /tmp/gnb_ngap.pcap # Path where the NGAP PCAP is stored.

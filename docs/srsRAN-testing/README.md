@@ -51,7 +51,7 @@ sudo ip netns add ue1
 ### Copy across config files
 
 ```sh
-cp ~/qcore/docs/srsRAN-testing/du.yml ~/srsRAN_Project/build/apps/du
+cp ~/qcore/docs/srsRAN-testing/du-zmq.yml ~/srsRAN_Project/build/apps/du
 cp ~/qcore/docs/srsRAN-testing/ue.conf ~/srsRAN_4G/build/srsue/src
 ```
 
@@ -75,7 +75,7 @@ RUST_LOG=debug cargo run -- --mcc 001 --mnc 01 --local-ip 127.0.0.1  --f1u-inter
 
 ```sh
 cd ~/srsRAN_Project/build/apps/du
-sudo ./srsdu -c du.yml
+sudo ./srsdu -c du-zmq.yml
 ```
 
 #### Terminal 4 - UE
