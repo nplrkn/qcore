@@ -282,8 +282,10 @@ impl<'a, A: HandlerApi> super::F1apBase for UeProcedure<'a, A> {
     ) -> Result<Box<UlDcchMessage>> {
         // Send the request using the common code in rrc_indication().
         self.rrc_indication(srb_id, rrc).await?;
+        self.receive_rrc().await
+    }
 
-        // Wait for a response.
+    async fn receive_rrc(&mut self) -> Result<Box<UlDcchMessage>> {
         let pdu = self.receive_f1ap_pdu().await?;
         let F1apPdu::InitiatingMessage(InitiatingMessage::UlRrcMessageTransfer(
             ul_rrc_message_transfer,
@@ -322,10 +324,8 @@ impl<'a, A: HandlerApi> super::F1apBase for UeProcedure<'a, A> {
 }
 
 impl<'a, A: HandlerApi> NasBase for UeProcedure<'a, A> {
-    async fn nas_request(&mut self, nas: Box<Nas5gsMessage>) -> Result<Box<Nas5gsMessage>> {
-        // TODO: these two implementation should be in different files
+    async fn receive_nas(&mut self) -> Result<Box<Nas5gsMessage>> {
         if self.ngap_mode() {
-            self.nas_indication(nas).await?;
             self.receive_ngap_pdu().await.and_then(|x| match *x {
                 NgapPdu::InitiatingMessage(ngap::InitiatingMessage::UplinkNasTransport(
                     UplinkNasTransport { nas_pdu, .. },
@@ -339,30 +339,27 @@ impl<'a, A: HandlerApi> NasBase for UeProcedure<'a, A> {
                 )),
             })
         } else {
-            let nas_bytes = self.ue.nas.encode(nas)?;
-            let rrc = crate::rrc::build::dl_information_transfer(
-                1, // TODO transaction ID
-                DedicatedNasMessage(nas_bytes),
-            );
-
-            self.rrc_request(SrbId(1), &rrc)
-                .await
-                .and_then(|x| match x.message {
-                    UlDcchMessageType::C1(C1_6::UlInformationTransfer(UlInformationTransfer {
-                        critical_extensions:
-                            CriticalExtensions37::UlInformationTransfer(UlInformationTransferIEs {
-                                dedicated_nas_message: Some(DedicatedNasMessage(response_bytes)),
-                                ..
-                            }),
-                    })) => {
-                        let msg = self.nas_decode(&response_bytes)?;
-                        Ok(msg)
-                    }
-                    _ => Err(anyhow!(
-                        "Expected RrcUlInformationTransfer with DedicatedNasMessage"
-                    )),
-                })
+            self.receive_rrc().await.and_then(|x| match x.message {
+                UlDcchMessageType::C1(C1_6::UlInformationTransfer(UlInformationTransfer {
+                    critical_extensions:
+                        CriticalExtensions37::UlInformationTransfer(UlInformationTransferIEs {
+                            dedicated_nas_message: Some(DedicatedNasMessage(response_bytes)),
+                            ..
+                        }),
+                })) => {
+                    let msg = self.nas_decode(&response_bytes)?;
+                    Ok(msg)
+                }
+                _ => Err(anyhow!(
+                    "Expected RrcUlInformationTransfer with DedicatedNasMessage"
+                )),
+            })
         }
+    }
+
+    async fn nas_request(&mut self, nas: Box<Nas5gsMessage>) -> Result<Box<Nas5gsMessage>> {
+        self.nas_indication(nas).await?;
+        self.receive_nas().await
     }
 
     async fn nas_indication(&mut self, nas: Box<Nas5gsMessage>) -> Result<()> {

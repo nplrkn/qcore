@@ -15,6 +15,7 @@ use oxirush_nas::Nas5gsMessage;
 pub trait NasBase {
     async fn nas_request(&mut self, nas: Box<Nas5gsMessage>) -> Result<Box<Nas5gsMessage>>;
     async fn nas_indication(&mut self, nas: Box<Nas5gsMessage>) -> Result<()>;
+    async fn receive_nas(&mut self) -> Result<Box<Nas5gsMessage>>;
 }
 
 mod prelude {

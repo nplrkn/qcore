@@ -5,7 +5,6 @@ In progress
 
 - Phone interop
   -  PDU session release command should flow on SRB 2, not SRB 1
-  -  Unhandled message PduSessionReleaseComplete
   -  PDU session establishment request on SRB 2 chasing RrcReconfigurationComplete on SRB 1 should not get processed first, causing both procedures to fail.
   
 - NGAP mode 

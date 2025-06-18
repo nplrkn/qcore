@@ -248,8 +248,9 @@ impl<T: Transport> MockUe<T> {
         else {
             bail!("Expected NasPduSessionReleaseCommand, got {message:?}");
         };
+        info!(&self.logger, "Nas Pdu Session Command <<");
         let nas_session_release_complete = build_nas::pdu_session_release_complete()?;
-        info!(&self.logger, "NAS Pdu Session Release request >>");
+        info!(&self.logger, "Nas Pdu Session Release Complete >>");
         self.send_nas(nas_session_release_complete).await
     }
 }

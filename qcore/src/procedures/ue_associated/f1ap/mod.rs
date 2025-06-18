@@ -27,6 +27,7 @@ pub trait F1apBase {
         rrc: &T,
     ) -> Result<Box<UlDcchMessage>>;
     async fn rrc_indication<T: Send + SerDes>(&mut self, srb: SrbId, rrc: &T) -> Result<()>;
+    async fn receive_rrc(&mut self) -> Result<Box<UlDcchMessage>>;
 }
 
 mod prelude {
