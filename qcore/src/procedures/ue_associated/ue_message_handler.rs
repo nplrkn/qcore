@@ -30,7 +30,7 @@ impl<A: HandlerApi> UeMessageHandler<A> {
         let mut give_context = None;
         let mut ue = Box::new(UeContext::new(ue_id));
         let result = self.dispatch_all(&mut ue, &mut give_context).await;
-        self.cleanup(&give_context, ue).await;
+        self.cleanup(give_context, ue).await;
         result
     }
 
@@ -58,11 +58,37 @@ impl<A: HandlerApi> UeMessageHandler<A> {
         }
     }
 
+    async fn release_ran_context(
+        &self,
+        ue_context: &mut UeContext,
+        give_context: &mut Option<Sender<NasContext>>,
+    ) -> Result<()> {
+        let mut ping = None;
+        UeProcedure::new(
+            &self.api,
+            ue_context,
+            &self.logger,
+            &self.receiver,
+            give_context,
+            &mut ping,
+        )
+        .ran_context_release()
+        .await?;
+
+        if let Some(sender) = ping {
+            let _ = sender.send(()).await;
+        }
+        Ok(())
+    }
+
     async fn cleanup(
         &self,
-        give_context: &Option<Sender<NasContext>>,
+        mut give_context: Option<Sender<NasContext>>,
         mut ue_context: Box<UeContext>,
     ) {
+        let _ = self.release_ran_context(&mut *ue_context, &mut give_context)
+            .await;
+
         // Remove the channel to this UE.
         self.api.delete_ue_channel(ue_context.key);
 

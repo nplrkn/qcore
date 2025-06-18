@@ -483,7 +483,7 @@ pub fn ue_context_release_command(ue: &UeContext, cause: Cause) -> Box<UeContext
         gnb_du_ue_f1ap_id: ue.gnb_du_ue_f1ap_id(),
         cause,
         rrc_container: None,
-        srb_id: Some(SrbId(1)),
+        srb_id: None, // This is supplied if there is an Rrc Container to send (TS38.473, 8.3.3.2)
         old_gnb_du_ue_f1ap_id: None,
         execute_duplication: None,
         rrc_delivery_status_request: None,

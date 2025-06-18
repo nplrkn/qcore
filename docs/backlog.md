@@ -7,8 +7,7 @@ In progress
   -  PDU session release command should flow on SRB 2, not SRB 1
   -  Unhandled message PduSessionReleaseComplete
   -  PDU session establishment request on SRB 2 chasing RrcReconfigurationComplete on SRB 1 should not get processed first, causing both procedures to fail.
-  -  Receipt of UeContextRelease request in the middle of registration procedure should not cause a registration reject to be sent.
-
+  
 - NGAP mode 
   - Test with srsRAN
   - clean up uplink pipeline

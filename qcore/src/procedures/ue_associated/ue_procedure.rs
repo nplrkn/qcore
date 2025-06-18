@@ -32,6 +32,7 @@ pub struct UeProcedure<'a, A: HandlerApi> {
     receiver: &'a Receiver<UeMessage>,
     give_context: &'a mut Option<Sender<NasContext>>,
     ping: &'a mut Option<Sender<()>>,
+    pub f1ap_release_cause: f1ap::Cause,
 }
 
 impl<'a, A: HandlerApi> std::ops::Deref for UeProcedure<'a, A> {
@@ -62,6 +63,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
             receiver,
             give_context,
             ping,
+            f1ap_release_cause: f1ap::Cause::RadioNetwork(f1ap::CauseRadioNetwork::NormalRelease),
         }
     }
 
@@ -136,6 +138,14 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         }
     }
 
+    pub async fn ran_context_release(self) -> Result<()> {
+        if self.ngap_mode() {
+            bail!("Ran context release not yet implemented in NGAP mode")
+        } else {
+            UeContextReleaseProcedure::new(self).run().await
+        }
+    }
+
     pub async fn dispatch(self) -> Result<()> {
         match self.receiver.recv().await? {
             UeMessage::Ngap(pdu) => self.ngap_dispatch(pdu).await,
@@ -177,7 +187,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
 
     // TODO move into a different trait Dispatcher?
     // Return Err if the UE handler should exit.
-    async fn f1ap_dispatch(self, pdu: Box<F1apPdu>) -> Result<()> {
+    async fn f1ap_dispatch(mut self, pdu: Box<F1apPdu>) -> Result<()> {
         match *pdu {
             F1apPdu::InitiatingMessage(InitiatingMessage::InitialUlRrcMessageTransfer(r)) => {
                 self.log_message(">> F1ap InitialUlRrcMessageTransfer");
@@ -198,9 +208,12 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
                 }
             }
             F1apPdu::InitiatingMessage(InitiatingMessage::UeContextReleaseRequest(r)) => {
-                UeContextReleaseProcedure::new(self)
-                    .du_initiated(&r)
-                    .await?;
+                self.log_message(">> F1ap UeContextReleaseRequest");
+                info!(
+                    self.logger,
+                    "DU initiated context release, cause {:?}", r.cause
+                );
+                self.f1ap_release_cause = r.cause.clone();
                 bail!("Context release");
             }
             pdu => {

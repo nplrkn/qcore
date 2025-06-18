@@ -52,7 +52,13 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                 self.0 = self.0.ran_ue_registration(&kgnb).await?;
                 self.accept_registration().await?;
             }
-            Err(cause) => self.reject_registration(cause).await?,
+            Err(cause) => {
+                if cause != ABORT_PROCEDURE {
+                    self.reject_registration(cause).await?
+                } else {
+                    bail!("Abort registration procedure")
+                }
+            }
         }
 
         Ok(())
@@ -137,20 +143,17 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     ) -> Result<(), u8> {
         info!(self.logger, "SUPI registration for imsi-{imsi}");
 
-        self.authenticate_ue(imsi).await.map_err(|e| {
-            warn!(self.logger, "Authentication failure - {e}");
-            FGMM_CAUSE_ILLEGAL_UE
-        })?;
+        self.authenticate_ue(imsi).await?;
 
         self.activate_nas_security(ue_security_capability)
             .await
             .map_err(|e| {
                 warn!(self.logger, "NAS security failure - {e}");
-                FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED
+                ABORT_PROCEDURE
             })
     }
 
-    async fn authenticate_ue(&mut self, imsi: &str) -> Result<()> {
+    async fn authenticate_ue(&mut self, imsi: &str) -> Result<(), u8> {
         let mut ksi_retry_done = false;
         let mut resync_retry_done = false;
         loop {
@@ -164,12 +167,18 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                     continue;
                 }
                 NasAuthOutcome::ResyncSqn(sqn) if !resync_retry_done => {
-                    self.resync_subscriber_sqn(imsi, sqn).await?;
+                    self.resync_subscriber_sqn(imsi, sqn).await.map_err(|e| {
+                        warn!(self.logger, "Resync signature failure - {e}");
+                        ABORT_PROCEDURE
+                    })?;
                     resync_retry_done = true;
                     debug!(self.logger, "Resynchronized SQN to UE {:02x?}", sqn);
                     continue;
                 }
-                x => bail!("Successive auth failures {:?}", x),
+                x => {
+                    warn!(self.logger, "Successive auth failures {:?}", x);
+                    return Err(ABORT_PROCEDURE);
+                }
             }
         }
     }
@@ -186,8 +195,11 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         self.check_nas_security_mode_complete(rsp)
     }
 
-    async fn perform_nas_authentication(&mut self, imsi: &str) -> Result<NasAuthOutcome> {
-        let (challenge, auth_params) = self.generate_challenge(imsi).await?;
+    async fn perform_nas_authentication(&mut self, imsi: &str) -> Result<NasAuthOutcome, u8> {
+        let (challenge, auth_params) = self.generate_challenge(imsi).await.map_err(|e| {
+            warn!(self.logger, "While generating challenge - {e}");
+            FGMM_CAUSE_ILLEGAL_UE
+        })?;
         let req = crate::nas::build::authentication_request(
             &challenge.rand,
             &challenge.autn,
@@ -195,10 +207,20 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         );
 
         self.log_message("<< NasAuthenticationRequest");
-        match expect_nas!(AuthenticationResponse, self.nas_request(req).await?) {
+        match expect_nas!(
+            AuthenticationResponse,
+            self.nas_request(req).await.map_err(|e| {
+                warn!(self.logger, "Unexpected message - {e}");
+                ABORT_PROCEDURE
+            })?
+        ) {
             Ok(rsp) => {
                 self.log_message(">> NasAuthenticationResponse");
-                self.check_authentication_response(&rsp, &challenge)?;
+                self.check_authentication_response(&rsp, &challenge)
+                    .map_err(|e| {
+                        warn!(self.logger, "Bad authentication respnse - {e}");
+                        ABORT_PROCEDURE
+                    })?;
                 Ok(NasAuthOutcome::Kseaf(challenge.kseaf))
             }
             Err(m) => self.authentication_failure(m, &auth_params, &challenge.rand),
@@ -210,8 +232,11 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         rsp: Box<Nas5gsMessage>,
         auth_params: &SubscriberAuthParams,
         rand: &[u8; 16],
-    ) -> Result<NasAuthOutcome> {
-        let auth_failure = ensure_nas!(AuthenticationFailure, rsp);
+    ) -> Result<NasAuthOutcome, u8> {
+        let auth_failure = expect_nas!(AuthenticationFailure, rsp).map_err(|e| {
+            warn!(self.logger, "Unexpected message {:?}", e);
+            ABORT_PROCEDURE
+        })?;
         self.log_message(">> NasAuthenticationFailure");
         match auth_failure.fgmm_cause.value {
             FGMM_CAUSE_SYNCH_FAILURE => {
@@ -226,7 +251,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                             );
                             Ok(NasAuthOutcome::ResyncSqn(auth_params.sqn.0))
                         } else {
-                            Err(e)
+                            Err(ABORT_PROCEDURE)
                         }
                     }
                 }
@@ -236,7 +261,8 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                 Ok(NasAuthOutcome::RetryWithNewKSI)
             }
             cause => {
-                bail!("Authentication failure cause {cause}");
+                warn!(self.logger, "UE failed authentication with cause {cause}");
+                Err(cause)
             }
         }
     }

@@ -3,7 +3,10 @@ use async_trait::async_trait;
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gsMessage, Nas5gsmMessage, NasPduAddress, NasPduSessionType,
     decode_nas_5gs_message,
-    messages::{NasDlNasTransport, NasPduSessionEstablishmentAccept, NasPduSessionReleaseCommand},
+    messages::{
+        NasAuthenticationRequest, NasDlNasTransport, NasPduSessionEstablishmentAccept,
+        NasPduSessionReleaseCommand,
+    },
 };
 use slog::{Logger, info, o};
 use std::net::Ipv4Addr;
@@ -113,9 +116,14 @@ impl<T: Transport> MockUe<T> {
         self.send_nas(self.build_register_request()?).await
     }
 
-    pub async fn handle_nas_authentication(&mut self) -> Result<()> {
-        ensure_nas!(AuthenticationRequest, self.receive_nas().await?);
+    pub async fn receive_nas_authentication_request(&mut self) -> Result<NasAuthenticationRequest> {
+        let nas = ensure_nas!(AuthenticationRequest, self.receive_nas().await?);
         info!(&self.logger, "NAS Authentication request >>");
+        Ok(nas)
+    }
+
+    pub async fn handle_nas_authentication(&mut self) -> Result<()> {
+        let _ = self.receive_nas_authentication_request().await?;
         let nas_authentication_response = build_nas::authentication_response()?;
         info!(&self.logger, "NAS Authentication response <<");
         self.send_nas(nas_authentication_response).await

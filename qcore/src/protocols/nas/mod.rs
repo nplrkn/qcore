@@ -7,6 +7,9 @@ pub mod build;
 pub mod parse;
 
 // TS24.501, Table 9.11.3.2.1
+
+pub const ABORT_PROCEDURE: u8 = 0;
+#[allow(dead_code)]
 pub const FGMM_CAUSE_ILLEGAL_UE: u8 = 0b00000011;
 #[allow(dead_code)]
 pub const FGMM_CAUSE_IMPLICITLY_DEREGISTERED: u8 = 0b00001010;

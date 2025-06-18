@@ -32,6 +32,10 @@ async fn guti_registration() -> anyhow::Result<()> {
 
     // This is the case where the UE resets and its GUTI registration comes in using a new F1AP ID.
     ue.perform_rrc_setup().await?;
+
+    // QCore cleans up the old SRB from the previous Rrc Setup.
+    du.handle_ue_context_release(ue.du_ue_context()).await?;
+
     ue.handle_rrc_security_mode().await?;
     ue.handle_capability_enquiry().await?;
     ue.handle_nas_registration_accept().await?;
