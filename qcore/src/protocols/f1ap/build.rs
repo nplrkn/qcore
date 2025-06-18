@@ -376,9 +376,6 @@ pub fn ue_context_modification_request(
     ue: &UeContext,
     _released_session: &PduSession,
 ) -> Box<UeContextModificationRequest> {
-    let srbs_to_be_released_list = Some(SrbsToBeReleasedList(nonempty![SrbsToBeReleasedItem {
-        srb_id: SrbId(2)
-    }]));
     let drbs_to_be_released_list = Some(DrbsToBeReleasedList(nonempty![DrbsToBeReleasedItem {
         drb_id: DrbId(1)
     }]));
@@ -399,7 +396,7 @@ pub fn ue_context_modification_request(
         srbs_to_be_setup_mod_list: None,
         drbs_to_be_setup_mod_list: None,
         drbs_to_be_modified_list: None,
-        srbs_to_be_released_list,
+        srbs_to_be_released_list: None,
         drbs_to_be_released_list,
         inactivity_monitoring_request: None,
         rat_frequency_priority_information: None,
