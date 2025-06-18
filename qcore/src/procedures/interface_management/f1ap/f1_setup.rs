@@ -1,6 +1,6 @@
 //! f1_setup - the initial handshake that establishes an instance of the F1 reference point between GNB-CU and GNB-DU
 use super::prelude::*;
-use f1ap::{F1SetupFailure, F1SetupRequest, F1SetupResponse};
+use f1ap::{F1SetupFailure, F1SetupRequest, F1SetupResponse, GnbDuServedCellsItem};
 use xxap::{RequestError, ResponseAction};
 
 define_procedure!(F1SetupProcedure);
@@ -22,7 +22,28 @@ impl<'a, A: HandlerApi> F1SetupProcedure<'a, A> {
             self.logger,
             "F1 setup with DU name:{gnb_du_name}, id:{:x}", r.gnb_du_id.0
         );
-        let response = crate::f1ap::build::f1_setup_response(r, self.config().clone().name)?;
+
+        // Filter out the served cells not in the PLMN.
+        let gnb_du_served_cells_list: Vec<GnbDuServedCellsItem> = r
+            .gnb_du_served_cells_list
+            .map(|x| x.0.into())
+            .unwrap_or_default();
+        let gnb_du_served_cells_list: Vec<GnbDuServedCellsItem> = gnb_du_served_cells_list
+            .into_iter()
+            .filter(|x| x.served_cell_information.nr_cgi.plmn_identity == self.config().plmn)
+            .collect();
+
+        let response = crate::f1ap::build::f1_setup_response(
+            r.transaction_id,
+            self.config().clone().name,
+            &gnb_du_served_cells_list,
+        )?;
+
+        self.served_cells()
+            .lock()
+            .await
+            .insert(r.gnb_du_id.0, gnb_du_served_cells_list);
+
         self.log_message("<< F1SetupResponse");
         Ok((response, None))
     }

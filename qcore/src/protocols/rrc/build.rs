@@ -1,9 +1,8 @@
-//! build_rrc - construction of RRC messages
-
-use asn1_per::{NonEmpty, nonempty};
-use rrc::*;
-
 use crate::{PdcpSequenceNumberLength, data::PduSession};
+use anyhow::Result;
+use asn1_per::{NonEmpty, SerDes, nonempty};
+use rrc::*;
+use std::collections::HashSet;
 
 pub fn setup(rrc_transaction_identifier: u8, master_cell_group: Vec<u8>) -> Box<DlCcchMessage> {
     Box::new(DlCcchMessage {
@@ -164,8 +163,34 @@ pub fn reconfiguration(
     })
 }
 
-pub fn ue_capability_enquiry(rrc_transaction_identifier: u8) -> Box<DlDcchMessage> {
-    Box::new(DlDcchMessage {
+pub fn ue_capability_enquiry(
+    rrc_transaction_identifier: u8,
+    bands: &HashSet<u16>,
+) -> Result<Box<DlDcchMessage>> {
+    let freq_band_list = NonEmpty::collect(bands.iter().map(|band| {
+        FreqBandInformation::BandInformationNr(FreqBandInformationNr {
+            band_nr: FreqBandIndicatorNr(*band),
+            max_bandwidth_requested_dl: None,
+            max_bandwidth_requested_ul: None,
+            max_carriers_requested_dl: None,
+            max_carriers_requested_ul: None,
+        })
+    }))
+    .map(FreqBandList);
+
+    let capability_request_filter = if freq_band_list.is_some() {
+        Some(
+            UeCapabilityRequestFilterNr {
+                frequency_band_list_filter: freq_band_list,
+                non_critical_extension: None,
+            }
+            .as_bytes()?,
+        )
+    } else {
+        None
+    };
+
+    Ok(Box::new(DlDcchMessage {
         message: DlDcchMessageType::C1(C1_2::UeCapabilityEnquiry(UeCapabilityEnquiry {
             rrc_transaction_identifier: RrcTransactionIdentifier(rrc_transaction_identifier),
             critical_extensions: CriticalExtensions32::UeCapabilityEnquiry(
@@ -173,7 +198,7 @@ pub fn ue_capability_enquiry(rrc_transaction_identifier: u8) -> Box<DlDcchMessag
                     ue_capability_rat_request_list: UeCapabilityRatRequestList(nonempty![
                         UeCapabilityRatRequest {
                             rat_type: RatType::Nr,
-                            capability_request_filter: None
+                            capability_request_filter
                         }
                     ]),
                     late_non_critical_extension: None,
@@ -181,5 +206,5 @@ pub fn ue_capability_enquiry(rrc_transaction_identifier: u8) -> Box<DlDcchMessag
                 },
             ),
         })),
-    })
+    }))
 }

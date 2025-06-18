@@ -15,6 +15,7 @@ use async_std::{
 use async_trait::async_trait;
 use aya::Ebpf;
 use dashmap::DashMap;
+use f1ap::GnbDuServedCellsItem;
 use slog::{Logger, info, o, warn};
 use std::collections::HashMap;
 use std::net::IpAddr;
@@ -24,6 +25,10 @@ use xxap::{
     Indication, IndicationHandler, Procedure, RequestError, RequestProvider, SctpTransportProvider,
     ShutdownHandle, Stack,
 };
+
+pub type DuServedCells = Vec<GnbDuServedCellsItem>;
+pub type DuId = u64;
+pub type ServedCellsStore = Arc<Mutex<HashMap<DuId, DuServedCells>>>;
 
 #[derive(Clone)]
 pub struct QCore {
@@ -35,6 +40,7 @@ pub struct QCore {
     ue_tasks: Arc<DashMap<u32, Sender<UeMessage>>>,
     sub_db: Arc<Mutex<SubscriberDb>>,
     tmsis: Arc<Mutex<HashMap<Tmsi, NasContextLocator>>>,
+    served_cells: ServedCellsStore,
     ngap_mode: bool,
 }
 
@@ -106,6 +112,7 @@ impl QCore {
             packet_processor,
             sub_db: Arc::new(Mutex::new(sub_db)),
             tmsis: Arc::new(Mutex::new(HashMap::new())),
+            served_cells: Arc::new(Mutex::new(HashMap::new())),
             ngap_mode,
         })
     }
@@ -200,6 +207,10 @@ impl HandlerApi for QCore {
 
     fn ngap_mode(&self) -> bool {
         self.ngap_mode
+    }
+
+    fn served_cells(&self) -> &ServedCellsStore {
+        &self.served_cells
     }
 
     async fn lookup_subscriber_creds_and_inc_sqn(

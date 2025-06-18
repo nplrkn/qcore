@@ -39211,7 +39211,7 @@ impl PerCodec for NrFreqInfo {
     }
 }
 // NrCgi
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct NrCgi {
     pub plmn_identity: PlmnIdentity,
     pub nr_cell_identity: NrCellIdentity,
@@ -39470,7 +39470,7 @@ impl PerCodec for NrPrachConfig {
     }
 }
 // NrCellIdentity
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct NrCellIdentity(pub BitString);
 
 impl NrCellIdentity {

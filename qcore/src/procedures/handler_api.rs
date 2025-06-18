@@ -1,4 +1,6 @@
-use crate::{Config, NasContext, SubscriberAuthParams, UserplaneSession, nas::Tmsi};
+use crate::{
+    Config, NasContext, SubscriberAuthParams, UserplaneSession, nas::Tmsi, qcore::ServedCellsStore,
+};
 use anyhow::Result;
 use async_std::channel::Sender;
 use async_trait::async_trait;
@@ -24,6 +26,7 @@ pub enum UeMessage {
 pub trait HandlerApi: Send + Sync + Clone + 'static {
     fn config(&self) -> &Config;
     fn ngap_mode(&self) -> bool;
+    fn served_cells(&self) -> &ServedCellsStore;
 
     // Returns the K, OPC and SQN, and increments the SQN.
     // The returned SQN is the one _before_ the increment.  This means that

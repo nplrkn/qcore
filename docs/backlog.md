@@ -1,6 +1,7 @@
 In progress
 
-- Handle session release request
+- Session enquiry
+  -  Update / Remove a DU's served cells on Du configuraiton update, F1 Remove, disconnection
 
 - NGAP mode 
   - Test with srsRAN
@@ -28,6 +29,7 @@ NGAP mode
 - Registration accept should piggyback on NGAP Initial Context Setup request
 
 Function gaps
+- Large SCTP messages - e.g. unfiltered UE Capability Information
 - Deregistration accept
 - PDU session release
 - Idle / paging

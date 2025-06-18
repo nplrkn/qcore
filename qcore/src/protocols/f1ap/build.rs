@@ -10,20 +10,21 @@ use rrc::{
 use xxap::{GtpTunnel, PduSessionId, TransportLayerAddress};
 
 pub fn f1_setup_response(
-    r: F1SetupRequest,
+    transaction_id: TransactionId,
     gnb_cu_name: Option<String>,
+    served_cells: &[GnbDuServedCellsItem],
 ) -> Result<F1SetupResponse> {
     // Ask for all served cells to be activated.
     let sib2 = build_sib2().as_bytes()?;
-    let cells_to_be_activated_list = r.gnb_du_served_cells_list.map(|cells| {
-        CellsToBeActivatedList(
-            cells
-                .0
-                .map(|ref x| served_cell_to_activated(x, sib2.clone())),
-        )
-    });
+    let cells_to_be_activated_list = NonEmpty::collect(
+        served_cells
+            .iter()
+            .map(|item| served_cell_to_activated(item, sib2.clone())),
+    )
+    .map(CellsToBeActivatedList);
+
     Ok(F1SetupResponse {
-        transaction_id: r.transaction_id,
+        transaction_id,
         gnb_cu_rrc_version: RrcVersion {
             latest_rrc_version: bitvec![u8, Msb0;0, 0, 0],
             latest_rrc_version_enhanced: None,
