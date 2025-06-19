@@ -3,6 +3,7 @@ use crate::{HandlerApi, NasContext, UeContext, procedures::UeMessage};
 use anyhow::Result;
 use async_std::channel::{self, Receiver, Sender};
 use slog::{Logger, debug, warn};
+use std::collections::VecDeque;
 
 pub struct UeMessageHandler<A: HandlerApi> {
     receiver: Receiver<UeMessage>,
@@ -39,18 +40,30 @@ impl<A: HandlerApi> UeMessageHandler<A> {
         ue_context: &mut UeContext,
         give_context: &mut Option<Sender<NasContext>>,
     ) -> Result<()> {
+        let mut queue = VecDeque::new();
+        let mut result = Ok(());
         loop {
             let mut ping = None;
-            UeProcedure::new(
+            let ue_procedure = UeProcedure::new(
                 &self.api,
                 ue_context,
                 &self.logger,
                 &self.receiver,
                 give_context,
                 &mut ping,
-            )
-            .dispatch()
-            .await?;
+                &mut queue,
+            );
+
+            // On success, keep dispatching.  On error, release the RAN context as a final
+            // procedure before passing up the error.
+            if result.is_ok() {
+                result = ue_procedure.dispatch().await;
+            } else {
+                if let Err(e) = ue_procedure.ran_context_release().await {
+                    warn!(self.logger, "Failed to release RAN context: {e}");
+                }
+                return result;
+            }
 
             if let Some(sender) = ping {
                 let _ = sender.send(()).await;
@@ -58,37 +71,11 @@ impl<A: HandlerApi> UeMessageHandler<A> {
         }
     }
 
-    async fn release_ran_context(
-        &self,
-        ue_context: &mut UeContext,
-        give_context: &mut Option<Sender<NasContext>>,
-    ) -> Result<()> {
-        let mut ping = None;
-        UeProcedure::new(
-            &self.api,
-            ue_context,
-            &self.logger,
-            &self.receiver,
-            give_context,
-            &mut ping,
-        )
-        .ran_context_release()
-        .await?;
-
-        if let Some(sender) = ping {
-            let _ = sender.send(()).await;
-        }
-        Ok(())
-    }
-
     async fn cleanup(
         &self,
-        mut give_context: Option<Sender<NasContext>>,
+        give_context: Option<Sender<NasContext>>,
         mut ue_context: Box<UeContext>,
     ) {
-        let _ = self.release_ran_context(&mut *ue_context, &mut give_context)
-            .await;
-
         // Remove the channel to this UE.
         self.api.delete_ue_channel(ue_context.key);
 

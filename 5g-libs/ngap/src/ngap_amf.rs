@@ -24,6 +24,7 @@ impl<T> Application for NgapAmf<T> where
         + RequestProvider<RanConfigurationUpdateProcedure>
         + IndicationHandler<InitialUeMessageProcedure>
         + IndicationHandler<UplinkNasTransportProcedure>
+        + IndicationHandler<UeRadioCapabilityInfoIndicationProcedure>
         + EventHandler
 {
 }
@@ -47,6 +48,7 @@ where
         + RequestProvider<RanConfigurationUpdateProcedure>
         + IndicationHandler<InitialUeMessageProcedure>
         + IndicationHandler<UplinkNasTransportProcedure>
+        + IndicationHandler<UeRadioCapabilityInfoIndicationProcedure>
         + EventHandler,
 {
     type TopPdu = NgapPdu;
@@ -66,8 +68,12 @@ where
                 UplinkNasTransportProcedure::call_provider(&self.0, req, logger).await;
                 None
             }
+            NgapPdu::InitiatingMessage(InitiatingMessage::UeRadioCapabilityInfoIndication(req)) => {
+                UeRadioCapabilityInfoIndicationProcedure::call_provider(&self.0, req, logger).await;
+                None
+            }
             m => {
-                error!(logger, "Unhandled message {:?}", m);
+                error!(logger, "Unhandled Ngap message {:?}", m);
                 return None;
             }
         }

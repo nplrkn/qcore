@@ -16,6 +16,8 @@ async fn ngap_attach() -> anyhow::Result<()> {
     ue.handle_nas_security_mode().await?;
     gnb.handle_initial_context_setup(ue.gnb_ue_context())
         .await?;
+    gnb.send_ue_radio_capability_info(ue.gnb_ue_context())
+        .await?;
     ue.handle_nas_registration_accept().await?;
 
     // UE establishes PDU session

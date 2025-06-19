@@ -146,3 +146,18 @@ pub fn pdu_session_resource_setup_response(
         }),
     )))
 }
+
+pub fn ue_radio_capability_info_indication(
+    amf_ue_ngap_id: AmfUeNgapId,
+    ran_ue_ngap_id: RanUeNgapId,
+) -> Box<NgapPdu> {
+    Box::new(NgapPdu::InitiatingMessage(
+        InitiatingMessage::UeRadioCapabilityInfoIndication(UeRadioCapabilityInfoIndication {
+            amf_ue_ngap_id,
+            ran_ue_ngap_id,
+            ue_radio_capability: UeRadioCapability(vec![]),
+            ue_radio_capability_for_paging: None,
+            ue_radio_capability_eutra_format: None,
+        }),
+    ))
+}

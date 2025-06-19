@@ -88,7 +88,7 @@ where
                 None
             }
             m => {
-                error!(logger, "Unhandled message {:?}", m);
+                error!(logger, "Unhandled F1ap message {:?}", m);
                 return None;
             }
         }

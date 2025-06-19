@@ -228,7 +228,16 @@ impl MockGnb {
         );
         info!(&self.logger, "InitialContextSetupResponse >>");
         self.send(&ue_setup_response, Some(assoc_id)).await;
+        Ok(())
+    }
 
+    pub async fn send_ue_radio_capability_info(&self, ue: &mut UeContext) -> Result<()> {
+        let pdu = build_ngap::ue_radio_capability_info_indication(
+            ue.amf_ue_ngap_id.unwrap(),
+            RanUeNgapId(ue.ue_id),
+        );
+        info!(self.logger, "Ngap UeRadioCapabilityInfoIndication >>");
+        self.send(&pdu, Some(ue.binding.assoc_id)).await;
         Ok(())
     }
 

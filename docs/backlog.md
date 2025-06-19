@@ -15,6 +15,10 @@ In progress
   - log startup mode more explicitly
   - handle UeRadioCapabilityInfoIndication
 
+- Unexpected message queueing
+  - Use queueing mechanism to handle ping and take context, not just F1ap and Ngap Pdu
+  - Implement systematically
+
 -  Session establishment with real phone
    -  OnePlus
    -  Samsung

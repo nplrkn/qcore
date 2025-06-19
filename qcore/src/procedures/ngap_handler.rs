@@ -5,7 +5,8 @@ use async_trait::async_trait;
 use ngap::{
     InitialUeMessage, InitiatingMessage, NgSetupFailure, NgSetupRequest, NgSetupResponse, NgapAmf,
     NgapPdu, RanConfigurationUpdate, RanConfigurationUpdateAcknowledge,
-    RanConfigurationUpdateFailure, RanConfigurationUpdateProcedure, UplinkNasTransport,
+    RanConfigurationUpdateFailure, RanConfigurationUpdateProcedure,
+    UeRadioCapabilityInfoIndication, UplinkNasTransport,
 };
 use xxap::{
     EventHandler, IndicationHandler, RequestError, RequestProvider, ResponseAction, TnlaEvent,
@@ -94,5 +95,24 @@ impl<A: HandlerApi> EventHandler for NgapHandler<A> {
             }
             TnlaEvent::Terminated => info!(logger, "NGAP TNLA {} closed", tnla_id),
         };
+    }
+}
+
+#[async_trait]
+impl<A: HandlerApi> IndicationHandler<ngap::UeRadioCapabilityInfoIndicationProcedure>
+    for NgapHandler<A>
+{
+    async fn handle(&self, i: UeRadioCapabilityInfoIndication, logger: &Logger) {
+        if let Err(e) = self
+            .dispatch_ue_message(
+                i.amf_ue_ngap_id.0 as u32,
+                UeMessage::Ngap(Box::new(NgapPdu::InitiatingMessage(
+                    InitiatingMessage::UeRadioCapabilityInfoIndication(i),
+                ))),
+            )
+            .await
+        {
+            warn!(logger, "Failed to dispatch UplinkNasTransport - {}", e);
+        }
     }
 }
