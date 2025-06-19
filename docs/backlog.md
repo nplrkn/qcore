@@ -8,7 +8,6 @@ In progress
   -  PDU session establishment request on SRB 2 chasing RrcReconfigurationComplete on SRB 1 should not get processed first, causing both procedures to fail.
   
 - NGAP mode 
-  - Test with srsRAN
   - clean up uplink pipeline
   - use different forwarding tables for NGAP vs F1AP 
   - session release
