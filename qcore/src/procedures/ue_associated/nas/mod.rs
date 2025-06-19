@@ -11,11 +11,12 @@ pub use session_release::*;
 
 use anyhow::Result;
 use oxirush_nas::Nas5gsMessage;
+use crate::data::DecodedNas;
 
 pub trait NasBase {
-    async fn nas_request(&mut self, nas: Box<Nas5gsMessage>) -> Result<Box<Nas5gsMessage>>;
+    async fn nas_request(&mut self, nas: Box<Nas5gsMessage>) -> Result<DecodedNas>;
     async fn nas_indication(&mut self, nas: Box<Nas5gsMessage>) -> Result<()>;
-    async fn receive_nas(&mut self) -> Result<Box<Nas5gsMessage>>;
+    async fn receive_nas(&mut self) -> Result<DecodedNas>;
 }
 
 mod prelude {

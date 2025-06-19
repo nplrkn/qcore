@@ -1,5 +1,6 @@
 use crate::{
-    Config, NasContext, SubscriberAuthParams, UserplaneSession, nas::Tmsi, qcore::ServedCellsStore,
+    Config, NasContext, SubscriberAuthParams, UserplaneSession, data::DecodedNas, nas::Tmsi,
+    qcore::ServedCellsStore,
 };
 use anyhow::Result;
 use async_std::channel::Sender;
@@ -13,6 +14,7 @@ use xxap::{Indication, Procedure, RequestError};
 pub enum UeMessage {
     F1ap(Box<F1apPdu>),
     Ngap(Box<NgapPdu>),
+    Nas(DecodedNas),
     TakeContext(Sender<NasContext>),
 
     // Send this message to a message handler to get a notification when the current procedure has finished processing.

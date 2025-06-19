@@ -6,10 +6,9 @@ use super::prelude::*;
 define_ue_procedure!(UplinkNasTransportProcedure);
 
 impl<'a, A: HandlerApi> UplinkNasTransportProcedure<'a, A> {
-    pub async fn run(self, mut uplink_nas_transport: Box<UplinkNasTransport>) -> Result<()> {
+    pub async fn run(mut self, uplink_nas_transport: Box<UplinkNasTransport>) -> Result<()> {
         self.log_message(">> Ngap UplinkNasTransport");
-        UplinkNasProcedure::new(self.0)
-            .run(&mut uplink_nas_transport.nas_pdu.0)
-            .await
+        let nas = self.nas_decode(&uplink_nas_transport.nas_pdu.0)?;
+        UplinkNasProcedure::new(self.0).run(nas).await
     }
 }

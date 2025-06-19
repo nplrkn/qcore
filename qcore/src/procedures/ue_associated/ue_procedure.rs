@@ -1,7 +1,7 @@
 use super::prelude::*;
 use crate::{
     NasContext, UeContext,
-    data::PduSession,
+    data::{DecodedNas, PduSession},
     procedures::{
         UeMessage,
         ue_associated::{
@@ -9,7 +9,7 @@ use crate::{
             InitialUeMessageProcedure, NasBase, PduSessionResourceSetupProcedure,
             RrcReconfigurationProcedure, RrcSecurityModeProcedure, RrcSetupProcedure,
             RrcUeCapabilityEnquiryProcedure, UeContextReleaseProcedure, UeContextSetupProcedure,
-            UlInformationTransferProcedure, UplinkNasTransportProcedure,
+            UlInformationTransferProcedure, UplinkNasProcedure, UplinkNasTransportProcedure,
         },
     },
 };
@@ -150,6 +150,8 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         }
     }
 
+    // TODO move these into a different trait and/or file "Dispatcher"?
+    // Return Err if the UE handler should exit.
     pub async fn dispatch(self) -> Result<()> {
         // Process any queued messages before going to the inbox.
         let next_message = if let Some(message) = self.queued_messages.pop_front() {
@@ -161,6 +163,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         match next_message {
             UeMessage::Ngap(pdu) => self.ngap_dispatch(pdu).await,
             UeMessage::F1ap(pdu) => self.f1ap_dispatch(pdu).await,
+            UeMessage::Nas(pdu) => self.nas_dispatch(pdu).await,
             UeMessage::TakeContext(sender) => {
                 info!(
                     &self.logger,
@@ -174,6 +177,10 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
                 Ok(())
             }
         }
+    }
+
+    async fn nas_dispatch(self, pdu: DecodedNas) -> Result<()> {
+        UplinkNasProcedure::new(self).run(pdu).await
     }
 
     // Return Err if the UE handler should exit.
@@ -202,8 +209,6 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         Ok(())
     }
 
-    // TODO move into a different trait Dispatcher?
-    // Return Err if the UE handler should exit.
     async fn f1ap_dispatch(mut self, pdu: Box<F1apPdu>) -> Result<()> {
         match *pdu {
             F1apPdu::InitiatingMessage(InitiatingMessage::InitialUlRrcMessageTransfer(r)) => {
@@ -256,7 +261,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
     }
 
     // Used to enqueue a message if the receiver is not ready to process it immediately.
-    pub async fn enqueue_message(&mut self, message: UeMessage) {
+    async fn enqueue_message(&mut self, message: UeMessage) {
         self.queued_messages.push_back(message);
     }
 
@@ -296,21 +301,55 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         bail!("Expected {expected}, got {pdu:?}");
     }
 
-    pub fn nas_decode(&mut self, bytes: &[u8]) -> Result<Box<Nas5gsMessage>> {
-        self.ue.nas.decode(bytes, self.logger)
+    pub async fn unexpected_nas_pdu(&mut self, pdu: DecodedNas, expected: &str) -> Result<()> {
+        debug!(self.logger, "Queue NAS PDU (wanted {expected})");
+        self.enqueue_message(UeMessage::Nas(pdu)).await;
+        Ok(())
     }
 
-    pub fn nas_decode_with_security_header(
+    // pub fn nas_decode(&mut self, bytes: &[u8]) -> Result<Box<Nas5gsMessage>> {
+    //     self.ue.nas.decode(bytes, self.logger)
+    // }
+
+    pub fn nas_decode(
         &mut self,
         bytes: &[u8],
     ) -> Result<(Box<Nas5gsMessage>, Option<Nas5gsSecurityHeader>)> {
-        self.ue.nas.decode_with_security_header(bytes, self.logger)
+        self.ue.nas.decode(bytes, self.logger)
     }
 
     fn extract_ul_dcch_message(&self, r: &UlRrcMessageTransfer) -> Result<Box<UlDcchMessage>> {
         let rrc_message_bytes = pdcp::view_inner(&r.rrc_container.0)?;
         Ok(Box::new(UlDcchMessage::from_bytes(rrc_message_bytes)?))
     }
+
+    // OAI UE sends a security protected deregistration request where the inner
+    // message has security header type 0x0100 - INTEGRITY_PROTECTED_AND_CIPHERED_WITH_NEW_SECU_CTX -
+    // but no security header.
+    // Wireshark parses this OK, but our Oxirush NAS decoder doesn't.
+    // Current hypothesis is that OAI is getting it wrong, and Wireshark is tolerating it because
+    // it calculates inner messsage offsets assuming that it cannot have a security header.
+    //
+    // For now, we have this hack to patch the message to pacify the NAS decoder.
+    // fn patch_nas_for_oai_deregistration_security_header(&self, nas_bytes: &mut [u8]) {
+    //     const INNER_SECURITY_HEADER_TYPE_OFFSET: usize = 8;
+    //     if nas_bytes.len() < (INNER_SECURITY_HEADER_TYPE_OFFSET + 1) {
+    //         return;
+    //     }
+
+    //     if nas_bytes[0] == 0x7e && nas_bytes[1] == 0x02 {
+    //         // Security protected MM message.
+    //         // The inner message header starts at byte 7, and its security header type is at byte 8.
+    //         if nas_bytes[INNER_SECURITY_HEADER_TYPE_OFFSET] != 0x00 {
+    //             warn!(
+    //                 self.logger,
+    //                 "Patching NAS message to change inner message security header type from {:?} to 0",
+    //                 nas_bytes[INNER_SECURITY_HEADER_TYPE_OFFSET]
+    //             );
+    //             nas_bytes[INNER_SECURITY_HEADER_TYPE_OFFSET] = 0x00;
+    //         }
+    //     }
+    // }
 }
 
 impl<'a, A: HandlerApi> super::F1apBase for UeProcedure<'a, A> {
@@ -368,7 +407,7 @@ impl<'a, A: HandlerApi> super::F1apBase for UeProcedure<'a, A> {
 }
 
 impl<'a, A: HandlerApi> NasBase for UeProcedure<'a, A> {
-    async fn receive_nas(&mut self) -> Result<Box<Nas5gsMessage>> {
+    async fn receive_nas(&mut self) -> Result<DecodedNas> {
         if self.ngap_mode() {
             loop {
                 let pdu = self.receive_ngap_pdu().await?;
@@ -402,7 +441,7 @@ impl<'a, A: HandlerApi> NasBase for UeProcedure<'a, A> {
         }
     }
 
-    async fn nas_request(&mut self, nas: Box<Nas5gsMessage>) -> Result<Box<Nas5gsMessage>> {
+    async fn nas_request(&mut self, nas: Box<Nas5gsMessage>) -> Result<DecodedNas> {
         self.nas_indication(nas).await?;
         self.receive_nas().await
     }

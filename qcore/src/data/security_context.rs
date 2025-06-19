@@ -44,6 +44,9 @@ impl SecurityContext {
 
                 // TODO: police sequence number.  This is just a warning until the test framework is ready and we have
                 // confirmed that the logic is correct with real phone interop testing.
+
+                // We also need to be careful about reordering - can this occur?  If so, the sequence number will go backwards but
+                // should not be dropped.
                 warn!(
                     logger,
                     "NAS sequence number {} did not advance from last {} - dropped for replay protection",

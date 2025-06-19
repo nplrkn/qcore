@@ -10,6 +10,8 @@ pub struct NasContext {
     security_context: Option<SecurityContext>,
 }
 
+pub type DecodedNas = (Box<Nas5gsMessage>, Option<Nas5gsSecurityHeader>);
+
 impl NasContext {
     pub fn security_activated(&self) -> bool {
         self.security_context.is_some()
@@ -22,18 +24,7 @@ impl NasContext {
             .unwrap_or_default()
     }
 
-    pub fn decode(&mut self, data: &[u8], logger: &Logger) -> Result<Box<Nas5gsMessage>> {
-        self.decode_with_security_header(data, logger)
-            .map(|(nas, _)| nas)
-    }
-
-    // This is used for situations where the security context might need to be retrieved using a GUTI
-    // (registration, service request).
-    pub fn decode_with_security_header(
-        &mut self,
-        data: &[u8],
-        logger: &Logger,
-    ) -> Result<(Box<Nas5gsMessage>, Option<Nas5gsSecurityHeader>)> {
+    pub fn decode(&mut self, data: &[u8], logger: &Logger) -> Result<DecodedNas> {
         let nas_message = Box::new(
             decode_nas_5gs_message(data)
                 .map_err(|e| anyhow!("NAS decode error - {e} - message bytes: {:?}", data))?,

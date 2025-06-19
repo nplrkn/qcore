@@ -1,6 +1,7 @@
 //! uplink_nas - transfer of a Nas message from UE to AMF
 use super::prelude::*;
 use super::{DeregistrationProcedure, RegistrationProcedure, SessionEstablishmentProcedure};
+use crate::data::DecodedNas;
 use crate::procedures::ue_associated::SessionReleaseProcedure;
 use crate::protocols::nas::FGMM_CAUSE_DNN_NOT_SUPPORTED_OR_NOT_SUBSCRIBED_IN_THE_SLICE;
 use oxirush_nas::{
@@ -11,10 +12,8 @@ use oxirush_nas::{
 define_ue_procedure!(UplinkNasProcedure);
 
 impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
-    pub async fn run(mut self, nas_bytes: &mut [u8]) -> Result<()> {
-        self.patch_nas_for_oai_deregistration_security_header(nas_bytes);
-
-        let (message, security_header) = self.nas_decode_with_security_header(nas_bytes)?;
+    pub async fn run(mut self, nas: DecodedNas) -> Result<()> {
+        let (message, security_header) = nas;
         let Nas5gsMessage::Gmm(_, mm_message) = *message else {
             warn!(self.logger, "Expected MM message, got {:?}", message);
             return Ok(());
@@ -92,34 +91,6 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
             Ok(false)
         } else {
             Ok(true)
-        }
-    }
-
-    // OAI UE sends a security protected deregistration request where the inner
-    // message has security header type 0x0100 - INTEGRITY_PROTECTED_AND_CIPHERED_WITH_NEW_SECU_CTX -
-    // but no security header.
-    // Wireshark parses this OK, but our Oxirush NAS decoder doesn't.
-    // Current hypothesis is that OAI is getting it wrong, and Wireshark is tolerating it because
-    // it calculates inner messsage offsets assuming that it cannot have a security header.
-    //
-    // For now, we have this hack to patch the message to pacify the NAS decoder.
-    fn patch_nas_for_oai_deregistration_security_header(&self, nas_bytes: &mut [u8]) {
-        const INNER_SECURITY_HEADER_TYPE_OFFSET: usize = 8;
-        if nas_bytes.len() < (INNER_SECURITY_HEADER_TYPE_OFFSET + 1) {
-            return;
-        }
-
-        if nas_bytes[0] == 0x7e && nas_bytes[1] == 0x02 {
-            // Security protected MM message.
-            // The inner message header starts at byte 7, and its security header type is at byte 8.
-            if nas_bytes[INNER_SECURITY_HEADER_TYPE_OFFSET] != 0x00 {
-                warn!(
-                    self.logger,
-                    "Patching NAS message to change inner message security header type from {:?} to 0",
-                    nas_bytes[INNER_SECURITY_HEADER_TYPE_OFFSET]
-                );
-                nas_bytes[INNER_SECURITY_HEADER_TYPE_OFFSET] = 0x00;
-            }
         }
     }
 }

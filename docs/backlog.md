@@ -5,8 +5,7 @@ In progress
 
 - Phone interop
   -  PDU session release command should flow on SRB 2, not SRB 1
-  -  PDU session establishment request on SRB 2 chasing RrcReconfigurationComplete on SRB 1 should not get processed first, causing both procedures to fail.
-  
+    
 - NGAP mode 
   - clean up uplink pipeline
   - use different forwarding tables for NGAP vs F1AP 
@@ -16,6 +15,10 @@ In progress
   - handle UeRadioCapabilityInfoIndication
 
 - Unexpected message queueing
+  - ensure_nas(...).0 is ugly
+  - A procedure (nas sesssion release) should not have to loop on self.receive_nas().  The loop should
+    happen under the covers.
+
   - Use queueing mechanism to handle ping and take context, not just F1ap and Ngap Pdu
   - Implement systematically
 

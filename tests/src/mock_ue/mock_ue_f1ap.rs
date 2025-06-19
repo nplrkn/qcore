@@ -159,8 +159,7 @@ impl<'a> MockUeF1ap<'a> {
 
     pub async fn handle_capability_enquiry(&mut self) -> Result<()> {
         let message = self.transport.receive_rrc_dl_dcch().await?;
-        let DlDcchMessageType::C1(C1_2::UeCapabilityEnquiry(enquiry)) = *message
-        else {
+        let DlDcchMessageType::C1(C1_2::UeCapabilityEnquiry(enquiry)) = *message else {
             bail!("Expected Ue Capability Enquiry - got {:?}", message)
         };
         info!(&self.logger, "Rrc UeCapabilityEnquiry <<");
@@ -172,23 +171,21 @@ impl<'a> MockUeF1ap<'a> {
     }
 
     pub async fn handle_rrc_reconfiguration_with_session_accept(&mut self) -> Result<()> {
-        let rrc = self.transport.receive_rrc_dl_dcch().await?;
-        let nas = self.handle_rrc_reconfiguration(rrc, Some(1), None).await?;
+        let nas = self.handle_rrc_reconfiguration(Some(1), None).await?;
         self.handle_session_accept(nas)
     }
 
     pub async fn handle_rrc_reconfiguration_with_session_release(&mut self) -> Result<()> {
-        let rrc = self.transport.receive_rrc_dl_dcch().await?;
-        let nas = self.handle_rrc_reconfiguration(rrc, None, Some(1)).await?;
+        let nas = self.handle_rrc_reconfiguration(None, Some(1)).await?;
         self.handle_session_release(nas).await
     }
 
-    async fn handle_rrc_reconfiguration(
+    pub async fn handle_rrc_reconfiguration(
         &mut self,
-        rrc: Box<DlDcchMessageType>,
         added_drb_id: Option<u8>,
         released_drb_id: Option<u8>,
     ) -> Result<Vec<u8>> {
+        let rrc = self.transport.receive_rrc_dl_dcch().await?;
         let DlDcchMessageType::C1(C1_2::RrcReconfiguration(RrcReconfiguration {
             critical_extensions:
                 CriticalExtensions15::RrcReconfiguration(RrcReconfigurationIEs {

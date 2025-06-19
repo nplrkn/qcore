@@ -84,7 +84,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
             .await;
         self.ue.tmsi = Some(tmsi);
         self.log_message("<< NasRegistrationAccept");
-        let _rsp = ensure_nas!(RegistrationComplete, self.nas_request(r).await?);
+        let _rsp = ensure_nas!(RegistrationComplete, self.nas_request(r).await?.0);
         self.log_message(">> NasRegistrationComplete");
         Ok(())
     }
@@ -131,7 +131,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     async fn query_ue_identity_inner(&mut self) -> Result<Imsi> {
         let r = crate::nas::build::identity_request();
         self.log_message("<< NasIdentityRequest");
-        let rsp = ensure_nas!(IdentityResponse, self.nas_request(r).await?);
+        let rsp = ensure_nas!(IdentityResponse, self.nas_request(r).await?.0);
         self.log_message(">> NasSecurityModeComplete");
         crate::nas::parse::identity_response(rsp)
     }
@@ -190,7 +190,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         self.configure_nas_security(&ue_security_capabilities);
         let r = crate::nas::build::security_mode_command(ue_security_capabilities, self.ue.ksi);
         self.log_message("<< NasSecurityModeCommand");
-        let rsp = ensure_nas!(SecurityModeComplete, self.nas_request(r).await?);
+        let rsp = ensure_nas!(SecurityModeComplete, self.nas_request(r).await?.0);
         self.log_message(">> NasSecurityModeComplete");
         self.check_nas_security_mode_complete(rsp)
     }
@@ -209,10 +209,13 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         self.log_message("<< NasAuthenticationRequest");
         match expect_nas!(
             AuthenticationResponse,
-            self.nas_request(req).await.map_err(|e| {
-                warn!(self.logger, "Unexpected message - {e}");
-                ABORT_PROCEDURE
-            })?
+            self.nas_request(req)
+                .await
+                .map_err(|e| {
+                    warn!(self.logger, "Unexpected message - {e}");
+                    ABORT_PROCEDURE
+                })?
+                .0
         ) {
             Ok(rsp) => {
                 self.log_message(">> NasAuthenticationResponse");

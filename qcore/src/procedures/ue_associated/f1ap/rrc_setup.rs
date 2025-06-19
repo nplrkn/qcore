@@ -19,8 +19,7 @@ impl<'a, A: HandlerApi> RrcSetupProcedure<'a, A> {
 
         let nas_bytes = self.handle_rrc_setup(r).await?;
 
-        if let Ok((nas_message, security_header)) = self.nas_decode_with_security_header(&nas_bytes)
-        {
+        if let Ok((nas_message, security_header)) = self.nas_decode(&nas_bytes) {
             let registration_request = ensure_nas!(RegistrationRequest, nas_message);
             RegistrationProcedure::new(self.0)
                 .run(Box::new(registration_request), security_header)
