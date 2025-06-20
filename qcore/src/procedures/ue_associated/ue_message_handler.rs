@@ -43,14 +43,12 @@ impl<A: HandlerApi> UeMessageHandler<A> {
         let mut queue = VecDeque::new();
         let mut result = Ok(());
         loop {
-            let mut ping = None;
             let ue_procedure = UeProcedure::new(
                 &self.api,
                 ue_context,
                 &self.logger,
                 &self.receiver,
                 give_context,
-                &mut ping,
                 &mut queue,
             );
 
@@ -63,10 +61,6 @@ impl<A: HandlerApi> UeMessageHandler<A> {
                     warn!(self.logger, "Failed to release RAN context: {e}");
                 }
                 return result;
-            }
-
-            if let Some(sender) = ping {
-                let _ = sender.send(()).await;
             }
         }
     }

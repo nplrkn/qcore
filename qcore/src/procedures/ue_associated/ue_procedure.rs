@@ -19,7 +19,7 @@ use f1ap::{
     CellGroupConfig, DlRrcMessageTransferProcedure, F1apPdu, InitiatingMessage, RrcContainer,
     SrbId, UlRrcMessageTransfer,
 };
-use ngap::{AmfUeNgapId, NgapPdu, UplinkNasTransport};
+use ngap::{AmfUeNgapId, NgapPdu};
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gsMessage, Nas5gsmMessage, decode_nas_5gs_message,
     messages::Nas5gsSecurityHeader,
@@ -35,7 +35,6 @@ pub struct UeProcedure<'a, A: HandlerApi> {
     pub ue: &'a mut UeContext,
     receiver: &'a Receiver<UeMessage>,
     give_context: &'a mut Option<Sender<NasContext>>,
-    ping: &'a mut Option<Sender<()>>,
     pub f1ap_release_cause: f1ap::Cause,
     queued_messages: &'a mut VecDeque<UeMessage>,
 }
@@ -60,7 +59,6 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         logger: &'a Logger,
         receiver: &'a Receiver<UeMessage>,
         give_context: &'a mut Option<Sender<NasContext>>,
-        ping: &'a mut Option<Sender<()>>,
         queued_messages: &'a mut VecDeque<UeMessage>,
     ) -> Self {
         UeProcedure {
@@ -68,7 +66,6 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
             ue,
             receiver,
             give_context,
-            ping,
             f1ap_release_cause: f1ap::Cause::RadioNetwork(f1ap::CauseRadioNetwork::NormalRelease),
             queued_messages,
         }
@@ -176,7 +173,8 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
                 Err(anyhow!("Take context"))
             }
             UeMessage::Ping(sender) => {
-                *(self.ping) = Some(sender);
+                debug!(self.logger, "Respond to ping");
+                sender.send(()).await?;
                 Ok(())
             }
         }
@@ -248,15 +246,17 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         Ok(())
     }
 
+    /// Receive a message mid-procedure.  If the procedure does not want the message
+    /// it should call enqueue_message() to queue it for later processing.
+    /// It will then get processed from dispatch().
+    ///
+    /// The TakeContext message immediately causes any procedure to abort.
     async fn receive_pdu(&mut self) -> Result<UeMessage> {
         loop {
             match self.receiver.recv().await? {
                 UeMessage::TakeContext(sender) => {
                     *self.give_context = Some(sender);
                     bail!("Take context")
-                }
-                UeMessage::Ping(sender) => {
-                    *self.ping = Some(sender);
                 }
                 x => return Ok(x),
             }
@@ -278,8 +278,8 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
                         continue;
                     }
                 },
-                _ => {
-                    bail!("Unexpected UeMessage received");
+                m => {
+                    self.enqueue_message(m); // e.g. UeMessage::Ping
                 }
             }
         }
@@ -300,8 +300,8 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
                         continue;
                     }
                 },
-                _ => {
-                    bail!("Unexpected UeMessage received");
+                m => {
+                    self.enqueue_message(m); // e.g. UeMessage::Ping
                 }
             }
         }

@@ -16,8 +16,7 @@ In progress
 
 - Unexpected message queueing
   - OAI patch
-  - Use queueing mechanism to handle ping and take context, not just F1ap and Ngap Pdu
-  - Implement systematically
+  - streamline receive_f1ap_pdu() / receive_ngap_pdu()
   - receive_rrc() should also take filter
 
 -  Session establishment with real phone
