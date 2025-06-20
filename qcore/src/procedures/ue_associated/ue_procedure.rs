@@ -285,35 +285,49 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         }
     }
 
+    async fn receive_ngap_pdu<T>(
+        &mut self,
+        filter: fn(Box<NgapPdu>) -> Result<T, Box<NgapPdu>>,
+        expected: &str,
+    ) -> Result<T> {
+        loop {
+            let msg = self.receive_pdu().await?;
+            match msg {
+                UeMessage::Ngap(pdu) => match filter(pdu) {
+                    Ok(extracted) => return Ok(extracted),
+                    Err(pdu) => {
+                        self.unexpected_ngap_pdu(pdu, expected)?;
+                        continue;
+                    }
+                },
+                _ => {
+                    bail!("Unexpected UeMessage received");
+                }
+            }
+        }
+    }
+
     // Used to enqueue a message if the receiver is not ready to process it immediately.
     fn enqueue_message(&mut self, message: UeMessage) {
         self.queued_messages.push_back(message);
     }
 
-    async fn receive_ngap_pdu(&mut self) -> Result<Box<NgapPdu>> {
-        match self.receive_pdu().await? {
-            UeMessage::Ngap(pdu) => Ok(pdu),
-            _ => {
-                bail!("Unexpected UeMessage received");
-            }
-        }
-    }
-
     async fn receive_nas_inner(&mut self) -> Result<DecodedNas> {
         if self.ngap_mode() {
-            loop {
-                let pdu = self.receive_ngap_pdu().await?;
-                let NgapPdu::InitiatingMessage(ngap::InitiatingMessage::UplinkNasTransport(
-                    UplinkNasTransport { nas_pdu, .. },
-                )) = *pdu
-                else {
-                    self.unexpected_ngap_pdu(pdu, "UplinkNasTransport")?;
-                    continue;
-                };
+            let uplink_nas_transport = self
+                .receive_ngap_pdu(
+                    |m| match *m {
+                        NgapPdu::InitiatingMessage(
+                            ngap::InitiatingMessage::UplinkNasTransport(x),
+                        ) => Ok(x),
+                        _ => Err(m),
+                    },
+                    "Uplink Nas Transport",
+                )
+                .await?;
 
-                let msg = self.nas_decode(&nas_pdu.0)?;
-                return Ok(msg);
-            }
+            let msg = self.nas_decode(&uplink_nas_transport.nas_pdu.0)?;
+            return Ok(msg);
         } else {
             self.receive_rrc().await.and_then(|x| match x.message {
                 UlDcchMessageType::C1(C1_6::UlInformationTransfer(UlInformationTransfer {
