@@ -20,7 +20,10 @@ use f1ap::{
     SrbId, UlRrcMessageTransfer,
 };
 use ngap::{AmfUeNgapId, NgapPdu, UplinkNasTransport};
-use oxirush_nas::{Nas5gsMessage, messages::Nas5gsSecurityHeader};
+use oxirush_nas::{
+    Nas5gmmMessage, Nas5gsMessage, Nas5gsmMessage, decode_nas_5gs_message,
+    messages::Nas5gsSecurityHeader,
+};
 use rrc::{
     C1_6, CriticalExtensions37, DedicatedNasMessage, UlDcchMessage, UlDcchMessageType,
     UlInformationTransfer, UlInformationTransferIEs,
@@ -260,18 +263,31 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         }
     }
 
-    // Used to enqueue a message if the receiver is not ready to process it immediately.
-    async fn enqueue_message(&mut self, message: UeMessage) {
-        self.queued_messages.push_back(message);
-    }
-
-    async fn receive_f1ap_pdu(&mut self) -> Result<Box<F1apPdu>> {
-        match self.receive_pdu().await? {
-            UeMessage::F1ap(pdu) => Ok(pdu),
-            _ => {
-                bail!("Unexpected UeMessage received");
+    async fn receive_f1ap_pdu<T>(
+        &mut self,
+        filter: fn(Box<F1apPdu>) -> Result<T, Box<F1apPdu>>,
+        expected: &str,
+    ) -> Result<T> {
+        loop {
+            let msg = self.receive_pdu().await?;
+            match msg {
+                UeMessage::F1ap(pdu) => match filter(pdu) {
+                    Ok(extracted) => return Ok(extracted),
+                    Err(pdu) => {
+                        self.unexpected_f1ap_pdu(pdu, expected)?;
+                        continue;
+                    }
+                },
+                _ => {
+                    bail!("Unexpected UeMessage received");
+                }
             }
         }
+    }
+
+    // Used to enqueue a message if the receiver is not ready to process it immediately.
+    fn enqueue_message(&mut self, message: UeMessage) {
+        self.queued_messages.push_back(message);
     }
 
     async fn receive_ngap_pdu(&mut self) -> Result<Box<NgapPdu>> {
@@ -283,6 +299,40 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         }
     }
 
+    async fn receive_nas_inner(&mut self) -> Result<DecodedNas> {
+        if self.ngap_mode() {
+            loop {
+                let pdu = self.receive_ngap_pdu().await?;
+                let NgapPdu::InitiatingMessage(ngap::InitiatingMessage::UplinkNasTransport(
+                    UplinkNasTransport { nas_pdu, .. },
+                )) = *pdu
+                else {
+                    self.unexpected_ngap_pdu(pdu, "UplinkNasTransport")?;
+                    continue;
+                };
+
+                let msg = self.nas_decode(&nas_pdu.0)?;
+                return Ok(msg);
+            }
+        } else {
+            self.receive_rrc().await.and_then(|x| match x.message {
+                UlDcchMessageType::C1(C1_6::UlInformationTransfer(UlInformationTransfer {
+                    critical_extensions:
+                        CriticalExtensions37::UlInformationTransfer(UlInformationTransferIEs {
+                            dedicated_nas_message: Some(DedicatedNasMessage(response_bytes)),
+                            ..
+                        }),
+                })) => {
+                    let msg = self.nas_decode(&response_bytes)?;
+                    Ok(msg)
+                }
+                _ => Err(anyhow!(
+                    "Expected RrcUlInformationTransfer with DedicatedNasMessage"
+                )),
+            })
+        }
+    }
+
     // Used in the middle of a procedure when an unexpected message is received and
     // decides whether to enqueue an unexpected NGAP PDU or abort the current procedure.
     //
@@ -291,19 +341,19 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
     // we can process the indication later.
     //
     // However if the indication is telling us to tear down the UE context, we should abandon the Nas procedure.
-    async fn unexpected_ngap_pdu(&mut self, pdu: Box<NgapPdu>, expected: &str) -> Result<()> {
+    fn unexpected_ngap_pdu(&mut self, pdu: Box<NgapPdu>, expected: &str) -> Result<()> {
         debug!(self.logger, "Queue NGAP PDU (wanted {expected})");
-        self.enqueue_message(UeMessage::Ngap(pdu)).await;
+        self.enqueue_message(UeMessage::Ngap(pdu));
         Ok(())
     }
 
-    async fn unexpected_f1ap_pdu(&mut self, pdu: Box<F1apPdu>, expected: &str) -> Result<()> {
+    fn unexpected_f1ap_pdu(&mut self, pdu: Box<F1apPdu>, expected: &str) -> Result<()> {
         bail!("Expected {expected}, got {pdu:?}");
     }
 
-    pub async fn unexpected_nas_pdu(&mut self, pdu: DecodedNas, expected: &str) -> Result<()> {
+    fn unexpected_nas_pdu(&mut self, pdu: DecodedNas, expected: &str) -> Result<()> {
         debug!(self.logger, "Queue NAS PDU (wanted {expected})");
-        self.enqueue_message(UeMessage::Nas(pdu)).await;
+        self.enqueue_message(UeMessage::Nas(pdu));
         Ok(())
     }
 
@@ -365,19 +415,17 @@ impl<'a, A: HandlerApi> super::F1apBase for UeProcedure<'a, A> {
     }
 
     async fn receive_rrc(&mut self) -> Result<Box<UlDcchMessage>> {
-        loop {
-            let pdu = self.receive_f1ap_pdu().await?;
-            let F1apPdu::InitiatingMessage(InitiatingMessage::UlRrcMessageTransfer(
-                ul_rrc_message_transfer,
-            )) = *pdu
-            else {
-                self.unexpected_f1ap_pdu(pdu, "UlRrcMessageTransfer")
-                    .await?;
-                continue;
-            };
-            self.log_message(">> F1ap UlRrcMessageTransfer");
-            return self.extract_ul_dcch_message(&ul_rrc_message_transfer);
-        }
+        let ul_rrc_message_transfer = self
+            .receive_f1ap_pdu(
+                |message| match *message {
+                    F1apPdu::InitiatingMessage(InitiatingMessage::UlRrcMessageTransfer(x)) => Ok(x),
+                    _ => Err(message),
+                },
+                "UlRrcMessageTransfer",
+            )
+            .await?;
+        self.log_message(">> F1ap UlRrcMessageTransfer");
+        return self.extract_ul_dcch_message(&ul_rrc_message_transfer);
     }
 
     /// Sends an RRC message.
@@ -407,43 +455,53 @@ impl<'a, A: HandlerApi> super::F1apBase for UeProcedure<'a, A> {
 }
 
 impl<'a, A: HandlerApi> NasBase for UeProcedure<'a, A> {
-    async fn receive_nas(&mut self) -> Result<DecodedNas> {
-        if self.ngap_mode() {
-            loop {
-                let pdu = self.receive_ngap_pdu().await?;
-                let NgapPdu::InitiatingMessage(ngap::InitiatingMessage::UplinkNasTransport(
-                    UplinkNasTransport { nas_pdu, .. },
-                )) = *pdu
-                else {
-                    self.unexpected_ngap_pdu(pdu, "UplinkNasTransport").await?;
-                    continue;
-                };
-
-                let msg = self.nas_decode(&nas_pdu.0)?;
-                return Ok(msg);
+    async fn receive_nas<T>(
+        &mut self,
+        filter: fn(DecodedNas) -> Result<T, DecodedNas>,
+        expected: &str,
+    ) -> Result<T> {
+        loop {
+            let nas = self.receive_nas_inner().await?;
+            match filter(nas) {
+                Ok(extracted) => return Ok(extracted),
+                Err(nas) => self.unexpected_nas_pdu(nas, expected)?,
             }
-        } else {
-            self.receive_rrc().await.and_then(|x| match x.message {
-                UlDcchMessageType::C1(C1_6::UlInformationTransfer(UlInformationTransfer {
-                    critical_extensions:
-                        CriticalExtensions37::UlInformationTransfer(UlInformationTransferIEs {
-                            dedicated_nas_message: Some(DedicatedNasMessage(response_bytes)),
-                            ..
-                        }),
-                })) => {
-                    let msg = self.nas_decode(&response_bytes)?;
-                    Ok(msg)
-                }
-                _ => Err(anyhow!(
-                    "Expected RrcUlInformationTransfer with DedicatedNasMessage"
-                )),
-            })
         }
     }
 
-    async fn nas_request(&mut self, nas: Box<Nas5gsMessage>) -> Result<DecodedNas> {
+    async fn receive_nas_sm<T>(
+        &mut self,
+        filter: fn(Nas5gsmMessage) -> Option<T>,
+        expected: &str,
+    ) -> Result<T> {
+        loop {
+            let nas = self.receive_nas_inner().await?;
+            if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::UlNasTransport(ref ul_nas_transport)) =
+                *nas.0
+            {
+                let inner = Box::new(decode_nas_5gs_message(
+                    &ul_nas_transport.payload_container.value,
+                )?);
+                if let Nas5gsMessage::Gsm(_, nas_sm) = *inner {
+                    if let Some(extracted) = filter(nas_sm) {
+                        return Ok(extracted);
+                    }
+                }
+            }
+            // This is not the message we are looking for.  Park the top level NAS PDU.  This is rather inefficient
+            // since it means we will decode the inner message again later.
+            self.unexpected_nas_pdu(nas, expected)?;
+        }
+    }
+
+    async fn nas_request<T>(
+        &mut self,
+        nas: Box<Nas5gsMessage>,
+        filter: fn(DecodedNas) -> Result<T, DecodedNas>,
+        expected: &str,
+    ) -> Result<T> {
         self.nas_indication(nas).await?;
-        self.receive_nas().await
+        self.receive_nas(filter, expected).await
     }
 
     async fn nas_indication(&mut self, nas: Box<Nas5gsMessage>) -> Result<()> {

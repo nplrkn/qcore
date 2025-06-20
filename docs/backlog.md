@@ -15,10 +15,7 @@ In progress
   - handle UeRadioCapabilityInfoIndication
 
 - Unexpected message queueing
-  - ensure_nas(...).0 is ugly
-  - A procedure (nas sesssion release) should not have to loop on self.receive_nas().  The loop should
-    happen under the covers.
-
+  - OAI patch
   - Use queueing mechanism to handle ping and take context, not just F1ap and Ngap Pdu
   - Implement systematically
 
