@@ -13,7 +13,6 @@ In progress
   - session release
 
 - Unexpected message queueing
-  - OAI patch
   - receive_rrc() should also take filter
 
 -  Session establishment with real phone

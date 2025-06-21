@@ -60,8 +60,7 @@ RUST_LOG=debug cargo run -- --mcc 208 --mnc 99 --local-ip 127.0.0.1 --ran-interf
 #### Terminal 3 - OAI DU
 
 ```sh
-cd ~/openairinterface5g/cmake_targets/ran_build/build
-sudo ./nr-softmodem -O ~/oai.conf --rfsim
+cd ~/openairinterface5g/cmake_targets/ran_build/build && sudo ./nr-softmodem -O ~/oai.conf --rfsim
 ```
 
 This uses the symlink oai.conf that we made earlier.
@@ -69,8 +68,7 @@ This uses the symlink oai.conf that we made earlier.
 #### Terminal 4 - OAI UE
 
 ```sh
-cd ~/openairinterface5g/cmake_targets/ran_build/build
-sudo ./nr-uesoftmodem -r 106 --numerology 1 --band 78 -C 3619200000 --ssb 516 --rfsim
+cd ~/openairinterface5g/cmake_targets/ran_build/build && sudo ./nr-uesoftmodem -r 106 --numerology 1 --band 78 -C 3619200000 --ssb 516 --rfsim
 ```
 Note that the arguments to nr-uesoftmodem obey the startup log from nr-softmodem in terminal 3 "Command line parameters for OAI UE...".  
 

@@ -356,34 +356,6 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         let rrc_message_bytes = pdcp::view_inner(&r.rrc_container.0)?;
         Ok(Box::new(UlDcchMessage::from_bytes(rrc_message_bytes)?))
     }
-
-    // OAI UE sends a security protected deregistration request where the inner
-    // message has security header type 0x0100 - INTEGRITY_PROTECTED_AND_CIPHERED_WITH_NEW_SECU_CTX -
-    // but no security header.
-    // Wireshark parses this OK, but our Oxirush NAS decoder doesn't.
-    // Current hypothesis is that OAI is getting it wrong, and Wireshark is tolerating it because
-    // it calculates inner messsage offsets assuming that it cannot have a security header.
-    //
-    // For now, we have this hack to patch the message to pacify the NAS decoder.
-    // fn patch_nas_for_oai_deregistration_security_header(&self, nas_bytes: &mut [u8]) {
-    //     const INNER_SECURITY_HEADER_TYPE_OFFSET: usize = 8;
-    //     if nas_bytes.len() < (INNER_SECURITY_HEADER_TYPE_OFFSET + 1) {
-    //         return;
-    //     }
-
-    //     if nas_bytes[0] == 0x7e && nas_bytes[1] == 0x02 {
-    //         // Security protected MM message.
-    //         // The inner message header starts at byte 7, and its security header type is at byte 8.
-    //         if nas_bytes[INNER_SECURITY_HEADER_TYPE_OFFSET] != 0x00 {
-    //             warn!(
-    //                 self.logger,
-    //                 "Patching NAS message to change inner message security header type from {:?} to 0",
-    //                 nas_bytes[INNER_SECURITY_HEADER_TYPE_OFFSET]
-    //             );
-    //             nas_bytes[INNER_SECURITY_HEADER_TYPE_OFFSET] = 0x00;
-    //         }
-    //     }
-    // }
 }
 
 impl<'a, A: HandlerApi> super::F1apBase for UeProcedure<'a, A> {
