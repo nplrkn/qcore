@@ -2,8 +2,6 @@ In progress
 
 - No 'atomic_cxchg_relaxed_relaxed in intrinsics' compile error
 
-- Session enquiry
-
 - Phone interop
   -  PDU session release command should flow on SRB 2, not SRB 1
     

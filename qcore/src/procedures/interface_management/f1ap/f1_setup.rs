@@ -26,10 +26,9 @@ impl<'a, A: HandlerApi> F1SetupProcedure<'a, A> {
         // Filter out the served cells not in the PLMN.
         let gnb_du_served_cells_list: Vec<GnbDuServedCellsItem> = r
             .gnb_du_served_cells_list
-            .map(|x| x.0.into())
-            .unwrap_or_default();
-        let gnb_du_served_cells_list: Vec<GnbDuServedCellsItem> = gnb_du_served_cells_list
+            .map(|x| x.0)
             .into_iter()
+            .flatten()
             .filter(|x| x.served_cell_information.nr_cgi.plmn_identity == self.config().plmn)
             .collect();
 
