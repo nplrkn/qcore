@@ -1,6 +1,7 @@
 use async_std::channel::Sender;
 use f1ap::F1apPdu;
 use ngap::NgapPdu;
+use rrc::UlDcchMessage;
 
 use crate::data::{DecodedNas, NasContext};
 
@@ -9,6 +10,7 @@ pub enum UeMessage {
     F1ap(Box<F1apPdu>),
     Ngap(Box<NgapPdu>),
     Nas(DecodedNas),
+    Rrc(Box<UlDcchMessage>),
     TakeContext(Sender<NasContext>),
 
     // Send this message to a message handler to get a notification when the current procedure has finished processing.

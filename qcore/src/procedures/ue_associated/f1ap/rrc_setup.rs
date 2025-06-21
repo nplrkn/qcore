@@ -23,7 +23,11 @@ impl<'a, A: HandlerApi> RrcSetupProcedure<'a, A> {
         self.log_message(">> RrcSetupRequest");
         let rrc_setup = crate::rrc::build::setup(0, cell_group_config);
         self.log_message("<< RrcSetup");
-        let response = self.rrc_request(SrbId(0), &rrc_setup).await?;
+
+        // We use a filter that allows any message because the only valid message at this point is an RrcSetupComplete
+        // and we don't want to queue an unexpected message.
+        // TODO: provide a different style of filter that fails rather than queues?
+        let response = self.rrc_request(SrbId(0), &rrc_setup, Ok, "").await?;
         let nas_bytes = self.check_rrc_setup_complete(response)?;
         self.log_message(">> RrcSetupComplete");
         Ok(nas_bytes)
@@ -43,7 +47,7 @@ impl<'a, A: HandlerApi> RrcSetupProcedure<'a, A> {
             UlCcchMessage {
                 message: UlCcchMessageType::C1(C1_4::RrcSetupRequest(x)),
             } => Ok(x),
-            m => Err(anyhow!(format!("Not yet implemented Rrc message {:?}", m))),
+            m => bail!("Initial RRC message is not Rrc Setup {:?}", m),
         }
     }
 

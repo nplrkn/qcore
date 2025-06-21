@@ -10,9 +10,6 @@ In progress
   - use different forwarding tables for NGAP vs F1AP 
   - session release
 
-- Unexpected message queueing
-  - receive_rrc() should also take filter
-
 -  Session establishment with real phone
    -  OnePlus
    -  Samsung

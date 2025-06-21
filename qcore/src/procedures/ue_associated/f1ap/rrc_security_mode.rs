@@ -1,3 +1,5 @@
+use crate::rrc_request_filter;
+
 use super::prelude::*;
 use f1ap::SrbId;
 use rrc::{C1_6, UlDcchMessage, UlDcchMessageType};
@@ -9,15 +11,25 @@ impl<'a, A: HandlerApi> RrcSecurityModeProcedure<'a, A> {
         self.configure_rrc_security(kgnb);
         let r = crate::rrc::build::security_mode_command(1);
         self.log_message("<< RrcSecurityModeCommand");
-        let response = self.rrc_request(SrbId(1), &r).await?;
-        match *response {
-            UlDcchMessage {
-                message: UlDcchMessageType::C1(C1_6::SecurityModeComplete(_)),
-            } => {
+
+        // TODO: this is a case for a filter that fails rather than queues.
+        match self
+            .rrc_request(
+                SrbId(1),
+                &r,
+                rrc_request_filter!(SecurityModeComplete, SecurityModeFailure),
+                "Security mode response",
+            )
+            .await?
+        {
+            Ok(_) => {
                 self.log_message(">> RrcSecurityModeComplete");
                 Ok(self.0)
             }
-            m => bail!("Expected Rrc SecurityModeComplete, received {:?}", m),
+            Err(_) => {
+                self.log_message(">> RrcSecurityModeFailure");
+                bail!("Rrc Security Mode Failure")
+            }
         }
     }
 

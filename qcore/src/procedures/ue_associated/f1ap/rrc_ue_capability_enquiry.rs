@@ -1,8 +1,10 @@
 use std::collections::HashSet;
 
+use crate::rrc_filter;
+
 use super::prelude::*;
 use asn1_per::SerDes;
-use f1ap::{FddInfo, NrFreqInfo, NrModeInfo, SrbId, TddInfo};
+use f1ap::{FddInfo, NrCgi, NrFreqInfo, NrModeInfo, SrbId, TddInfo};
 use rrc::{
     C1_6, CriticalExtensions33, UeCapabilityInformation, UeCapabilityInformationIEs, UlDcchMessage,
     UlDcchMessageType,
@@ -17,6 +19,37 @@ impl<'a, A: HandlerApi> RrcUeCapabilityEnquiryProcedure<'a, A> {
             bail!("Logic error - NR CGI missing")
         };
 
+        let bands = self.get_bands_for_served_cell(nr_cgi).await?;
+        debug!(self.logger, "Asking UE about bands: {:?}", bands);
+
+        let r = crate::rrc::build::ue_capability_enquiry(1, &bands)?;
+        self.log_message("<< Rrc UeCapabilityEnquiry");
+
+        let ue_capability_information = self
+            .rrc_request(
+                SrbId(1),
+                &r,
+                rrc_filter!(UeCapabilityInformation),
+                "Rrc Ue Capability Information",
+            )
+            .await?;
+        self.log_message(">> Rrc UeCapabilityInformation");
+
+        if let UeCapabilityInformation {
+            critical_extensions:
+                CriticalExtensions33::UeCapabilityInformation(UeCapabilityInformationIEs {
+                    ue_capability_rat_container_list: Some(capabilities),
+                    ..
+                }),
+            ..
+        } = ue_capability_information
+        {
+            self.ue.rat_capabilities = Some(capabilities.as_bytes()?);
+        }
+        Ok(self.0)
+    }
+
+    async fn get_bands_for_served_cell(&self, nr_cgi: &NrCgi) -> Result<HashSet<u16>> {
         let mut bands: HashSet<u16> = HashSet::new();
 
         // TODO: surely this calls for a HashMap by NrCgi?
@@ -43,32 +76,7 @@ impl<'a, A: HandlerApi> RrcUeCapabilityEnquiryProcedure<'a, A> {
                 }
             }
         }
-        debug!(self.logger, "Asking UE about bands: {:?}", bands);
-
-        let r = crate::rrc::build::ue_capability_enquiry(1, &bands)?;
-        self.log_message("<< Rrc UeCapabilityEnquiry");
-
-        let response = self.rrc_request(SrbId(1), &r).await?;
-        match *response {
-            UlDcchMessage {
-                message:
-                    UlDcchMessageType::C1(C1_6::UeCapabilityInformation(UeCapabilityInformation {
-                        critical_extensions:
-                            CriticalExtensions33::UeCapabilityInformation(UeCapabilityInformationIEs {
-                                ue_capability_rat_container_list,
-                                ..
-                            }),
-                        ..
-                    })),
-            } => {
-                self.log_message(">> Rrc UeCapabilityInformation");
-                if let Some(capabilities) = ue_capability_rat_container_list {
-                    self.ue.rat_capabilities = Some(capabilities.as_bytes()?);
-                }
-                Ok(self.0)
-            }
-            m => bail!("Expected UeCapabilityInformation, received {:?}", m),
-        }
+        Ok(bands)
     }
 }
 
