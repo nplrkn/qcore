@@ -5,8 +5,10 @@ mod ue_message_handler;
 pub use f1ap::*;
 pub use nas::*;
 pub use ngap::*;
+pub mod ue_message;
 mod ue_procedure;
 
+pub use ue_message::UeMessage;
 pub use ue_message_handler::UeMessageHandler;
 pub use ue_procedure::UeProcedure;
 

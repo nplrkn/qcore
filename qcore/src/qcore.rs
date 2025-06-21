@@ -77,7 +77,7 @@ impl QCore {
         let mut ebpf = PacketProcessor::install_ebpf(
             ngap_mode,
             local_ip,
-            &config.f1u_interface_name,
+            &config.ran_interface_name,
             &config.n6_interface_name,
             &config.tun_interface_name,
             &logger,

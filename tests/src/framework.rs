@@ -65,7 +65,7 @@ async fn start_qcore(
             serving_network_name: "5G:mnc093.mcc208.3gppnetwork.org".to_string(),
             skip_ue_authentication_check: true, // saves us having to implement milenage etc in test framework
             sst: 1,
-            f1u_interface_name: "lo".to_string(),
+            ran_interface_name: "lo".to_string(),
             n6_interface_name: "veth1".to_string(),
             tun_interface_name: "qcoretun".to_string(),
             ue_subnet: Ipv4Addr::new(10, 255, 0, 0),

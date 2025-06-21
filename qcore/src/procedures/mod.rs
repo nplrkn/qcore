@@ -6,10 +6,10 @@ mod procedure;
 mod ue_associated;
 
 pub use f1ap_handler::F1apHandler;
-pub use handler_api::{HandlerApi, UeMessage};
+pub use handler_api::HandlerApi;
 pub use ngap_handler::NgapHandler;
 pub use procedure::Procedure;
-pub use ue_associated::UeMessageHandler;
+pub use ue_associated::{UeMessage, UeMessageHandler};
 
 // Reduces procedure boilerplate by compressing common 'use' directives to a single line.
 mod prelude {

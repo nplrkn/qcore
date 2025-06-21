@@ -33,7 +33,7 @@ pub struct Config {
     pub amf_ids: AmfIds,
 
     // Name of the F1U ethernet device
-    pub f1u_interface_name: String,
+    pub ran_interface_name: String,
 
     // Name of the N6 ethernet device
     pub n6_interface_name: String,

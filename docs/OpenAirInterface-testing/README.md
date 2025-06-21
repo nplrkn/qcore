@@ -54,7 +54,7 @@ sudo tcpdump -w oai_test.pcap -i any sctp or port 2152 or host 10.255.0.1
 
 ```sh
 cd ~/qcore
-RUST_LOG=debug cargo run -- --mcc 208 --mnc 99 --local-ip 127.0.0.1 --f1u-interface-name lo --sim-cred-file docs/OpenAirInterface-testing/oai-sim.toml
+RUST_LOG=debug cargo run -- --mcc 208 --mnc 99 --local-ip 127.0.0.1 --ran-interface-name lo --sim-cred-file docs/OpenAirInterface-testing/oai-sim.toml
 ```
 
 #### Terminal 3 - OAI DU

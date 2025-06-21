@@ -30,10 +30,10 @@ struct Args {
     #[arg(long)]
     mnc: String,
 
-    /// Name of the Linux Ethernet device used for userplane communication with the DU.  If
-    /// you are running the DU locally, this should be set to "lo".
+    /// Name of the Linux Ethernet device used for userplane communication with the DU or gNB.  
+    /// If you are running the DU / gNB locally, this should be set to "lo".
     #[arg(long, default_value = "eth0")]
-    f1u_interface_name: String,
+    ran_interface_name: String,
 
     /// Name of the Linux Ethernet device on which downlink packets to UEs will arrive.  
     #[arg(long, default_value = "veth1")]
@@ -91,7 +91,7 @@ async fn main() -> Result<()> {
             serving_network_name,
             skip_ue_authentication_check: false,
             sst: args.sst,
-            f1u_interface_name: args.f1u_interface_name,
+            ran_interface_name: args.ran_interface_name,
             n6_interface_name: args.n6_interface_name,
             tun_interface_name: args.tun_interface_name,
             ue_subnet: args.ue_subnet,

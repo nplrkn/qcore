@@ -246,77 +246,69 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         Ok(())
     }
 
-    /// Receive a message mid-procedure.  If the procedure does not want the message
-    /// it should call enqueue_message() to queue it for later processing.
-    /// It will then get processed from dispatch().
+    /// Receive an NGAP or F1AP message mid-procedure.  
+    ///
+    /// The caller provides a filter that skips over any unwanted messages.  The caller
+    /// may also call enqueue_message() itself if more complex filtering is needed.
+    ///
+    /// Attempting to queue certain messages will immediately fail and abort the procedure - for example
+    /// a Ue Context release request from the DU.  Otherwise, a queue message will be processed later in dispatch().
     ///
     /// The TakeContext message immediately causes any procedure to abort.
-    async fn receive_pdu(&mut self) -> Result<UeMessage> {
-        loop {
-            match self.receiver.recv().await? {
-                UeMessage::TakeContext(sender) => {
-                    *self.give_context = Some(sender);
-                    bail!("Take context")
-                }
-                x => return Ok(x),
-            }
-        }
-    }
-
-    async fn receive_f1ap_pdu<T>(
+    async fn receive_xxap_pdu<T, BoxP>(
         &mut self,
-        filter: fn(Box<F1apPdu>) -> Result<T, Box<F1apPdu>>,
+        filter: fn(BoxP) -> Result<T, BoxP>,
         expected: &str,
-    ) -> Result<T> {
+    ) -> Result<T>
+    where
+        BoxP: TryFrom<UeMessage, Error = UeMessage> + Into<UeMessage>,
+    {
         loop {
-            let msg = self.receive_pdu().await?;
-            match msg {
-                UeMessage::F1ap(pdu) => match filter(pdu) {
+            let msg = self.receiver.recv().await?;
+            let msg = match BoxP::try_from(msg) {
+                Ok(pdu) => match filter(pdu) {
                     Ok(extracted) => return Ok(extracted),
-                    Err(pdu) => {
-                        self.unexpected_f1ap_pdu(pdu, expected)?;
-                        continue;
-                    }
+                    Err(pdu) => pdu.into(),
                 },
-                m => {
-                    self.enqueue_message(m); // e.g. UeMessage::Ping
-                }
-            }
-        }
-    }
-
-    async fn receive_ngap_pdu<T>(
-        &mut self,
-        filter: fn(Box<NgapPdu>) -> Result<T, Box<NgapPdu>>,
-        expected: &str,
-    ) -> Result<T> {
-        loop {
-            let msg = self.receive_pdu().await?;
-            match msg {
-                UeMessage::Ngap(pdu) => match filter(pdu) {
-                    Ok(extracted) => return Ok(extracted),
-                    Err(pdu) => {
-                        self.unexpected_ngap_pdu(pdu, expected)?;
-                        continue;
-                    }
-                },
-                m => {
-                    self.enqueue_message(m); // e.g. UeMessage::Ping
-                }
-            }
+                Err(msg) => msg,
+            };
+            debug!(self.logger, "Queue message (wanted {expected})");
+            self.enqueue_message(msg)?; // e.g. UeMessage::Ping
         }
     }
 
     // Used to enqueue a message if the receiver is not ready to process it immediately.
-    fn enqueue_message(&mut self, message: UeMessage) {
+    fn enqueue_message(&mut self, message: UeMessage) -> Result<()> {
+        // Check for messages that should abort the procedure immediately.
+        match message {
+            UeMessage::TakeContext(sender) => {
+                *self.give_context = Some(sender);
+                bail!("Take context")
+            }
+            UeMessage::F1ap(ref m) => match *m.as_ref() {
+                F1apPdu::InitiatingMessage(InitiatingMessage::UeContextReleaseRequest(_)) => {
+                    bail!("Context release request from DU - abort current procedure");
+                }
+                _ => (),
+            },
+            UeMessage::Ngap(ref m) => match *m.as_ref() {
+                NgapPdu::InitiatingMessage(ngap::InitiatingMessage::UeContextReleaseRequest(_)) => {
+                    bail!("Context release request from gNB - abort current procedure");
+                }
+                _ => (),
+            },
+            _ => (),
+        }
+
         self.queued_messages.push_back(message);
+        Ok(())
     }
 
     async fn receive_nas_inner(&mut self) -> Result<DecodedNas> {
         if self.ngap_mode() {
             let uplink_nas_transport = self
-                .receive_ngap_pdu(
-                    |m| match *m {
+                .receive_xxap_pdu(
+                    |m: Box<NgapPdu>| match *m {
                         NgapPdu::InitiatingMessage(
                             ngap::InitiatingMessage::UplinkNasTransport(x),
                         ) => Ok(x),
@@ -327,7 +319,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
                 .await?;
 
             let msg = self.nas_decode(&uplink_nas_transport.nas_pdu.0)?;
-            return Ok(msg);
+            Ok(msg)
         } else {
             self.receive_rrc().await.and_then(|x| match x.message {
                 UlDcchMessageType::C1(C1_6::UlInformationTransfer(UlInformationTransfer {
@@ -347,33 +339,11 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         }
     }
 
-    // Used in the middle of a procedure when an unexpected message is received and
-    // decides whether to enqueue an unexpected NGAP PDU or abort the current procedure.
-    //
-    // For example, while a NAS procedure might be waiting for a response that will arrive
-    // in a Ngap UplinkNasTransport, the GNB might first send a UE capability indication.  In this case,
-    // we can process the indication later.
-    //
-    // However if the indication is telling us to tear down the UE context, we should abandon the Nas procedure.
-    fn unexpected_ngap_pdu(&mut self, pdu: Box<NgapPdu>, expected: &str) -> Result<()> {
-        debug!(self.logger, "Queue NGAP PDU (wanted {expected})");
-        self.enqueue_message(UeMessage::Ngap(pdu));
-        Ok(())
-    }
-
-    fn unexpected_f1ap_pdu(&mut self, pdu: Box<F1apPdu>, expected: &str) -> Result<()> {
-        bail!("Expected {expected}, got {pdu:?}");
-    }
-
     fn unexpected_nas_pdu(&mut self, pdu: DecodedNas, expected: &str) -> Result<()> {
         debug!(self.logger, "Queue NAS PDU (wanted {expected})");
-        self.enqueue_message(UeMessage::Nas(pdu));
+        self.enqueue_message(UeMessage::Nas(pdu))?;
         Ok(())
     }
-
-    // pub fn nas_decode(&mut self, bytes: &[u8]) -> Result<Box<Nas5gsMessage>> {
-    //     self.ue.nas.decode(bytes, self.logger)
-    // }
 
     pub fn nas_decode(
         &mut self,
@@ -430,16 +400,16 @@ impl<'a, A: HandlerApi> super::F1apBase for UeProcedure<'a, A> {
 
     async fn receive_rrc(&mut self) -> Result<Box<UlDcchMessage>> {
         let ul_rrc_message_transfer = self
-            .receive_f1ap_pdu(
-                |message| match *message {
+            .receive_xxap_pdu(
+                |m: Box<F1apPdu>| match *m {
                     F1apPdu::InitiatingMessage(InitiatingMessage::UlRrcMessageTransfer(x)) => Ok(x),
-                    _ => Err(message),
+                    _ => Err(m),
                 },
                 "UlRrcMessageTransfer",
             )
             .await?;
         self.log_message(">> F1ap UlRrcMessageTransfer");
-        return self.extract_ul_dcch_message(&ul_rrc_message_transfer);
+        self.extract_ul_dcch_message(&ul_rrc_message_transfer)
     }
 
     /// Sends an RRC message.
