@@ -6,7 +6,6 @@
 - NGAP mode 
   - ran context release
   - Registration accept should piggyback on NGAP Initial Context Setup request
-  - clean up uplink pipeline
   - use different forwarding tables for NGAP vs F1AP 
   - session release
 - Session establishment with real phone
