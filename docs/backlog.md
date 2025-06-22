@@ -1,39 +1,33 @@
-In progress
+# Backlog
 
+## In progress
 - No 'atomic_cxchg_relaxed_relaxed in intrinsics' compile error
-
-- Phone interop
-  -  PDU session release command should flow on SRB 2, not SRB 1
-    
+- PDU session release command should flow on SRB 2, not SRB 1  
 - NGAP mode 
+  - ran context release
+  - Registration accept should piggyback on NGAP Initial Context Setup request
   - clean up uplink pipeline
   - use different forwarding tables for NGAP vs F1AP 
   - session release
-
--  Session establishment with real phone
+- Session establishment with real phone
    -  OnePlus
    -  Samsung
    -  Motorola
  
-Performance
+## Performance
 - iperf framework
 - Release build perf profiling + tuning
 - Reduce memcpy
 
-Persistence
+## Persistence
 - Paging continuity
-
-NGAP mode
-- Registration accept should piggyback on NGAP Initial Context Setup request
-
-Function gaps
-- Update / Remove a DU's served cells on Du configuraiton update, F1 Remove, disconnection
-- Large SCTP messages - e.g. unfiltered UE Capability Information
-- Deregistration accept
-- PDU session release
-- Idle / paging
 - SQN
-- Session deletion
+
+## Function gaps
+- Deregistration accept
+- Update / Remove a DU's served cells on Du configuration update, F1 Remove, disconnection
+- Large SCTP messages - e.g. unfiltered UE Capability Information
+- Idle / paging
 - UE static IP
 - Registration timeout and refresh
 - PDCP Rx reordering
@@ -54,17 +48,17 @@ Function gaps
 - >1 PDU session per UE
 - >1 DU
 
-Error handling
-- Session setup with existing PDU session ID should not leave up old session.  This was seen with OnePlus phone which repeated 
+## Error handling
+- Session setup with existing PDU session ID should not leave up old session.  Seen with OnePlus phone which repeated 
   its session setup request (with no intervening delete) after not liking the response.
 
-Tidying + refactoring
+## Tidying + refactoring
+- give rrc its own directory under ue_associated procedures
 - avoid having to expect() on UeContext fields
 - message logs in both test framework and QCORE debug should use consistent F1 / RRC / NAS prefix
 - simplify xxap 
-- get rid of patch_nas_for_oai_deregistration_security_header() and fail gracefully
 
-Regression tests
+## Regression tests
 - should check there are no further messages when a mock is dropped
 - userplane testing of 18 bit PDCP sequence number
 - using real AUTS calculation (to catch SQN handling changes).
@@ -72,4 +66,3 @@ Regression tests
 - dl delivery status packet with / without payload
 - tcp out through NAT masquerade
 - stats (add new QCore pub method)
-

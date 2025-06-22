@@ -18,18 +18,8 @@ pub unsafe fn add(stat_id: CounterIndex, amount: u64) {
     }
 }
 
-// Drop the current packet and increment the given counter if the condition is not met.
-macro_rules! ensure {
-    ($cond:expr, $stat:ident) => {
-        if !$cond {
-            inc($stat);
-            return aya_ebpf::bindings::TC_ACT_SHOT;
-        }
-    };
-}
-
 // Variant which return Err
-macro_rules! ensure2 {
+macro_rules! ensure {
     ($cond:expr, $stat:ident) => {
         if !$cond {
             inc($stat);

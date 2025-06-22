@@ -93,7 +93,7 @@ impl PacketProcessor {
         let (uplink_program, downlink_program) = if ngap_mode {
             ("tc_uplink_n3", "tc_downlink_n3")
         } else {
-            ("tc_uplink", "tc_downlink")
+            ("tc_uplink_f1u", "tc_downlink_f1u")
         };
 
         let _ = tc::qdisc_add_clsact(f1u_if_name);

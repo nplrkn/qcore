@@ -1,5 +1,7 @@
 use core::mem;
 
+use network_types::{eth::EthHdr, ip::Ipv4Hdr, udp::UdpHdr};
+
 // TS29.281, 5.1
 #[repr(C, packed)]
 pub struct GtpHdr {
@@ -28,9 +30,9 @@ pub struct GtpExtendedHdr {
     pub base: GtpHdr,
     pub optional: GtpHdrOptionalFields,
 }
-impl GtpExtendedHdr {
-    pub const LEN: usize = mem::size_of::<GtpExtendedHdr>();
-}
+
+pub const GTP_EXTENSION_HEADER_OFFSET: usize =
+    EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + GtpHdr::LEN + GtpHdrOptionalFields::LEN;
 
 #[repr(C, packed)]
 pub struct GtpExtPduSessionContainer {
