@@ -5,11 +5,12 @@ use crate::{
     procedures::{
         UeMessage,
         ue_associated::{
-            F1apBase, F1apModeSessionReleaseProcedure, InitialContextSetupProcedure,
-            InitialUeMessageProcedure, NasBase, PduSessionResourceSetupProcedure,
-            RrcReconfigurationProcedure, RrcSecurityModeProcedure, RrcSetupProcedure,
-            RrcUeCapabilityEnquiryProcedure, UeContextReleaseProcedure, UeContextSetupProcedure,
-            UlInformationTransferProcedure, UplinkNasProcedure, UplinkNasTransportProcedure,
+            F1apRanSessionReleaseProcedure, InitialContextSetupProcedure,
+            InitialUeMessageProcedure, NasBase, NgapRanSessionReleaseProcedure,
+            PduSessionResourceSetupProcedure, RrcBase, RrcReconfigurationProcedure,
+            RrcSecurityModeProcedure, RrcSetupProcedure, RrcUeCapabilityEnquiryProcedure,
+            UeContextReleaseProcedure, UeContextSetupProcedure, UlInformationTransferProcedure,
+            UplinkNasProcedure, UplinkNasTransportProcedure,
         },
     },
 };
@@ -134,9 +135,11 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         nas: Vec<u8>,
     ) -> Result<Self> {
         if self.ngap_mode() {
-            bail!("Session deletion not yet implemented in NGAP mode")
+            NgapRanSessionReleaseProcedure::new(self)
+                .run(released_session, nas)
+                .await
         } else {
-            F1apModeSessionReleaseProcedure::new(self)
+            F1apRanSessionReleaseProcedure::new(self)
                 .run(released_session, nas)
                 .await
         }
@@ -373,7 +376,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
     }
 }
 
-impl<'a, A: HandlerApi> super::F1apBase for UeProcedure<'a, A> {
+impl<'a, A: HandlerApi> super::RrcBase for UeProcedure<'a, A> {
     /// Sends an RRC message and waits for a response.
     async fn rrc_request<T: Send + SerDes, F>(
         &mut self,

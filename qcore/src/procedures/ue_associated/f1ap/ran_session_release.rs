@@ -2,8 +2,8 @@ use super::prelude::*;
 use crate::{data::PduSession, procedures::ue_associated::RrcReconfigurationProcedure};
 use f1ap::UeContextModificationResponse;
 
-define_ue_procedure!(F1apModeSessionReleaseProcedure);
-impl<'a, A: HandlerApi> F1apModeSessionReleaseProcedure<'a, A> {
+define_ue_procedure!(RanSessionReleaseProcedure);
+impl<'a, A: HandlerApi> RanSessionReleaseProcedure<'a, A> {
     pub async fn run(
         self,
         released_session: &PduSession,

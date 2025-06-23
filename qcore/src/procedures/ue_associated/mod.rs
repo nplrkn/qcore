@@ -1,11 +1,13 @@
 mod f1ap;
 mod nas;
 mod ngap;
+mod rrc;
 mod ue_message_handler;
 pub use f1ap::*;
 pub use nas::*;
 pub use ngap::*;
 pub mod ue_message;
+pub use rrc::*;
 mod ue_procedure;
 
 pub use ue_message::UeMessage;

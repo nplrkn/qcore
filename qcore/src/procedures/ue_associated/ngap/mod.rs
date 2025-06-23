@@ -6,6 +6,8 @@ mod uplink_nas_transport;
 pub use uplink_nas_transport::UplinkNasTransportProcedure;
 mod pdu_session_resource_setup;
 pub use pdu_session_resource_setup::PduSessionResourceSetupProcedure;
+mod ran_session_release;
+pub use ran_session_release::RanSessionReleaseProcedure as NgapRanSessionReleaseProcedure;
 
 //pub trait NgapBase {}
 
