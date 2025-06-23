@@ -24,7 +24,7 @@ async fn session_release() -> anyhow::Result<()> {
     ue.handle_rrc_reconfiguration_with_session_accept().await?;
 
     // Userplane packet passthrough
-    ue.send_nas_pdu_session_release().await?;
+    ue.send_nas_pdu_session_release_request().await?;
     du.handle_ue_context_modification(ue.du_ue_context())
         .await?;
     ue.handle_rrc_reconfiguration_with_session_release().await?;

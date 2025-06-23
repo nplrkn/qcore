@@ -15,7 +15,7 @@ async fn sequential_sessions() -> anyhow::Result<()> {
     ue.send_nas_pdu_session_establishment_request().await?;
     du.handle_f1_ue_context_setup(ue.du_ue_context()).await?;
     ue.handle_rrc_reconfiguration_with_session_accept().await?;
-    ue.send_nas_pdu_session_release().await?;
+    ue.send_nas_pdu_session_release_request().await?;
     du.handle_ue_context_modification(ue.du_ue_context())
         .await?;
     let nas = ue.handle_rrc_reconfiguration(None, Some(1)).await?;

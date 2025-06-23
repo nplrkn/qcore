@@ -9,8 +9,6 @@ pub use pdu_session_resource_setup::PduSessionResourceSetupProcedure;
 mod ran_session_release;
 pub use ran_session_release::RanSessionReleaseProcedure as NgapRanSessionReleaseProcedure;
 
-//pub trait NgapBase {}
-
 mod prelude {
     pub use super::super::prelude::*;
 }

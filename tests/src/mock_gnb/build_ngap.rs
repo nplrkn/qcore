@@ -147,6 +147,33 @@ pub fn pdu_session_resource_setup_response(
     )))
 }
 
+pub fn pdu_session_resource_release_response(
+    amf_ue_ngap_id: AmfUeNgapId,
+    ran_ue_ngap_id: RanUeNgapId,
+    pdu_session_id: PduSessionId,
+) -> Result<Box<NgapPdu>> {
+    let pdu_session_resource_release_response_transfer =
+        PduSessionResourceReleaseResponseTransfer {
+            secondary_rat_usage_information: None,
+        }
+        .as_bytes()?;
+
+    Ok(Box::new(NgapPdu::SuccessfulOutcome(
+        SuccessfulOutcome::PduSessionResourceReleaseResponse(PduSessionResourceReleaseResponse {
+            amf_ue_ngap_id,
+            ran_ue_ngap_id,
+            pdu_session_resource_released_list_rel_res: PduSessionResourceReleasedListRelRes(
+                nonempty![PduSessionResourceReleasedItemRelRes {
+                    pdu_session_id,
+                    pdu_session_resource_release_response_transfer
+                }],
+            ),
+            user_location_information: None,
+            criticality_diagnostics: None,
+        }),
+    )))
+}
+
 pub fn ue_radio_capability_info_indication(
     amf_ue_ngap_id: AmfUeNgapId,
     ran_ue_ngap_id: RanUeNgapId,

@@ -33,6 +33,7 @@ pub struct UeContext {
 }
 
 pub struct Session {
+    pdu_session_id: PduSessionId,
     remote_tunnel_info: GtpTunnel,
     local_teid: GtpTeid,
 }
@@ -116,6 +117,7 @@ impl MockGnb {
                     PduSessionResourceSetupListSuReq(NonEmpty {
                         head:
                             PduSessionResourceSetupItemSuReq {
+                                pdu_session_id,
                                 pdu_session_nas_pdu: Some(NasPdu(nas_bytes)),
                                 pdu_session_resource_setup_request_transfer,
                                 ..
@@ -146,6 +148,7 @@ impl MockGnb {
             &local_teid,
         )?;
         ue.session = Some(Session {
+            pdu_session_id,
             remote_tunnel_info,
             local_teid: GtpTeid(local_teid),
         });
@@ -153,6 +156,39 @@ impl MockGnb {
         info!(self.logger, "Ngap PduSessionResourceSetupResponse >>");
         self.send(&pdu, None).await;
         Ok(nas_bytes)
+    }
+
+    pub async fn handle_pdu_session_resource_release(&self, ue: &mut UeContext) -> Result<Vec<u8>> {
+        let pdu = self.receive_pdu().await?;
+        let NgapPdu::InitiatingMessage(InitiatingMessage::PduSessionResourceReleaseCommand(
+            PduSessionResourceReleaseCommand {
+                amf_ue_ngap_id,
+                ran_ue_ngap_id,
+                nas_pdu: Some(nas),
+                ..
+            },
+        )) = *pdu
+        else {
+            bail!(
+                "Expected Ngap PduSessionResourceReleaseCommand with Nas Pdu, got {:?}",
+                pdu
+            )
+        };
+        info!(self.logger, "Ngap PduSessionResourceReleaseCommand <<");
+
+        let Some(session) = ue.session.take() else {
+            bail!("UE should have a session");
+        };
+
+        let pdu = build_ngap::pdu_session_resource_release_response(
+            amf_ue_ngap_id,
+            ran_ue_ngap_id,
+            session.pdu_session_id,
+        )?;
+        info!(self.logger, "Ngap PduSessionResourceReleaseResponse >>");
+        self.send(&pdu, None).await;
+
+        Ok(nas.0)
     }
 
     pub async fn send_nas(
