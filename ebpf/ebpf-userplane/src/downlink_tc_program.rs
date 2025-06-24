@@ -1,3 +1,4 @@
+use core::intrinsics::{atomic_cxchg, AtomicOrdering};
 use crate::counters::*;
 use crate::globals::*;
 use crate::headers::*;
@@ -8,7 +9,6 @@ use aya_ebpf::macros::{classifier, map};
 use aya_ebpf::maps::Array;
 use aya_ebpf::programs::TcContext;
 //use aya_log_ebpf::info;
-use core::intrinsics::atomic_cxchg_relaxed_relaxed;
 use ebpf_common::CounterIndex::*;
 use ebpf_common::*;
 use network_types::{
@@ -79,7 +79,7 @@ pub fn tc_downlink(ctx: TcContext) -> i32 {
         let mut pdcp_seq_num = *seq_num_ptr;
         for _ in 0..retries {
             let (swapped_value, ok) =
-                atomic_cxchg_relaxed_relaxed(seq_num_ptr, pdcp_seq_num, pdcp_seq_num + 1);
+                atomic_cxchg::<u64, {AtomicOrdering::Relaxed},{AtomicOrdering::Relaxed}>(seq_num_ptr, pdcp_seq_num, pdcp_seq_num + 1);
             if ok {
                 break;
             }
@@ -92,7 +92,7 @@ pub fn tc_downlink(ctx: TcContext) -> i32 {
         let mut nr_seq_num = *seq_num_ptr;
         for _ in 0..retries {
             let (swapped_value, ok) =
-                atomic_cxchg_relaxed_relaxed(seq_num_ptr, nr_seq_num, nr_seq_num + 1);
+                atomic_cxchg::<u64, {AtomicOrdering::Relaxed},{AtomicOrdering::Relaxed}>(seq_num_ptr, nr_seq_num, nr_seq_num + 1);
             if ok {
                 break;
             }
