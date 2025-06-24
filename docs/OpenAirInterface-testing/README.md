@@ -9,23 +9,6 @@ QCore has been tested against [OpenAirInterface](https://openairinterface.org/oa
 ## Install, build, test with OAI
 ### Install / Build
 ```sh
-cd
-sudo apt update # prepare for package installation
-
-# install Rust (https://www.rust-lang.org/tools/install)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh 
-. "$HOME/.cargo/env" 
-rustup default nightly
-
-# Clone and build QCore
-git clone https://github.com/nplrkn/qcore.git  
-cd qcore
-cargo build
-
-# make a shortcut to the OAI config file from the home dir
-cd
-ln -s qcore/docs/OpenAirInterface-testing/qcore-interop-gnb-du.sa.band78.106prb.rfsim.conf oai.conf
-
 # get and build OAI - from https://gitlab.eurecom.fr/oai/openairinterface5g/-/blob/develop/doc/BUILD.md
 git clone https://gitlab.eurecom.fr/oai/openairinterface5g.git
 cd openairinterface5g/cmake_targets
@@ -34,14 +17,18 @@ cd openairinterface5g/cmake_targets
 
 ```
 
-### Set up routing
+### Set up 
+This assumes QCore is cloned to ~/qcore.
 
 ```sh
 ~/qcore/setup-routing
 sudo ip netns add ue1
+
+# make a shortcut to the OAI config file from the home dir
+cd && ln -s qcore/docs/OpenAirInterface-testing/qcore-interop-gnb-du.sa.band78.106prb.rfsim.conf oai.conf
 ```
 
-Note that this configuration is lost on reboot.
+The first two commands need to be re-run following a reboot.
 
 ### Running the test
 #### Terminal 1 - tcpdump
