@@ -7,7 +7,7 @@ use rrc::{
     CellReselectionInfoCommon, CellReselectionPriority, CellReselectionServingFreqInfo,
     IntraFreqCellReselectionInfo, QHyst, QRxLevMin,
 };
-use xxap::{GtpTunnel, PduSessionId, TransportLayerAddress};
+use xxap::{GtpTunnel, NrCgi, PduSessionId, TransportLayerAddress};
 
 pub fn f1_setup_response(
     transaction_id: TransactionId,

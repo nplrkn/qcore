@@ -3,7 +3,7 @@
 use super::common::*;
 use asn1_per::{aper::*, *};
 #[allow(unused_imports)]
-use xxap::{GtpTunnel, PduSessionId, PlmnIdentity, TransportLayerAddress};
+use xxap::{GtpTunnel, NrCgi, PduSessionId, PlmnIdentity, TransportLayerAddress};
 
 // AdditionalDlUpTnlInformationForHoList
 #[derive(Clone, Debug)]
@@ -17848,98 +17848,7 @@ impl PerCodec for NpnSupport {
         })
     }
 }
-// NrCellIdentity
-#[derive(Clone, Debug)]
-pub struct NrCellIdentity(pub BitString);
 
-impl NrCellIdentity {
-    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
-        Ok(Self(decode::decode_bitstring(
-            data,
-            Some(36),
-            Some(36),
-            false,
-        )?))
-    }
-    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
-        encode::encode_bitstring(data, Some(36), Some(36), false, &self.0, false)
-    }
-}
-
-impl PerCodec for NrCellIdentity {
-    type Allocator = Allocator;
-    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
-        NrCellIdentity::decode_inner(data).map_err(|mut e: PerCodecError| {
-            e.push_context("NrCellIdentity");
-            e
-        })
-    }
-    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
-        self.encode_inner(data).map_err(|mut e: PerCodecError| {
-            e.push_context("NrCellIdentity");
-            e
-        })
-    }
-}
-// NrCgi
-#[derive(Clone, Debug)]
-pub struct NrCgi {
-    pub plmn_identity: PlmnIdentity,
-    pub nr_cell_identity: NrCellIdentity,
-}
-
-impl NrCgi {
-    fn decode_inner(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
-        let (optionals, _extensions_present) = decode::decode_sequence_header(data, true, 1)?;
-        let plmn_identity = PlmnIdentity::decode(data)?;
-        let nr_cell_identity = NrCellIdentity::decode(data)?;
-
-        // Process the extension container
-
-        if optionals[0] {
-            let num_ies = decode::decode_length_determinent(data, Some(1), Some(65535), false)?;
-            for _ in 0..num_ies {
-                let (id, _ext) = decode::decode_integer(data, Some(0), Some(65535), false)?;
-                let _criticality = Criticality::decode(data)?;
-                let ie_length = decode::decode_length_determinent(data, None, None, false)?;
-                match id {
-                    _ => data.advance_maybe_err(ie_length, false)?,
-                }
-                data.decode_align()?;
-            }
-        }
-        Ok(Self {
-            plmn_identity,
-            nr_cell_identity,
-        })
-    }
-    fn encode_inner(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
-        let mut optionals = BitString::new();
-        optionals.push(false);
-
-        encode::encode_sequence_header(data, true, &optionals, false)?;
-        self.plmn_identity.encode(data)?;
-        self.nr_cell_identity.encode(data)?;
-
-        Ok(())
-    }
-}
-
-impl PerCodec for NrCgi {
-    type Allocator = Allocator;
-    fn decode(data: &mut PerCodecData) -> Result<Self, PerCodecError> {
-        NrCgi::decode_inner(data).map_err(|mut e: PerCodecError| {
-            e.push_context("NrCgi");
-            e
-        })
-    }
-    fn encode(&self, data: &mut PerCodecData) -> Result<(), PerCodecError> {
-        self.encode_inner(data).map_err(|mut e: PerCodecError| {
-            e.push_context("NrCgi");
-            e
-        })
-    }
-}
 // NrCgiList
 #[derive(Clone, Debug)]
 pub struct NrCgiList(pub NonEmpty<NrCgi>);

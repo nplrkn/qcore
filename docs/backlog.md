@@ -1,17 +1,20 @@
 # Backlog
 
 ## In progress
-- No 'atomic_cxchg_relaxed_relaxed in intrinsics' compile error
-- PDU session release command should flow on SRB 2, not SRB 1  
+- Include 5GS tracking area identity list on registration accept based on user location information from gNB
+- Transmission of Configuration Update Command
+- Rejection of Registration Request from Security Mode Command if slice asked for is eMBB / SST 1 with "no network slices available"
+  -  causes OnePlus phone to reregister with MIoT SST 3 / SD 0.
+
 - NGAP mode 
-  - ran context release
+  - move ran_session_setup_phase1 + 2 out of ue_procedure.rs
   - Registration accept should piggyback on NGAP Initial Context Setup request
   - use different forwarding tables for NGAP vs F1AP 
-  - session release
 - Session establishment with real phone
    -  OnePlus
    -  Samsung
    -  Motorola
+- PDU session release command should flow on SRB 2, not SRB 1  
  
 ## Performance
 - iperf framework

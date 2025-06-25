@@ -1,14 +1,13 @@
-use std::collections::HashSet;
-
-use crate::rrc_filter;
-
 use super::prelude::*;
+use crate::rrc_filter;
 use asn1_per::SerDes;
-use f1ap::{FddInfo, NrCgi, NrFreqInfo, NrModeInfo, SrbId, TddInfo};
+use f1ap::{FddInfo, NrFreqInfo, NrModeInfo, SrbId, TddInfo};
 use rrc::{
     C1_6, CriticalExtensions33, UeCapabilityInformation, UeCapabilityInformationIEs, UlDcchMessage,
     UlDcchMessageType,
 };
+use std::collections::HashSet;
+use xxap::NrCgi;
 
 define_ue_procedure!(RrcUeCapabilityEnquiryProcedure);
 

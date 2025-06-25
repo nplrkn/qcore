@@ -59,10 +59,10 @@ async fn start_qcore(
     QCore::start(
         Config {
             ip_addr: addr.parse()?,
-            plmn: PlmnIdentity([0x2, 0xf8, 0x39]),
+            plmn: PlmnIdentity([0x00, 0xf1, 0x10]),
             amf_ids: AmfIds([0x01, 0x01, 0x00]),
             name: Some("QCore".to_string()),
-            serving_network_name: "5G:mnc093.mcc208.3gppnetwork.org".to_string(),
+            serving_network_name: "5G:mnc001.mcc01.3gppnetwork.org".to_string(),
             skip_ue_authentication_check: true, // saves us having to implement milenage etc in test framework
             sst: 1,
             ran_interface_name: "lo".to_string(),

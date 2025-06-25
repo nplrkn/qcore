@@ -6,9 +6,9 @@ use crate::{
         UeMessage,
         ue_associated::{
             F1apRanSessionReleaseProcedure, InitialContextSetupProcedure,
-            InitialUeMessageProcedure, NasBase, NgapRanSessionReleaseProcedure,
-            PduSessionResourceSetupProcedure, RrcBase, RrcReconfigurationProcedure,
-            RrcSecurityModeProcedure, RrcSetupProcedure, RrcUeCapabilityEnquiryProcedure,
+            InitialUeMessageProcedure, InitialUlRrcMessageTransferProcedure, NasBase,
+            NgapRanSessionReleaseProcedure, PduSessionResourceSetupProcedure, RrcBase,
+            RrcReconfigurationProcedure, RrcSecurityModeProcedure, RrcUeCapabilityEnquiryProcedure,
             UeContextReleaseProcedure, UeContextSetupProcedure, UlInformationTransferProcedure,
             UplinkNasProcedure, UplinkNasTransportProcedure,
         },
@@ -232,7 +232,9 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         match *pdu {
             F1apPdu::InitiatingMessage(InitiatingMessage::InitialUlRrcMessageTransfer(r)) => {
                 self.log_message(">> F1ap InitialUlRrcMessageTransfer");
-                RrcSetupProcedure::new(self).run(Box::new(r)).await?;
+                InitialUlRrcMessageTransferProcedure::new(self)
+                    .run(Box::new(r))
+                    .await?;
             }
             F1apPdu::InitiatingMessage(InitiatingMessage::UlRrcMessageTransfer(r)) => {
                 self.log_message(">> F1ap UlRrcMessageTransfer");

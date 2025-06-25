@@ -6,10 +6,10 @@ use oxirush_nas::{
     NasAdditionalFGSecurityInformation, NasAuthenticationParameterAutn,
     NasAuthenticationParameterRand, NasDnn, NasExtendedProtocolConfigurationOptions, NasFGmmCause,
     NasFGsIdentityType, NasFGsMobileIdentity, NasFGsNetworkFeatureSupport,
-    NasFGsRegistrationResult, NasFGsmCause, NasKeySetIdentifier, NasNssai, NasPayloadContainer,
-    NasPayloadContainerType, NasPduAddress, NasPduSessionIdentity2, NasPduSessionType,
-    NasQosFlowDescriptions, NasQosRules, NasSNssai, NasSecurityAlgorithms, NasSessionAmbr,
-    NasUeSecurityCapability, encode_nas_5gs_message,
+    NasFGsRegistrationResult, NasFGsTrackingAreaIdentityList, NasFGsmCause, NasKeySetIdentifier,
+    NasNssai, NasPayloadContainer, NasPayloadContainerType, NasPduAddress, NasPduSessionIdentity2,
+    NasPduSessionType, NasQosFlowDescriptions, NasQosRules, NasSNssai, NasSecurityAlgorithms,
+    NasSessionAmbr, NasUeSecurityCapability, encode_nas_5gs_message,
     messages::{
         NasAuthenticationRequest, NasDlNasTransport, NasFGmmStatus, NasIdentityRequest,
         NasPduSessionEstablishmentAccept, NasPduSessionReleaseCommand, NasRegistrationAccept,
@@ -105,17 +105,27 @@ pub fn registration_accept(
     plmn: &PlmnIdentity,
     amf_ids: &AmfIds,
     tmsi: &[u8; 4],
+    tac: &[u8; 3],
 ) -> Box<Nas5gsMessage> {
     let fg_guti = Some(nas_mobile_identity_guti(plmn, amf_ids, tmsi));
 
     // Fake up IMS support - necessary to keep certain UEs registered.
     let fgs_network_feature_support = Some(NasFGsNetworkFeatureSupport::new(vec![0b00000001]));
 
+    let mut tai_ie_value = vec![
+        0_00_00000, // type of list 00, number of elements - 1 = 0 (...so 1 element)
+    ];
+    tai_ie_value.extend_from_slice(&plmn.0);
+    tai_ie_value.extend_from_slice(tac);
+
+    let tai_list = Some(NasFGsTrackingAreaIdentityList::new(tai_ie_value));
+
     Box::new(Nas5gsMessage::new_5gmm(
         Nas5gmmMessageType::RegistrationAccept,
         Nas5gmmMessage::RegistrationAccept(NasRegistrationAccept {
             fg_guti,
             allowed_nssai: Some(nssai(allowed_sst)),
+            tai_list,
             fgs_network_feature_support,
             ..NasRegistrationAccept::new(NasFGsRegistrationResult::new(
                 vec![0b00_0_0_0_001], // no emergency, no slice-specific auth, no SMS, 3GPP access

@@ -62,9 +62,9 @@ pub fn mobile_identity_supi(imsi: &str) -> NasFGsMobileIdentity {
     NasFGsMobileIdentity::new(vec![
         // Figure 9.11.3.4.3 and 9.11.3.4.3a of TS 24.501.
         0x01, // SUPI
-        0x02,
-        0xf8,
-        0x39, // MCC and MNC = 208, 93
+        0x00,
+        0xf1,
+        0x10, // MCC and MNC = 001, 01
         0xf0,
         0xff, // Routing indicator digits = 0
         0x00, // Protection scheme: 0000 null scheme
