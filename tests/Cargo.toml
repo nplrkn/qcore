@@ -9,7 +9,7 @@ async-std = { version = "1.13.1", features = ["attributes"] }
 async-trait = "0.1.88"
 slog = "2.7.0"
 qcore = { path = "../qcore" }
-oxirush-nas = { git = "https://github.com/nplrkn/oxirush-nas", rev = "abeff81" }
+oxirush-nas = { git = "https://github.com/nplrkn/oxirush-nas", rev = "5835253" }
 local-ip-address = "0.6.3"
 f1ap = { path = "../5g-libs/f1ap" }
 ngap = { path = "../5g-libs/ngap" }

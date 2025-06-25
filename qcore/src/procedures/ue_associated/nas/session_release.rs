@@ -42,6 +42,7 @@ impl<'a, A: HandlerApi> SessionReleaseProcedure<'a, A> {
                 "Pdu session release complete",
             )
             .await?;
+        self.log_message(">> Nas PduSessionReleaseComplete");
 
         // TODO check session identity
 

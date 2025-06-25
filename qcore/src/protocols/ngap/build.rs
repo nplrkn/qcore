@@ -1,9 +1,9 @@
 //! build_f1ap - construction of F1AP messages
+use crate::data::PduSession;
 use anyhow::Result;
 use asn1_per::*;
 use ngap::*;
 use xxap::{GtpTunnel, PduSessionId, PlmnIdentity, Snssai, TransportLayerAddress};
-use crate::data::PduSession;
 
 pub fn ng_setup_response(
     guami: &Guami,
@@ -212,5 +212,28 @@ pub fn pdu_session_resource_setup_request(
             ue_aggregate_maximum_bit_rate_dl: BitRate(768_000_000),
             ue_aggregate_maximum_bit_rate_ul: BitRate(768_000_000),
         }),
+    }))
+}
+
+pub fn pdu_session_resource_release_command(
+    amf_ue_ngap_id: AmfUeNgapId,
+    ran_ue_ngap_id: RanUeNgapId,
+    pdu_session: &PduSession,
+    nas: Vec<u8>,
+    cause: Cause,
+) -> Result<Box<PduSessionResourceReleaseCommand>> {
+    let pdu_session_resource_release_command_transfer =
+        PduSessionResourceReleaseCommandTransfer { cause }.as_bytes()?;
+    let pdu_session_resource_to_release_list_rel_cmd =
+        PduSessionResourceToReleaseListRelCmd(nonempty![PduSessionResourceToReleaseItemRelCmd {
+            pdu_session_id: PduSessionId(pdu_session.id),
+            pdu_session_resource_release_command_transfer
+        }]);
+    Ok(Box::new(PduSessionResourceReleaseCommand {
+        amf_ue_ngap_id,
+        ran_ue_ngap_id,
+        ran_paging_priority: None,
+        nas_pdu: Some(NasPdu(nas)),
+        pdu_session_resource_to_release_list_rel_cmd,
     }))
 }

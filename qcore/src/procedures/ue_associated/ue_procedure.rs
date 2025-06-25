@@ -281,7 +281,10 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
                 },
                 Err(msg) => msg,
             };
-            debug!(self.logger, "Queue message (wanted {expected})");
+            debug!(
+                self.logger,
+                "Queue message (wanted {expected} got {:?})", msg
+            );
             self.enqueue_message(msg)?; // e.g. UeMessage::Ping
         }
     }
@@ -329,6 +332,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
                     "Uplink Nas Transport",
                 )
                 .await?;
+            self.log_message(">> Ngap UplinkNasTransport");
             uplink_nas_transport.nas_pdu.0
         } else {
             let ul_information_transfer = self
@@ -340,6 +344,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
                     "UlInformationTransfer",
                 )
                 .await?;
+            self.log_message(">> Rrc UlInformationTransfer");
 
             let UlInformationTransfer {
                 critical_extensions:
@@ -412,7 +417,10 @@ impl<'a, A: HandlerApi> super::RrcBase for UeProcedure<'a, A> {
             match filter(ul_dcch_message) {
                 Ok(extracted) => return Ok(extracted),
                 Err(ul_dcch_message) => {
-                    debug!(self.logger, "Queue message (wanted {expected})");
+                    debug!(
+                        self.logger,
+                        "Queue message (wanted {expected} got {:?})", ul_dcch_message
+                    );
                     self.enqueue_message(UeMessage::Rrc(ul_dcch_message))?;
                 }
             }
