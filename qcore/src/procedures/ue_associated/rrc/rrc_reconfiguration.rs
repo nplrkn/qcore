@@ -41,16 +41,16 @@ impl<'a, A: HandlerApi> RrcReconfigurationProcedure<'a, A> {
     }
 
     async fn run(mut self, rrc_reconfiguration: Box<DlDcchMessage>) -> Result<UeProcedure<'a, A>> {
-        self.log_message("<< RrcReconfiguration(Nas)");
+        self.log_message("<< Rrc Reconfiguration");
         let _response = self
             .rrc_request(
                 SrbId(1),
                 &rrc_reconfiguration,
                 rrc_filter!(RrcReconfigurationComplete),
-                "Rrc Reconfiguration Complete",
+                "Rrc ReconfigurationComplete",
             )
             .await?;
-        self.log_message(">> RrcReconfigurationComplete");
+        self.log_message(">> Rrc ReconfigurationComplete");
         Ok(self.0)
     }
 }

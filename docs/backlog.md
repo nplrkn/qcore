@@ -1,8 +1,6 @@
 # Backlog
 
 ## In progress
-- Include 5GS tracking area identity list on registration accept based on user location information from gNB
-- Transmission of Configuration Update Command
 - Rejection of Registration Request from Security Mode Command if slice asked for is eMBB / SST 1 with "no network slices available"
   -  causes OnePlus phone to reregister with MIoT SST 3 / SD 0.
 
@@ -55,6 +53,8 @@
   its session setup request (with no intervening delete) after not liking the response.
 
 ## Tidying + refactoring
+- reduce test boilerplate
+- struct Config should be split into information that is used on startup (which doesn't need to be cloned), and information that is used by procedures (which does need to be cloned) 
 - give rrc its own directory under ue_associated procedures
 - avoid having to expect() on UeContext fields
 - message logs in both test framework and QCORE debug should use consistent F1 / RRC / NAS prefix

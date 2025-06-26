@@ -17,11 +17,11 @@ impl<'a, A: HandlerApi> UeContextSetupProcedure<'a, A> {
             self.config().ip_addr.into(),
             session,
         )?;
-        self.log_message("<< UeContextSetupRequest");
+        self.log_message("<< F1ap UeContextSetupRequest");
         let rsp = self
             .xxap_request::<f1ap::UeContextSetupProcedure>(ue_context_setup_request, self.logger)
             .await?;
-        self.log_message(">> UeContextSetupResponse");
+        self.log_message(">> F1ap UeContextSetupResponse");
         let (cell_group_config, gtp_tunnel) = self.check_ue_context_setup_response(rsp)?;
         session.userplane_info.remote_tunnel_info = Some(gtp_tunnel);
         Ok((self.0, cell_group_config))

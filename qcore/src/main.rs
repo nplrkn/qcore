@@ -5,7 +5,9 @@ use anyhow::{Result, anyhow, ensure};
 use async_std::channel::Sender;
 use async_std::prelude::*;
 use clap::Parser;
-use qcore::{AmfIds, Config, PdcpSequenceNumberLength, PlmnIdentity, QCore, SubscriberDb};
+use qcore::{
+    AmfIds, Config, NetworkDisplayName, PdcpSequenceNumberLength, PlmnIdentity, QCore, SubscriberDb,
+};
 use signal_hook::consts::signal::*;
 use signal_hook_async_std::Signals;
 use slog::{Drain, Logger, o};
@@ -68,6 +70,10 @@ struct Args {
     /// NGAP mode - act as a 5G Core (rather than a combined 5G Core / CU).
     #[arg(long, default_value_t = false)]
     ngap_mode: bool,
+
+    /// Network display name to send to UEs.
+    #[arg(long, default_value = "QCore")]
+    network_display_name: String,
 }
 
 #[async_std::main]
@@ -101,6 +107,7 @@ async fn main() -> Result<()> {
                 PdcpSequenceNumberLength::EighteenBits
             },
             five_qi: args.five_qi,
+            network_display_name: NetworkDisplayName::new(&args.network_display_name)?,
         },
         logger,
         sub_db,

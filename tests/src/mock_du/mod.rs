@@ -95,7 +95,7 @@ impl MockDu {
         self.connect(&transport_address, &bind_address, F1AP_SCTP_PPID)
             .await;
         let pdu = build_f1ap::f1_setup_request();
-        info!(self.logger, "F1SetupRequest >>");
+        info!(self.logger, "F1ap SetupRequest >>");
         self.send(&pdu, None).await;
         self.receive_f1_setup_response().await
     }
@@ -105,13 +105,13 @@ impl MockDu {
         let F1apPdu::SuccessfulOutcome(SuccessfulOutcome::F1SetupResponse(_)) = *pdu else {
             bail!("Unexpected F1ap message {:?}", pdu)
         };
-        info!(self.logger, "F1SetupResponse <<");
+        info!(self.logger, "F1ap SetupResponse <<");
         Ok(())
     }
 
     pub async fn perform_f1_removal(&mut self) -> Result<()> {
         let pdu = build_f1ap::f1_removal_request();
-        info!(self.logger, "F1RemovalRequest >>");
+        info!(self.logger, "F1ap RemovalRequest >>");
         self.send(&pdu, None).await;
         self.receive_f1_removal_response().await
     }
@@ -121,7 +121,7 @@ impl MockDu {
         let F1apPdu::SuccessfulOutcome(SuccessfulOutcome::F1RemovalResponse(_)) = *pdu else {
             bail!("Unexpected F1ap message {:?}", pdu)
         };
-        info!(self.logger, "F1RemovalResponse <<");
+        info!(self.logger, "F1ap RemovalResponse <<");
         Ok(())
     }
 
@@ -135,10 +135,7 @@ impl MockDu {
         let f1_indication =
             build_f1ap::initial_ul_rrc_message_transfer(ue.ue_id, initial_rrc.as_bytes()?);
 
-        info!(
-            self.logger,
-            "InitialUlRrcMessageTransfer(RrcSetupRequest) >>"
-        );
+        info!(self.logger, "F1ap InitialUlRrcMessageTransfer >>");
         self.send(&f1_indication, Some(ue.binding.assoc_id)).await;
 
         Ok(())
@@ -153,6 +150,7 @@ impl MockDu {
         else {
             bail!("Unexpected F1ap message {:?}", pdu)
         };
+        info!(self.logger, "F1ap DlRrcMessageTransfer <<");
 
         // A Rrc Setup flows as a DlCcchMessage on SRB0 (non PDCP encapsulated).  Check this is indeed for SRB0.
         assert_eq!(dl_rrc_message_transfer.srb_id.0, 0);
@@ -176,7 +174,7 @@ impl MockDu {
         // Wrap it in an UL Rrc Message Transfer
         let f1_indication =
             build_f1ap::ul_rrc_message_transfer(gnb_cu_ue_f1ap_id, ue.ue_id, pdcp_pdu.into());
-
+        info!(self.logger, "F1ap UlRrcMessageTransfer >>");
         self.send(&f1_indication, Some(ue.binding.assoc_id)).await;
 
         Ok(())
@@ -194,6 +192,7 @@ impl MockDu {
         else {
             bail!("Unexpected F1ap message {:?}", pdu)
         };
+        info!(&self.logger, "F1ap DlRrcMessageTransfer <<");
 
         assert_eq!(dl_rrc_message_transfer.gnb_du_ue_f1ap_id.0, ue.ue_id);
 
@@ -225,9 +224,9 @@ impl MockDu {
     pub async fn handle_f1_ue_context_setup(&self, ue: &mut UeContext) -> Result<()> {
         let ReceivedPdu { pdu, assoc_id } = self.receive_pdu_with_assoc_id().await?;
         self.check_and_store_ue_context_setup_request(pdu, ue)?;
-        info!(&self.logger, "UeContextSetupRequest <<");
+        info!(&self.logger, "F1ap UeContextSetupRequest <<");
         let ue_setup_response = build_f1ap::ue_context_setup_response(ue, &self.local_ip)?;
-        info!(&self.logger, "UeContextSetupResponse >>");
+        info!(&self.logger, "F1ap UeContextSetupResponse >>");
         self.send(&ue_setup_response, Some(assoc_id)).await;
 
         Ok(())

@@ -13,6 +13,7 @@ async fn ngap_session_release() -> anyhow::Result<()> {
     gnb.send_ue_radio_capability_info(ue.gnb_ue_context())
         .await?;
     ue.handle_nas_registration_accept().await?;
+    ue.receive_nas_configuration_update().await?;
     ue.send_nas_pdu_session_establishment_request().await?;
     let nas_accept = gnb
         .handle_pdu_session_resource_setup_with_session_accept(ue.gnb_ue_context())

@@ -9,7 +9,7 @@ impl<'a, A: HandlerApi> RrcSecurityModeProcedure<'a, A> {
     pub async fn run(mut self, kgnb: &[u8; 32]) -> Result<UeProcedure<'a, A>> {
         self.configure_rrc_security(kgnb);
         let r = crate::rrc::build::security_mode_command(1);
-        self.log_message("<< RrcSecurityModeCommand");
+        self.log_message("<< Rrc SecurityModeCommand");
 
         // TODO: this is a case for a filter that fails rather than queues.
         match self
@@ -22,11 +22,11 @@ impl<'a, A: HandlerApi> RrcSecurityModeProcedure<'a, A> {
             .await?
         {
             Ok(_) => {
-                self.log_message(">> RrcSecurityModeComplete");
+                self.log_message(">> Rrc SecurityModeComplete");
                 Ok(self.0)
             }
             Err(_) => {
-                self.log_message(">> RrcSecurityModeFailure");
+                self.log_message(">> Rrc SecurityModeFailure");
                 bail!("Rrc Security Mode Failure")
             }
         }

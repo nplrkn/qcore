@@ -22,6 +22,7 @@ async fn synchronization_failure_recovery() -> anyhow::Result<()> {
     ue.handle_rrc_security_mode().await?;
     ue.handle_capability_enquiry().await?;
     ue.handle_nas_registration_accept().await?;
+    ue.receive_nas_configuration_update().await?;
 
     // And if the UE reregisters during the lifetime of QCore, it gets the SQN right this time, and there
     // is no need for another synchronization.

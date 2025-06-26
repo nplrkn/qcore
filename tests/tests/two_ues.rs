@@ -15,6 +15,7 @@ async fn two_ues() -> anyhow::Result<()> {
     ue_1.handle_rrc_security_mode().await?;
     ue_1.handle_capability_enquiry().await?;
     ue_1.handle_nas_registration_accept().await?;
+    ue_1.receive_nas_configuration_update().await?;
 
     // UE 1 PDU session
     ue_1.send_nas_pdu_session_establishment_request().await?;
@@ -30,6 +31,7 @@ async fn two_ues() -> anyhow::Result<()> {
     ue_2.handle_rrc_security_mode().await?;
     ue_2.handle_capability_enquiry().await?;
     ue_2.handle_nas_registration_accept().await?;
+    ue_2.receive_nas_configuration_update().await?;
 
     // UE 2 PDU session
     ue_2.send_nas_pdu_session_establishment_request().await?;

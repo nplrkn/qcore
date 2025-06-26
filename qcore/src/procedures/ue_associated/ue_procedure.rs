@@ -120,7 +120,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         match ran_session_setup_state {
             RanSessionSetupState::Ngap => Ok(()),
             RanSessionSetupState::F1ap(cell_group_config, nas) => {
-                self.log_message("<< NasPduSessionEstablishmentAccept");
+                self.log_message("<< Nas PduSessionEstablishmentAccept");
                 let _ = RrcReconfigurationProcedure::new(self)
                     .add_session(nas, session_index, cell_group_config.0)
                     .await;

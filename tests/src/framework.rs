@@ -2,7 +2,10 @@ use crate::{MockGnb, mock_ue::Transport};
 
 use super::{DataNetwork, MockDu, MockUe};
 use anyhow::{Result, bail};
-use qcore::{AmfIds, Config, PdcpSequenceNumberLength, ProgramHandle, QCore, SubscriberDb};
+use qcore::{
+    AmfIds, Config, NetworkDisplayName, PdcpSequenceNumberLength, ProgramHandle, QCore,
+    SubscriberDb,
+};
 use slog::{Drain, Logger, o};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use xxap::PlmnIdentity;
@@ -71,6 +74,7 @@ async fn start_qcore(
             ue_subnet: Ipv4Addr::new(10, 255, 0, 0),
             pdcp_sn_length: PdcpSequenceNumberLength::TwelveBits,
             five_qi: 1,
+            network_display_name: NetworkDisplayName::new("QCoreTest")?,
         },
         logger.new(o!("qcore"=> 1)),
         sub_db,

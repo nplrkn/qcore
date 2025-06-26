@@ -12,7 +12,7 @@ impl<'a, A: HandlerApi> F1SetupProcedure<'a, A> {
         &self,
         r: F1SetupRequest,
     ) -> Result<ResponseAction<F1SetupResponse>, RequestError<F1SetupFailure>> {
-        self.log_message(">> F1SetupRequest");
+        self.log_message(">> F1ap SetupRequest");
         let gnb_du_name = if let Some(ref x) = r.gnb_du_name {
             x.0.clone()
         } else {
@@ -43,7 +43,7 @@ impl<'a, A: HandlerApi> F1SetupProcedure<'a, A> {
             .await
             .insert(r.gnb_du_id.0, gnb_du_served_cells_list);
 
-        self.log_message("<< F1SetupResponse");
+        self.log_message("<< F1ap SetupResponse");
         Ok((response, None))
     }
 }

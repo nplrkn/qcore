@@ -42,7 +42,7 @@ sudo ./setup-routing
 
 ### Run attach test
 ```sh
-RUST_LOG=info cargo test attach -- --nocapture
+RUST_LOG=info cargo test --test attach -- --nocapture
 ```
 
 To packet capture, run the following in parallel.

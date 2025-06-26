@@ -92,8 +92,6 @@ impl<P: Pdu> Mock<P> {
             .await
             .expect("Connect failed");
 
-        // Wait for the connection to be accepted.
-        debug!(self.logger, "Wait for connection to be accepted");
         self.expect_connection_established().await;
     }
 

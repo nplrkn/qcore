@@ -34,7 +34,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         r: Box<NasRegistrationRequest>,
         security_header: Option<Nas5gsSecurityHeader>,
     ) -> Result<()> {
-        self.log_message(">> RegistrationRequest");
+        self.log_message(">> Nas RegistrationRequest");
         match self.handle_registration(r, security_header).await {
             Ok(()) => {
                 // Derive Kgnb, and from that kRRCInt.
@@ -52,6 +52,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                 let kgnb = security::derive_kgnb(&self.ue.kamf, self.ue.nas.ul_nas_count());
                 self.0 = self.0.ran_ue_registration(&kgnb).await?;
                 self.accept_registration().await?;
+                self.send_configuration_update().await?;
             }
             Err(cause) => {
                 if cause != ABORT_PROCEDURE {
@@ -85,7 +86,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
             .register_new_tmsi(tmsi.clone(), self.ue.key, self.logger)
             .await;
         self.ue.tmsi = Some(tmsi);
-        self.log_message("<< NasRegistrationAccept");
+        self.log_message("<< Nas RegistrationAccept");
         let _rsp = self
             .nas_request(
                 r,
@@ -93,13 +94,13 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                 "Registration complete",
             )
             .await?;
-        self.log_message(">> NasRegistrationComplete");
+        self.log_message(">> Nas RegistrationComplete");
         Ok(())
     }
 
     async fn reject_registration(&mut self, cause: u8) -> Result<()> {
         let reject = crate::nas::build::registration_reject(cause);
-        self.log_message("<< NAS Registration Reject");
+        self.log_message("<< Nas RegistrationReject");
         self.nas_indication(reject).await
     }
 
@@ -138,11 +139,11 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
 
     async fn query_ue_identity_inner(&mut self) -> Result<Imsi> {
         let r = crate::nas::build::identity_request();
-        self.log_message("<< NasIdentityRequest");
+        self.log_message("<< Nas IdentityRequest");
         let rsp = self
             .nas_request(r, nas_filter!(IdentityResponse), "Identity response")
             .await?;
-        self.log_message(">> NasIdentityResponse");
+        self.log_message(">> Nas IdentityResponse");
         crate::nas::parse::identity_response(&rsp)
     }
 
@@ -199,7 +200,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     ) -> Result<()> {
         self.configure_nas_security(&ue_security_capabilities);
         let r = crate::nas::build::security_mode_command(ue_security_capabilities, *self.ue.ksi);
-        self.log_message("<< NasSecurityModeCommand");
+        self.log_message("<< NascSecurityModeCommand");
         let Ok(security_mode_complete) = self
             .nas_request(
                 r,
@@ -210,7 +211,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         else {
             bail!("Security mode command failed");
         };
-        self.log_message(">> NasSecurityModeComplete");
+        self.log_message(">> Nas SecurityModeComplete");
         self.check_nas_security_mode_complete(Box::new(security_mode_complete))
     }
 
@@ -225,7 +226,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
             *self.ue.ksi,
         );
 
-        self.log_message("<< NasAuthenticationRequest");
+        self.log_message("<< NascWAuthenticationRequest");
         match self
             .nas_request(
                 req,
@@ -241,7 +242,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                 ABORT_PROCEDURE
             })? {
             Ok(rsp) => {
-                self.log_message(">> NasAuthenticationResponse");
+                self.log_message(">> Nas AuthenticationResponse");
                 self.check_authentication_response(&rsp, &challenge)
                     .map_err(|e| {
                         warn!(self.logger, "Bad authentication respnse - {e}");
@@ -259,7 +260,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         auth_params: &SubscriberAuthParams,
         rand: &[u8; 16],
     ) -> Result<NasAuthOutcome, u8> {
-        self.log_message(">> NasAuthenticationFailure");
+        self.log_message(">> Nas AuthenticationFailure");
         match auth_failure.fgmm_cause.value {
             FGMM_CAUSE_SYNCH_FAILURE => {
                 debug!(self.logger, "Synch failure");
@@ -398,7 +399,6 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         &self,
         registration_request: Box<NasRegistrationRequest>,
     ) -> Result<(RegistrationType, NasUeSecurityCapability), u8> {
-        self.log_message(">> NAS Registration Request");
         let Some(ue_security_capability) = registration_request.ue_security_capability else {
             warn!(
                 self.logger,
@@ -547,5 +547,12 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         // TS33.501, 6.7.2: AMF starts integrity protection before transmitting SecurityModeCommand.
         let knasint = security::derive_knasint(&self.ue.kamf);
         self.ue.nas.enable_security(knasint);
+    }
+
+    async fn send_configuration_update(&mut self) -> Result<()> {
+        let command =
+            crate::nas::build::configuration_update_command(&self.config().network_display_name);
+        self.log_message("<< Nas ConfigurationUpdateCommand");
+        self.nas_indication(command).await
     }
 }

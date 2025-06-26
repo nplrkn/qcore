@@ -13,6 +13,7 @@ async fn context_release_request() -> anyhow::Result<()> {
     ue.handle_rrc_security_mode().await?;
     ue.handle_capability_enquiry().await?;
     ue.handle_nas_registration_accept().await?;
+    ue.receive_nas_configuration_update().await?;
     ue.send_nas_pdu_session_establishment_request().await?;
     du.handle_f1_ue_context_setup(ue.du_ue_context()).await?;
     ue.handle_rrc_reconfiguration_with_session_accept().await?;

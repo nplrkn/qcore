@@ -92,7 +92,7 @@ impl<T: Transport> MockUe<T> {
         let nas_bytes = self.transport.receive_nas(&self.logger).await?;
         let outer = Box::new(
             decode_nas_5gs_message(&nas_bytes)
-                .map_err(|e| anyhow!("NAS decode error - {e} - message bytes: {:?}", nas_bytes))?,
+                .map_err(|e| anyhow!("Nas decode error - {e} - message bytes: {:?}", nas_bytes))?,
         );
         let (nas, _security_header) = match *outer {
             Nas5gsMessage::Gmm(_, _) => (outer, None),
@@ -118,28 +118,28 @@ impl<T: Transport> MockUe<T> {
 
     pub async fn receive_nas_authentication_request(&mut self) -> Result<NasAuthenticationRequest> {
         let nas = ensure_nas!(AuthenticationRequest, self.receive_nas().await?);
-        info!(&self.logger, "NAS Authentication request >>");
+        info!(&self.logger, "Nas AuthenticationRequest >>");
         Ok(nas)
     }
 
     pub async fn handle_nas_authentication(&mut self) -> Result<()> {
         let _ = self.receive_nas_authentication_request().await?;
         let nas_authentication_response = build_nas::authentication_response()?;
-        info!(&self.logger, "NAS Authentication response <<");
+        info!(&self.logger, "Nas AuthenticationResponse <<");
         self.send_nas(nas_authentication_response).await
     }
 
     pub async fn handle_nas_security_mode(&mut self) -> Result<()> {
         ensure_nas!(SecurityModeCommand, self.receive_nas().await?);
-        info!(&self.logger, "NAS Security mode command <<");
+        info!(&self.logger, "Nas SecurityModeCommand <<");
         let nas_security_mode_complete = build_nas::security_mode_complete()?;
-        info!(&self.logger, "NAS Security mode complete >>");
+        info!(&self.logger, "Nas SecurityModeComplete >>");
         self.send_nas(nas_security_mode_complete).await
     }
 
     pub async fn handle_identity_procedure(&mut self) -> Result<()> {
         ensure_nas!(IdentityRequest, self.receive_nas().await?);
-        info!(&self.logger, "NAS Identity Request <<");
+        info!(&self.logger, "Nas IdentityRequest <<");
         let imsi = if self.use_wrong_imsi {
             self.use_wrong_imsi = false;
             "543938298342342"
@@ -147,12 +147,13 @@ impl<T: Transport> MockUe<T> {
             &self.imsi
         };
         let nas_identity_response = build_nas::identity_response(imsi)?;
-        info!(&self.logger, "NAS Identity Response >>");
+        info!(&self.logger, "Nas IdentityResponse >>");
         self.send_nas(nas_identity_response).await
     }
 
     pub async fn handle_nas_registration_accept(&mut self) -> Result<()> {
         let message = ensure_nas!(RegistrationAccept, self.receive_nas().await?);
+        info!(&self.logger, "Nas RegistrationAccept <<");
         let Some(guti_ie) = message.fg_guti else {
             bail!("Expected GUTI in registration accept")
         };
@@ -161,21 +162,27 @@ impl<T: Transport> MockUe<T> {
         self.use_guti(guti.try_into().unwrap());
 
         let nas_registration_complete = build_nas::registration_complete()?;
-        info!(&self.logger, "NAS Registration Complete >>");
+        info!(&self.logger, "Nas RegistrationComplete >>");
         self.send_nas(nas_registration_complete).await
+    }
+
+    pub async fn receive_nas_configuration_update(&mut self) -> Result<()> {
+        let _message = ensure_nas!(ConfigurationUpdateCommand, self.receive_nas().await?);
+        info!(&self.logger, "Nas ConfigurationUpdateCommand <<");
+        Ok(())
     }
 
     pub async fn send_nas_pdu_session_establishment_request(&mut self) -> Result<()> {
         let nas_session_establishment_request =
             build_nas::pdu_session_establishment_request(self.dnn)?;
-        info!(&self.logger, "NAS PDU session establishment request >>");
+        info!(&self.logger, "Nas PduSessionEstablishmentRequest >>");
         self.send_nas(nas_session_establishment_request).await
     }
 
     pub async fn send_nas_deregistration_request(&mut self) -> Result<()> {
         let nas_deregistration_request = build_nas::deregistration_request()?;
         self.guti = None;
-        info!(&self.logger, "NAS deregistration request >>");
+        info!(&self.logger, "Nas DeregistrationRequest >>");
         self.send_nas(nas_deregistration_request).await
     }
 
@@ -196,9 +203,9 @@ impl<T: Transport> MockUe<T> {
 
     pub async fn fail_nas_authentication(&mut self, cause: u8) -> Result<()> {
         ensure_nas!(AuthenticationRequest, self.receive_nas().await?);
-        info!(&self.logger, "NAS Authentication request <<");
+        info!(&self.logger, "Nas AuthenticationRequest <<");
         let nas_authentication_failure = build_nas::authentication_failure(cause)?;
-        info!(&self.logger, "NAS Authentication failure >>");
+        info!(&self.logger, "Nas AuthenticationFailure >>");
         self.send_nas(nas_authentication_failure).await
     }
 

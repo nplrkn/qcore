@@ -7,13 +7,13 @@ use oxirush_nas::{
     NasAuthenticationParameterRand, NasDnn, NasExtendedProtocolConfigurationOptions, NasFGmmCause,
     NasFGsIdentityType, NasFGsMobileIdentity, NasFGsNetworkFeatureSupport,
     NasFGsRegistrationResult, NasFGsTrackingAreaIdentityList, NasFGsmCause, NasKeySetIdentifier,
-    NasNssai, NasPayloadContainer, NasPayloadContainerType, NasPduAddress, NasPduSessionIdentity2,
-    NasPduSessionType, NasQosFlowDescriptions, NasQosRules, NasSNssai, NasSecurityAlgorithms,
-    NasSessionAmbr, NasUeSecurityCapability, encode_nas_5gs_message,
+    NasNetworkName, NasNssai, NasPayloadContainer, NasPayloadContainerType, NasPduAddress,
+    NasPduSessionIdentity2, NasPduSessionType, NasQosFlowDescriptions, NasQosRules, NasSNssai,
+    NasSecurityAlgorithms, NasSessionAmbr, NasUeSecurityCapability, encode_nas_5gs_message,
     messages::{
-        NasAuthenticationRequest, NasDlNasTransport, NasFGmmStatus, NasIdentityRequest,
-        NasPduSessionEstablishmentAccept, NasPduSessionReleaseCommand, NasRegistrationAccept,
-        NasRegistrationReject, NasSecurityModeCommand,
+        NasAuthenticationRequest, NasConfigurationUpdateCommand, NasDlNasTransport, NasFGmmStatus,
+        NasIdentityRequest, NasPduSessionEstablishmentAccept, NasPduSessionReleaseCommand,
+        NasRegistrationAccept, NasRegistrationReject, NasSecurityModeCommand,
     },
 };
 use security::NAS_ABBA;
@@ -348,4 +348,20 @@ fn extended_protocol_configuration_options(
         0x05, 0x78, // 1400
     ]);
     NasExtendedProtocolConfigurationOptions::new(epco)
+}
+
+pub fn configuration_update_command(ucs2_network_name: &[u8]) -> Box<Nas5gsMessage> {
+    let mut network_name_ie_value = vec![
+        0b1_001_0_000, // coding scheme = 001: UCS2 (16 bit); add country initials = 0; number of spare bits in last octet = 000
+    ];
+    network_name_ie_value.extend_from_slice(ucs2_network_name);
+    let full_name_for_network = Some(NasNetworkName::new(network_name_ie_value));
+
+    Box::new(Nas5gsMessage::new_5gmm(
+        Nas5gmmMessageType::ConfigurationUpdateCommand,
+        Nas5gmmMessage::ConfigurationUpdateCommand(NasConfigurationUpdateCommand {
+            full_name_for_network,
+            ..NasConfigurationUpdateCommand::new()
+        }),
+    ))
 }

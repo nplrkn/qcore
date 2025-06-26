@@ -1,10 +1,11 @@
+use anyhow::{Result, anyhow};
+use asn1_per::*;
+use derive_deref::Deref;
+use ngap::{AmfPointer, AmfRegionId, AmfSetId};
 use std::{
     fmt::Display,
     net::{IpAddr, Ipv4Addr},
 };
-
-use asn1_per::*;
-use ngap::{AmfPointer, AmfRegionId, AmfSetId};
 use xxap::PlmnIdentity;
 
 use crate::protocols::nas::AmfIds;
@@ -49,6 +50,25 @@ pub struct Config {
 
     // 5QI
     pub five_qi: u8,
+
+    // The network name sent to the UE in the Nas ConfigurationUpdateCommand
+    // (displayed in UE network selection).
+    pub network_display_name: NetworkDisplayName,
+}
+
+/// NetworkDisplayName - UCS2 16-bit format, in network byte order
+#[derive(Debug, Clone, Deref)]
+pub struct NetworkDisplayName(Vec<u8>);
+impl NetworkDisplayName {
+    pub fn new(s: &str) -> Result<Self> {
+        let mut buf = [0u16; 64];
+        let len = ucs2::encode(s, &mut buf).map_err(|e| anyhow!("Network name conversion {e}"))?;
+        let mut v = vec![];
+        for c in buf.into_iter().take(len) {
+            v.extend_from_slice(&c.to_be_bytes())
+        }
+        Ok(NetworkDisplayName(v))
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

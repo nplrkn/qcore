@@ -7,10 +7,10 @@ define_ue_procedure!(RrcSetupProcedure);
 
 impl<'a, A: HandlerApi> RrcSetupProcedure<'a, A> {
     pub async fn run(mut self, _r: Box<RrcSetupRequest>, cell_group_config: Vec<u8>) -> Result<()> {
-        self.log_message(">> RrcSetupRequest");
+        self.log_message(">> Rrc SetupRequest");
 
         let rrc_setup = crate::rrc::build::setup(0, cell_group_config);
-        self.log_message("<< RrcSetup");
+        self.log_message("<< Rrc Setup");
 
         // We use a filter that allows any message because the only valid message at this point is an RrcSetupComplete
         // and we don't want to queue an unexpected message.
@@ -24,7 +24,7 @@ impl<'a, A: HandlerApi> RrcSetupProcedure<'a, A> {
             bail!("Expected Rrc Setup complete, got {:?}", response)
         };
 
-        self.log_message(">> RrcSetupComplete");
+        self.log_message(">> Rrc SetupComplete");
         let nas = self.nas_decode(&rrc_setup_complete_ies.dedicated_nas_message.0)?;
         UplinkNasProcedure::new(self.0).run(nas).await
     }

@@ -59,7 +59,7 @@ impl<'a> UeF1apMode<'a> {
 impl<'a> Transport for UeF1apMode<'a> {
     async fn send_nas(&mut self, nas_bytes: Vec<u8>, logger: &Logger) -> Result<()> {
         let rrc = build_rrc::ul_information_transfer(nas_bytes);
-        info!(logger, "UlInformationTransfer(Nas) >>");
+        info!(logger, "Rrc UlInformationTransfer >>");
         self.du.send_ul_rrc(&mut self.du_ue_context, &rrc).await
     }
 
@@ -73,10 +73,7 @@ impl<'a> Transport for UeF1apMode<'a> {
                     }),
                 ..
             })) => {
-                info!(
-                    logger,
-                    "DlRrcMessageTransfer(DlInformationTransfer(Nas)) <<"
-                );
+                info!(logger, "Rrc DlInformationTransfer <<");
                 Ok(x.0)
             }
             x => Err(anyhow!("Unexpected RRC message {:?}", x)),
@@ -123,6 +120,7 @@ impl<'a> MockUeF1ap<'a> {
 
     pub async fn perform_rrc_setup(&mut self) -> Result<()> {
         let rrc_setup_request = build_rrc::setup_request();
+        info!(self.logger, "Rrc SetupRequest >>");
         self.transport
             .send_initial_ul_rrc(rrc_setup_request)
             .await?;
@@ -130,16 +128,14 @@ impl<'a> MockUeF1ap<'a> {
         let DlCcchMessageType::C1(C1_1::RrcSetup(rrc_setup)) = *message else {
             bail!("Unexpected RRC message {:?}", message)
         };
-        info!(&self.logger, "DlRrcMessageTransfer(RrcSetup) <<");
+        info!(&self.logger, "Rrc Setup <<");
 
         // This currently assumes that the UE wants to register.
         let registration_request = self.build_register_request()?;
+        info!(&self.logger, "Nas RegistrationRequest >>");
         let rrc_setup_complete =
             build_rrc::setup_complete(rrc_setup.rrc_transaction_identifier, registration_request);
-        info!(
-            &self.logger,
-            "Rrc SetupComplete + NAS Registration Request >>"
-        );
+        info!(&self.logger, "Rrc SetupComplete >>");
         self.transport.send_ul_rrc(&rrc_setup_complete).await
     }
 
@@ -207,10 +203,7 @@ impl<'a> MockUeF1ap<'a> {
         else {
             bail!("Couldn't find NAS message list or RadioBearerConfig in Rrc Reconfiguration")
         };
-        info!(
-            &self.logger,
-            "DlRrcMessageTransfer(RrcReconfiguration(Nas)) <<"
-        );
+        info!(&self.logger, "Rrc Reconfiguration <<");
 
         match (added_drb_id, drb_to_add_mod_list) {
             (Some(x), Some(y)) => assert_eq!(x, y.0.first().drb_identity.0),

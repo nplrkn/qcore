@@ -17,6 +17,7 @@ async fn attach() -> anyhow::Result<()> {
     ue.handle_rrc_security_mode().await?;
     ue.handle_capability_enquiry().await?;
     ue.handle_nas_registration_accept().await?;
+    ue.receive_nas_configuration_update().await?;
 
     // UE establishes PDU session
     ue.send_nas_pdu_session_establishment_request().await?;
