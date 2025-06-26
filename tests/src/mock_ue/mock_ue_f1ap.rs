@@ -114,6 +114,27 @@ impl<'a> MockUeF1ap<'a> {
         })
     }
 
+    pub async fn new_with_session(
+        imsi: String,
+        ue_id: u32,
+        du: &'a MockDu,
+        cu_ip_addr: &IpAddr,
+        logger: &Logger,
+    ) -> Result<Self> {
+        let mut ue = Self::new(imsi, ue_id, du, cu_ip_addr, logger).await?;
+        ue.perform_rrc_setup().await?;
+        ue.handle_nas_authentication().await?;
+        ue.handle_nas_security_mode().await?;
+        ue.handle_rrc_security_mode().await?;
+        ue.handle_capability_enquiry().await?;
+        ue.handle_nas_registration_accept().await?;
+        ue.receive_nas_configuration_update().await?;
+        ue.send_nas_pdu_session_establishment_request().await?;
+        du.handle_f1_ue_context_setup(ue.du_ue_context()).await?;
+        ue.handle_rrc_reconfiguration_with_session_accept().await?;
+        Ok(ue)
+    }
+
     pub fn du_ue_context(&mut self) -> &mut DuUeContext {
         &mut self.base.transport.du_ue_context
     }
