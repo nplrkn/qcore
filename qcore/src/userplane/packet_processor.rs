@@ -33,8 +33,9 @@ type DownlinkForwardingTable = Array<MapData, DlForwardingEntry>;
 impl PacketProcessor {
     pub async fn new(ue_subnet: Ipv4Addr, ebpf: &mut Ebpf, logger: &Logger) -> Result<Self> {
         let mut index_pool = IndexPool::new();
-        // Take the 0 slot, so that the first UE gets an IP address ending in .1.
+        // Take the 0 and 1 slots, so that the first UE gets an IP address ending in .2.
         let _ = index_pool.request_id(0);
+        let _ = index_pool.request_id(1);
         let index_pool = Arc::new(Mutex::new(index_pool));
 
         let counters = PerCpuArray::try_from(ebpf.take_map("COUNTERS").unwrap())?;
