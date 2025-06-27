@@ -1,4 +1,3 @@
-use core::intrinsics::{atomic_cxchg, AtomicOrdering};
 use crate::counters::*;
 use crate::globals::*;
 use crate::headers::*;
@@ -8,6 +7,7 @@ use aya_ebpf::helpers::r#gen::bpf_csum_diff;
 use aya_ebpf::macros::{classifier, map};
 use aya_ebpf::maps::Array;
 use aya_ebpf::programs::TcContext;
+use core::intrinsics::{atomic_cxchg, AtomicOrdering};
 //use aya_log_ebpf::info;
 use ebpf_common::CounterIndex::*;
 use ebpf_common::*;
@@ -52,7 +52,7 @@ fn try_tc_downlink_n3(ctx: TcContext) -> Result<i32, i32> {
 
         push_common_outer_headers(
             &ctx,
-            (GTP_EXTENSION_HEADER_OFFSET - EthHdr::LEN + GtpExtPduSessionContainer::LEN) as i32,
+            GtpExtPduSessionContainer::LEN as i32,
             remote_ip,
             teid,
             GTP_EXT_PDU_SESSION_CONTAINER,
@@ -78,8 +78,7 @@ pub fn try_tc_downlink_f1u(ctx: TcContext) -> Result<i32, i32> {
 
         push_common_outer_headers(
             &ctx,
-            (GTP_EXTENSION_HEADER_OFFSET - EthHdr::LEN + GtpExtDlUserData::LEN + pdcp_header_length)
-                as i32,
+            (GtpExtDlUserData::LEN + pdcp_header_length) as i32,
             remote_ip,
             teid,
             GTP_EXT_NR_RAN_CONTAINER,
@@ -91,7 +90,7 @@ pub fn try_tc_downlink_f1u(ctx: TcContext) -> Result<i32, i32> {
     }
 }
 
-#[inline(always)] 
+#[inline(always)]
 fn get_pdcp_nr_seq_nums(entry: *mut DlForwardingEntry) -> (u64, u64) {
     unsafe {
         // The situation with sequence numbers is problematic because of maturity issue with the BPF tooling.
@@ -104,8 +103,11 @@ fn get_pdcp_nr_seq_nums(entry: *mut DlForwardingEntry) -> (u64, u64) {
         let seq_num_ptr: *mut u64 = (&raw mut (*entry).next_pdcp_seq_num);
         let mut pdcp_seq_num = *seq_num_ptr;
         for _ in 0..retries {
-            let (swapped_value, ok) =
-                atomic_cxchg::<u64, {AtomicOrdering::Relaxed},{AtomicOrdering::Relaxed}>(seq_num_ptr, pdcp_seq_num, pdcp_seq_num + 1);
+            let (swapped_value, ok) = atomic_cxchg::<
+                u64,
+                { AtomicOrdering::Relaxed },
+                { AtomicOrdering::Relaxed },
+            >(seq_num_ptr, pdcp_seq_num, pdcp_seq_num + 1);
             if ok {
                 break;
             }
@@ -117,8 +119,11 @@ fn get_pdcp_nr_seq_nums(entry: *mut DlForwardingEntry) -> (u64, u64) {
         let seq_num_ptr: *mut u64 = (&raw mut (*entry).next_nr_seq_num);
         let mut nr_seq_num = *seq_num_ptr;
         for _ in 0..retries {
-            let (swapped_value, ok) =
-                atomic_cxchg::<u64, {AtomicOrdering::Relaxed},{AtomicOrdering::Relaxed}>(seq_num_ptr, nr_seq_num, nr_seq_num + 1);
+            let (swapped_value, ok) = atomic_cxchg::<
+                u64,
+                { AtomicOrdering::Relaxed },
+                { AtomicOrdering::Relaxed },
+            >(seq_num_ptr, nr_seq_num, nr_seq_num + 1);
             if ok {
                 break;
             }
@@ -149,13 +154,15 @@ fn lookup_entry_by_dest_ip(ctx: &TcContext) -> Result<*mut DlForwardingEntry, i3
 #[inline(always)]
 fn push_common_outer_headers(
     ctx: &TcContext,
-    outer_header_length: i32,
+    inner_ip_offset_from_gtp_header: i32,
     remote_ip: u32,
     teid: u32,
     next_extension_header_type: u8,
 ) -> Result<(), i32> {
     unsafe {
         let inner_ip_length = (ctx.len() - EthHdr::LEN as u32) as u16;
+        let outer_header_length =
+            (GTP_EXTENSION_HEADER_OFFSET - EthHdr::LEN) as i32 + inner_ip_offset_from_gtp_header;
 
         ensure!(
             ctx.adjust_room(outer_header_length, BPF_ADJ_ROOM_MAC, 0)
@@ -219,8 +226,9 @@ fn push_common_outer_headers(
         // --- GTP header with optional fields present
         (*gtphdr).byte0 = 0b001_1_0_1_0_0; // version=1, PT=1, R, E=1, S=0, PN=0
         (*gtphdr).message_type = GTP_MESSAGE_TYPE_GPDU;
-        let gtp_payload_length =
-            inner_ip_length + (GtpHdrOptionalFields::LEN + GtpExtPduSessionContainer::LEN) as u16;
+        let gtp_payload_length = inner_ip_length
+            + GtpHdrOptionalFields::LEN as u16
+            + inner_ip_offset_from_gtp_header as u16;
         (*gtphdr).message_length = gtp_payload_length.to_be_bytes();
         (*gtphdr).teid = teid.to_be_bytes();
         (*gtpexthdr).sequence_number = [0, 0];

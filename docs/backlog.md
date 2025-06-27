@@ -1,25 +1,29 @@
 # Backlog
 
 ## In progress
-- Move to 5qi 7 as default?  (1 breaks Motorola)
+-  Move to 5qi 7 as default?  (1 breaks Motorola)
 -  Queue Message debug message is too verbose
 - Rejection of Registration Request from Security Mode Command if slice asked for is eMBB / SST 1 with "no network slices available"
   -  causes OnePlus phone to reregister with MIoT SST 3 / SD 0.
 
 - NGAP mode 
   - move ran_session_setup_phase1 + 2 out of ue_procedure.rs
-  - "Ran context release not yet implemented in NGAP mode" 
+  - if initial context setup request fails, 'unhandled message' and we don't save off the GUTI
+  - "Ran context release not yet implemented in NGAP mode" - e.g on deregistration or take context
   - Unhandled NGAP message UeContextReleaseRequest (cause RadioNetwork(RadioConnectionWithUeLost)) 
   - Registration accept should piggyback on NGAP Initial Context Setup request
   - use different forwarding tables for NGAP vs F1AP 
   - DlDropUnknownUe incrementing when no phones attached
 - Session establishment with real phone
-   -  OnePlus (working)
-   -  OPPO (session establishment working - SQN resync not working)
+   -  OnePlus 
+      -  refuses to set up a session and sends a ServiceRequest
+   -  OPPO 
+      -  SQN resync not working - fixed??
+      -  Identity Request not working - registration reject?
    -  Samsung (working)
    -  Motorola (working)
-- PDU session release command should flow on SRB 2, not SRB 1  
 - "NG setup with GNB name" - log line - trace of bitvec global gnb ID is ugly 
+- PDU session release command should flow on SRB 2, not SRB 1  
  
 ## Performance
 - iperf framework
