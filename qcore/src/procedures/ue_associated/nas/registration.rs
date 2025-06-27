@@ -226,7 +226,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
             *self.ue.ksi,
         );
 
-        self.log_message("<< NascWAuthenticationRequest");
+        self.log_message("<< NasAuthenticationRequest");
         match self
             .nas_request(
                 req,

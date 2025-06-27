@@ -228,7 +228,7 @@ impl HandlerApi for QCore {
         let mut sqn = Sqn(sqn);
 
         // After a resync we need to add 1 to both the IND and SEQ parts of the SQN.  See TS33.102.
-        const RESYNC_SQN_INCREMENT: u8 = 33;
+        const RESYNC_SQN_INCREMENT: u8 = 32; // temp hack
         sqn.add(RESYNC_SQN_INCREMENT);
 
         self.sub_db
