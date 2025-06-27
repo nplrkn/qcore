@@ -1,4 +1,5 @@
 #!/bin/sh
+EXTERNAL_LINK=${1:-eth0}
 UE_SUBNET="10.255.0.0/24"
 QCORE_TUN=qcoretun
 
@@ -30,15 +31,7 @@ sudo sysctl -w net.ipv4.conf.$QCORE_TUN.route_localnet=1
 
 # Allow UE packets to flow over eth0 to the outside world.
 # Enable NAT on the way out and accept them on the way back in
-sudo iptables -t nat -A POSTROUTING -o eth0 -s $UE_SUBNET -j MASQUERADE
-sudo iptables -A FORWARD -i eth0 -j ACCEPT -d $UE_SUBNET
-
-# UE-to-UE routing
-# Prevents sending ICMP redirects to the 'ue' tun device.
-# This occurs since QCore might emit a packet 10.255.0.1->10.255.0.2 on the ue device.  
-# Linux sees that it needs to hairpin that packet back over the ue device and would 
-# normally generate ICCMP redirect.
-#sudo sysctl -w net.ipv4.conf.ue.send_redirects=0   
-#sudo sysctl -w net.ipv4.conf.all.send_redirects=0
+sudo iptables -t nat -A POSTROUTING -o $EXTERNAL_LINK -s $UE_SUBNET -j MASQUERADE
+sudo iptables -A FORWARD -i $EXTERNAL_LINK -j ACCEPT -d $UE_SUBNET
 
 
