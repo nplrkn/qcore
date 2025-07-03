@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use async_std::channel::Sender;
 use f1ap::F1apPdu;
 use ngap::NgapPdu;
@@ -17,6 +19,14 @@ pub enum UeMessage {
     // Useful for testing purposes, to ensure that QCore has finished processing a response that the test framework
     // has sent in.
     Ping(Sender<()>),
+}
+
+impl Display for UeMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut s = format!("{:?}", self);
+        s.truncate(64);
+        write!(f, "{}", s)
+    }
 }
 
 impl TryFrom<UeMessage> for Box<F1apPdu> {

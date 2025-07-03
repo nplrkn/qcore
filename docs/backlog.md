@@ -1,19 +1,16 @@
 # Backlog
 
 ## In progress
--  Queue Message debug message is too verbose
+- Unhandled NGAP message UeContextReleaseRequest (cause RadioNetwork(RadioConnectionWithUeLost)) 
+- "Ran context release not yet implemented in NGAP mode" - e.g on deregistration or take context
 - Rejection of Registration Request from Security Mode Command if slice asked for is eMBB / SST 1 with "no network slices available"
   -  causes OnePlus phone to reregister with MIoT SST 3 / SD 0.
-
--  Duplicate log of InitialUlRrcMessageTransfer
 -  Unhandled RrcReestablishmentRequest
 -  See f1ap-samsung.log.
 
 - NGAP mode 
   - move ran_session_setup_phase1 + 2 out of ue_procedure.rs
   - if initial context setup request fails, 'unhandled message' and we don't save off the GUTI
-  - "Ran context release not yet implemented in NGAP mode" - e.g on deregistration or take context
-  - Unhandled NGAP message UeContextReleaseRequest (cause RadioNetwork(RadioConnectionWithUeLost)) 
   - Registration accept should piggyback on NGAP Initial Context Setup request
   - use different forwarding tables for NGAP vs F1AP 
   - DlDropUnknownUe incrementing when no phones attached

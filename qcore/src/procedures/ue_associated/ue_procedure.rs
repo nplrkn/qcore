@@ -231,7 +231,6 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
     async fn f1ap_dispatch(mut self, pdu: Box<F1apPdu>) -> Result<()> {
         match *pdu {
             F1apPdu::InitiatingMessage(InitiatingMessage::InitialUlRrcMessageTransfer(r)) => {
-                self.log_message(">> F1ap InitialUlRrcMessageTransfer");
                 InitialUlRrcMessageTransferProcedure::new(self)
                     .run(Box::new(r))
                     .await?;
@@ -283,10 +282,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
                 },
                 Err(msg) => msg,
             };
-            debug!(
-                self.logger,
-                "Queue message (wanted {expected} got {:?})", msg
-            );
+            debug!(self.logger, "Queue message (wanted {expected}) got {}", msg);
             self.enqueue_message(msg)?; // e.g. UeMessage::Ping
         }
     }
