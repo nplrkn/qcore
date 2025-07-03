@@ -5,20 +5,21 @@ use crate::{
     procedures::{
         UeMessage,
         ue_associated::{
-            F1apRanSessionReleaseProcedure, InitialContextSetupProcedure,
-            InitialUeMessageProcedure, InitialUlRrcMessageTransferProcedure, NasBase,
-            NgapRanSessionReleaseProcedure, PduSessionResourceSetupProcedure, RrcBase,
+            F1apRanSessionReleaseProcedure, F1apUeContextReleaseProcedure,
+            InitialContextSetupProcedure, InitialUeMessageProcedure,
+            InitialUlRrcMessageTransferProcedure, NasBase, NgapRanSessionReleaseProcedure,
+            NgapUeContextReleaseProcedure, PduSessionResourceSetupProcedure, RrcBase,
             RrcReconfigurationProcedure, RrcSecurityModeProcedure, RrcUeCapabilityEnquiryProcedure,
-            UeContextReleaseProcedure, UeContextSetupProcedure, UlInformationTransferProcedure,
-            UplinkNasProcedure, UplinkNasTransportProcedure,
+            UeContextSetupProcedure, UlInformationTransferProcedure, UplinkNasProcedure,
+            UplinkNasTransportProcedure,
         },
     },
 };
 use asn1_per::SerDes;
 use async_std::channel::{Receiver, Sender};
 use f1ap::{
-    CellGroupConfig, DlRrcMessageTransferProcedure, F1apPdu, InitiatingMessage, RrcContainer,
-    SrbId, UlRrcMessageTransfer,
+    CellGroupConfig, DlRrcMessageTransferProcedure, F1apPdu, RrcContainer, SrbId,
+    UlRrcMessageTransfer,
 };
 use ngap::{AmfUeNgapId, NgapPdu};
 use oxirush_nas::{
@@ -37,6 +38,7 @@ pub struct UeProcedure<'a, A: HandlerApi> {
     receiver: &'a Receiver<UeMessage>,
     give_context: &'a mut Option<Sender<NasContext>>,
     pub f1ap_release_cause: f1ap::Cause,
+    pub ngap_release_cause: ngap::Cause,
     queued_messages: &'a mut VecDeque<UeMessage>,
 }
 
@@ -68,6 +70,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
             receiver,
             give_context,
             f1ap_release_cause: f1ap::Cause::RadioNetwork(f1ap::CauseRadioNetwork::NormalRelease),
+            ngap_release_cause: ngap::Cause::Nas(ngap::CauseNas::NormalRelease),
             queued_messages,
         }
     }
@@ -147,9 +150,9 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
 
     pub async fn ran_context_release(self) -> Result<()> {
         if self.ngap_mode() {
-            bail!("Ran context release not yet implemented in NGAP mode")
+            NgapUeContextReleaseProcedure::new(self).run().await
         } else {
-            UeContextReleaseProcedure::new(self).run().await
+            F1apUeContextReleaseProcedure::new(self).run().await
         }
     }
 
@@ -189,7 +192,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
     }
 
     // Return Err if the UE handler should exit.
-    async fn ngap_dispatch(self, pdu: Box<NgapPdu>) -> Result<()> {
+    async fn ngap_dispatch(mut self, pdu: Box<NgapPdu>) -> Result<()> {
         match *pdu {
             NgapPdu::InitiatingMessage(ngap::InitiatingMessage::InitialUeMessage(r)) => {
                 InitialUeMessageProcedure::new(self)
@@ -207,7 +210,18 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
                 self.log_message(">> Ngap UeRadioCapabilityInfoIndication");
                 debug!(self.logger, "Ignoring UeRadioCapabilityInfoIndication");
             }
+            NgapPdu::InitiatingMessage(ngap::InitiatingMessage::UeContextReleaseRequest(r)) => {
+                self.log_message(">> Ngap UeContextReleaseRequest");
+                info!(
+                    self.logger,
+                    "GNB initiated context release, cause {:?}", r.cause
+                );
+                self.ngap_release_cause = r.cause.clone();
+                bail!("Context release");
+            }
+
             pdu => {
+                debug!(self.logger, "Unsupported NgapPdu");
                 bail!("Unsupported NgapPdu {pdu:?}");
             }
         }
@@ -230,17 +244,17 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
 
     async fn f1ap_dispatch(mut self, pdu: Box<F1apPdu>) -> Result<()> {
         match *pdu {
-            F1apPdu::InitiatingMessage(InitiatingMessage::InitialUlRrcMessageTransfer(r)) => {
+            F1apPdu::InitiatingMessage(f1ap::InitiatingMessage::InitialUlRrcMessageTransfer(r)) => {
                 InitialUlRrcMessageTransferProcedure::new(self)
                     .run(Box::new(r))
                     .await?;
             }
-            F1apPdu::InitiatingMessage(InitiatingMessage::UlRrcMessageTransfer(r)) => {
+            F1apPdu::InitiatingMessage(f1ap::InitiatingMessage::UlRrcMessageTransfer(r)) => {
                 self.log_message(">> F1ap UlRrcMessageTransfer");
                 let rrc = self.extract_ul_dcch_message(&r)?;
                 self.rrc_dispatch(rrc).await?;
             }
-            F1apPdu::InitiatingMessage(InitiatingMessage::UeContextReleaseRequest(r)) => {
+            F1apPdu::InitiatingMessage(f1ap::InitiatingMessage::UeContextReleaseRequest(r)) => {
                 self.log_message(">> F1ap UeContextReleaseRequest");
                 info!(
                     self.logger,
@@ -250,6 +264,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
                 bail!("Context release");
             }
             pdu => {
+                debug!(self.logger, "Unsupported F1apPdu");
                 bail!("Unsupported F1apPdu {pdu:?}");
             }
         }
@@ -296,8 +311,9 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
                 bail!("Take context")
             }
             UeMessage::F1ap(ref m) => {
-                if let F1apPdu::InitiatingMessage(InitiatingMessage::UeContextReleaseRequest(_)) =
-                    *m.as_ref()
+                if let F1apPdu::InitiatingMessage(
+                    f1ap::InitiatingMessage::UeContextReleaseRequest(_),
+                ) = *m.as_ref()
                 {
                     bail!("Context release request from DU - abort current procedure");
                 }
@@ -402,9 +418,9 @@ impl<'a, A: HandlerApi> super::RrcBase for UeProcedure<'a, A> {
             let ul_rrc_message_transfer = self
                 .receive_xxap_pdu(
                     |m: Box<F1apPdu>| match *m {
-                        F1apPdu::InitiatingMessage(InitiatingMessage::UlRrcMessageTransfer(x)) => {
-                            Ok(x)
-                        }
+                        F1apPdu::InitiatingMessage(
+                            f1ap::InitiatingMessage::UlRrcMessageTransfer(x),
+                        ) => Ok(x),
                         _ => Err(m),
                     },
                     "UlRrcMessageTransfer",

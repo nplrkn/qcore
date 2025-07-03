@@ -16,7 +16,7 @@ use async_trait::async_trait;
 use aya::Ebpf;
 use dashmap::DashMap;
 use f1ap::GnbDuServedCellsItem;
-use slog::{Logger, info, o, warn};
+use slog::{Logger, debug, info, o, warn};
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::ops::Deref;
@@ -165,11 +165,15 @@ impl QCore {
     /// Testability API to wait until all UE message handlers have processed all pending
     /// procedures.
     pub async fn wait_until_idle(&self) {
+        debug!(self.logger, "Wait until idle");
         let tasks = self.ue_tasks.iter();
         for task in tasks {
+            debug!(self.logger, "Ping UE task");
             let (sender, receiver) = channel::bounded(1);
-            let _ = task.send(UeMessage::Ping(sender)).await;
-            let _ = receiver.recv().await;
+            if task.send(UeMessage::Ping(sender)).await.is_ok() {
+                let _ = receiver.recv().await;
+            }
+            debug!(self.logger, "Ping UE task done");
         }
     }
 

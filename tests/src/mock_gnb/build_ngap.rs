@@ -188,3 +188,34 @@ pub fn ue_radio_capability_info_indication(
         }),
     ))
 }
+
+pub fn ue_context_release_request(
+    amf_ue_ngap_id: AmfUeNgapId,
+    ran_ue_ngap_id: RanUeNgapId,
+) -> Box<NgapPdu> {
+    Box::new(NgapPdu::InitiatingMessage(
+        InitiatingMessage::UeContextReleaseRequest(UeContextReleaseRequest {
+            amf_ue_ngap_id,
+            ran_ue_ngap_id,
+            pdu_session_resource_list_cxt_rel_req: None,
+            cause: Cause::RadioNetwork(CauseRadioNetwork::RadioConnectionWithUeLost),
+        }),
+    ))
+}
+
+pub fn ue_context_release_complete(
+    amf_ue_ngap_id: AmfUeNgapId,
+    ran_ue_ngap_id: RanUeNgapId,
+) -> Box<NgapPdu> {
+    Box::new(NgapPdu::SuccessfulOutcome(
+        SuccessfulOutcome::UeContextReleaseComplete(UeContextReleaseComplete {
+            amf_ue_ngap_id,
+            ran_ue_ngap_id,
+            user_location_information: None,
+            info_on_recommended_cells_and_ran_nodes_for_paging: None,
+            pdu_session_resource_list_cxt_rel_cpl: None,
+            criticality_diagnostics: None,
+            paging_assis_datafor_c_ecapab_ue: None,
+        }),
+    ))
+}

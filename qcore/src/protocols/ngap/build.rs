@@ -140,6 +140,20 @@ pub fn downlink_nas_transport(
     })
 }
 
+pub fn ue_context_release_command(
+    amf_ue_ngap_id: AmfUeNgapId,
+    ran_ue_ngap_id: RanUeNgapId,
+    cause: Cause,
+) -> Box<UeContextReleaseCommand> {
+    Box::new(UeContextReleaseCommand {
+        ue_ngap_i_ds: UeNgapIDs::UeNgapIdPair(UeNgapIdPair {
+            amf_ue_ngap_id,
+            ran_ue_ngap_id,
+        }),
+        cause,
+    })
+}
+
 pub fn pdu_session_resource_setup_request(
     amf_ue_ngap_id: AmfUeNgapId,
     ran_ue_ngap_id: RanUeNgapId,

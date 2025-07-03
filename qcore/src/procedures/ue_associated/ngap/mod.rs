@@ -8,6 +8,8 @@ mod pdu_session_resource_setup;
 pub use pdu_session_resource_setup::PduSessionResourceSetupProcedure;
 mod ran_session_release;
 pub use ran_session_release::RanSessionReleaseProcedure as NgapRanSessionReleaseProcedure;
+mod ue_context_release;
+pub use ue_context_release::UeContextReleaseProcedure as NgapUeContextReleaseProcedure;
 
 mod prelude {
     pub use super::super::prelude::*;

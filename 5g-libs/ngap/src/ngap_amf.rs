@@ -25,6 +25,7 @@ impl<T> Application for NgapAmf<T> where
         + IndicationHandler<InitialUeMessageProcedure>
         + IndicationHandler<UplinkNasTransportProcedure>
         + IndicationHandler<UeRadioCapabilityInfoIndicationProcedure>
+        + IndicationHandler<UeContextReleaseRequestProcedure>
         + EventHandler
 {
 }
@@ -49,6 +50,7 @@ where
         + IndicationHandler<InitialUeMessageProcedure>
         + IndicationHandler<UplinkNasTransportProcedure>
         + IndicationHandler<UeRadioCapabilityInfoIndicationProcedure>
+        + IndicationHandler<UeContextReleaseRequestProcedure>
         + EventHandler,
 {
     type TopPdu = NgapPdu;
@@ -70,6 +72,10 @@ where
             }
             NgapPdu::InitiatingMessage(InitiatingMessage::UeRadioCapabilityInfoIndication(req)) => {
                 UeRadioCapabilityInfoIndicationProcedure::call_provider(&self.0, req, logger).await;
+                None
+            }
+            NgapPdu::InitiatingMessage(InitiatingMessage::UeContextReleaseRequest(req)) => {
+                UeContextReleaseRequestProcedure::call_provider(&self.0, req, logger).await;
                 None
             }
             m => {

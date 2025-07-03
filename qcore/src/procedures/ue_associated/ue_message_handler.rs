@@ -70,8 +70,10 @@ impl<A: HandlerApi> UeMessageHandler<A> {
         give_context: Option<Sender<NasContext>>,
         mut ue_context: Box<UeContext>,
     ) {
-        // Remove the channel to this UE.
+        // Remove the channel to this UE and drop all messages in it.
         self.api.delete_ue_channel(ue_context.key);
+        self.receiver.close();
+        while let Ok(_) = self.receiver.recv().await {}
 
         // If the message handler was asked to give away the NAS context, send it.
         if let Some(sender) = give_context {

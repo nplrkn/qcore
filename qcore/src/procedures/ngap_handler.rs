@@ -70,6 +70,23 @@ impl<A: HandlerApi> IndicationHandler<ngap::UplinkNasTransportProcedure> for Nga
 }
 
 #[async_trait]
+impl<A: HandlerApi> IndicationHandler<ngap::UeContextReleaseRequestProcedure> for NgapHandler<A> {
+    async fn handle(&self, i: ngap::UeContextReleaseRequest, logger: &Logger) {
+        if let Err(e) = self
+            .dispatch_ue_message(
+                i.amf_ue_ngap_id.0 as u32,
+                UeMessage::Ngap(Box::new(NgapPdu::InitiatingMessage(
+                    InitiatingMessage::UeContextReleaseRequest(i),
+                ))),
+            )
+            .await
+        {
+            warn!(logger, "Failed to dispatch UplinkNasTransport - {}", e);
+        }
+    }
+}
+
+#[async_trait]
 impl<A: HandlerApi> RequestProvider<RanConfigurationUpdateProcedure> for NgapHandler<A> {
     async fn request(
         &self,

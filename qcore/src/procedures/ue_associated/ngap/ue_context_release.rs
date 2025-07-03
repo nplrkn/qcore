@@ -1,21 +1,24 @@
 use super::prelude::*;
-use f1ap::UeContextReleaseComplete;
+use ngap::UeContextReleaseComplete;
 
 define_ue_procedure!(UeContextReleaseProcedure);
 impl<'a, A: HandlerApi> UeContextReleaseProcedure<'a, A> {
     pub async fn run(&self) -> Result<()> {
-        let ue_context_release_command = crate::f1ap::build::ue_context_release_command(
-            self.ue,
-            self.f1ap_release_cause.clone(),
+        // TODO: are we also meant to RRC Release the UE?
+
+        let ue_context_release_command = crate::ngap::build::ue_context_release_command(
+            self.ue.amf_ue_ngap_id(),
+            self.ue.ran_ue_ngap_id(),
+            self.ngap_release_cause.clone(),
         );
         self.log_message("<< Ngap UeContextReleaseCommand");
         let rsp = self
-            .xxap_request::<f1ap::UeContextReleaseProcedure>(
+            .xxap_request::<ngap::UeContextReleaseProcedure>(
                 ue_context_release_command,
                 self.logger,
             )
             .await?;
-        self.log_message(">> Ngap UeContextReleaseComplete");
+        self.log_message(">> UeContextReleaseComplete");
         self.check_ue_context_release_complete(&rsp)
     }
 

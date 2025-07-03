@@ -83,6 +83,16 @@ impl MockGnb {
         })
     }
 
+    pub async fn reset_ue_context(
+        &self,
+        ue: &mut UeContext,
+        worker_ip: &IpAddr,
+    ) -> Result<UeContext> {
+        let mut other = self.new_ue_context(ue.ue_id, worker_ip).await?;
+        std::mem::swap(ue, &mut other);
+        Ok(other)
+    }
+
     pub async fn perform_ng_setup(&mut self, worker_ip: &IpAddr) -> Result<()> {
         let transport_address = format!("{}:{}", worker_ip, NGAP_BIND_PORT);
         let bind_address = self.local_ip.clone();
@@ -280,14 +290,48 @@ impl MockGnb {
     fn check_and_store_initial_context_setup_request(
         &self,
         pdu: Box<NgapPdu>,
-        _ue: &mut UeContext,
+        ue: &mut UeContext,
     ) -> Result<()> {
         let NgapPdu::InitiatingMessage(InitiatingMessage::InitialContextSetupRequest(
-            _initial_context_setup_request,
+            InitialContextSetupRequest { amf_ue_ngap_id, .. },
         )) = *pdu
         else {
             bail!("Unexpected Ngap message {:?}", pdu)
         };
+        if ue.amf_ue_ngap_id.is_none() {
+            ue.amf_ue_ngap_id = Some(amf_ue_ngap_id);
+        } else {
+            assert_eq!(ue.amf_ue_ngap_id, Some(amf_ue_ngap_id));
+        }
+
+        Ok(())
+    }
+
+    pub async fn send_ue_context_release_request(&self, ue: &UeContext) -> Result<()> {
+        let pdu = build_ngap::ue_context_release_request(
+            ue.amf_ue_ngap_id.unwrap(),
+            RanUeNgapId(ue.ue_id),
+        );
+        info!(self.logger, "Ngap UeContextReleaseRequest >>");
+        self.send(&pdu, Some(ue.binding.assoc_id)).await;
+        Ok(())
+    }
+
+    pub async fn handle_ue_context_release(&self, ue: &UeContext) -> Result<()> {
+        let pdu = self.receive_pdu().await?;
+        let NgapPdu::InitiatingMessage(InitiatingMessage::UeContextReleaseCommand(
+            UeContextReleaseCommand { .. },
+        )) = *pdu
+        else {
+            bail!("Unexpected Ngap message {:?}", pdu);
+        };
+        info!(self.logger, "Ngap UeContextReleaseCommand <<");
+        let pdu = build_ngap::ue_context_release_complete(
+            ue.amf_ue_ngap_id.unwrap(),
+            RanUeNgapId(ue.ue_id),
+        );
+        info!(self.logger, "Ngap UeContextReleaseComplete >>");
+        self.send(&pdu, Some(ue.binding.assoc_id)).await;
         Ok(())
     }
 
