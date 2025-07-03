@@ -60,7 +60,7 @@ struct Args {
     sst: u8,
 
     /// 5QI value to use.
-    #[arg(long, default_value_t = 1)]
+    #[arg(long, default_value_t = 7)]
     five_qi: u8,
 
     /// PDCP sequence number length: 18-bit (false) or 12-bit (true).

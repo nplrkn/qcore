@@ -1,10 +1,13 @@
 # Backlog
 
 ## In progress
--  Move to 5qi 7 as default?  (1 breaks Motorola)
 -  Queue Message debug message is too verbose
 - Rejection of Registration Request from Security Mode Command if slice asked for is eMBB / SST 1 with "no network slices available"
   -  causes OnePlus phone to reregister with MIoT SST 3 / SD 0.
+
+-  Duplicate log of InitialUlRrcMessageTransfer
+-  Unhandled RrcReestablishmentRequest
+-  See f1ap-samsung.log.
 
 - NGAP mode 
   - move ran_session_setup_phase1 + 2 out of ue_procedure.rs

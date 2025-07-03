@@ -73,7 +73,7 @@ async fn start_qcore(
             tun_interface_name: "qcoretun".to_string(),
             ue_subnet: Ipv4Addr::new(10, 255, 0, 0),
             pdcp_sn_length: PdcpSequenceNumberLength::TwelveBits,
-            five_qi: 1,
+            five_qi: 7,
             network_display_name: NetworkDisplayName::new("QCoreTest")?,
         },
         logger.new(o!("qcore"=> 1)),
