@@ -33,10 +33,10 @@ pub trait HandlerApi: Send + Sync + Clone + 'static {
         logger: &Logger,
     );
 
-    fn spawn_ue_message_handler(&self) -> u32;
+    async fn spawn_ue_message_handler(&self) -> u32;
     async fn dispatch_ue_message(&self, ue_id: u32, message: UeMessage) -> Result<()>;
-    fn delete_ue_channel(&self, ue_id: u32);
-    fn delete_ue_channels(&self);
+    async fn delete_ue_channel(&self, ue_id: u32);
+    async fn delete_ue_channels(&self);
 
     async fn xxap_request<P: Procedure>(
         &self,

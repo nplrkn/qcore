@@ -1,8 +1,6 @@
 # Backlog
 
 ## In progress
-- Unhandled NGAP message UeContextReleaseRequest (cause RadioNetwork(RadioConnectionWithUeLost)) 
-- "Ran context release not yet implemented in NGAP mode" - e.g on deregistration or take context
 - Rejection of Registration Request from Security Mode Command if slice asked for is eMBB / SST 1 with "no network slices available"
   -  causes OnePlus phone to reregister with MIoT SST 3 / SD 0.
 -  Unhandled RrcReestablishmentRequest

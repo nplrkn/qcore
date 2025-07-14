@@ -1,2 +1,6 @@
 [target.'cfg(all())']
 runner = "sudo -E"
+
+[profile.test]
+# Prioritize build/link speed
+lto = "off"

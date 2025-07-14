@@ -73,7 +73,7 @@ impl<A: HandlerApi> RequestProvider<f1ap::GnbDuConfigurationUpdateProcedure> for
 #[async_trait]
 impl<A: HandlerApi> IndicationHandler<InitialUlRrcMessageTransferProcedure> for F1apHandler<A> {
     async fn handle(&self, r: InitialUlRrcMessageTransfer, logger: &Logger) {
-        let id = self.0.spawn_ue_message_handler();
+        let id = self.0.spawn_ue_message_handler().await;
         if let Err(e) = self
             .dispatch_ue_message(
                 id,

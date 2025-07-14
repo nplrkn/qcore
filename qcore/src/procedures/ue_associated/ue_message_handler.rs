@@ -70,10 +70,17 @@ impl<A: HandlerApi> UeMessageHandler<A> {
         give_context: Option<Sender<NasContext>>,
         mut ue_context: Box<UeContext>,
     ) {
+        debug!(self.logger, "Clean up UE context");
+
         // Remove the channel to this UE and drop all messages in it.
-        self.api.delete_ue_channel(ue_context.key);
+        self.api.delete_ue_channel(ue_context.key).await;
+        debug!(self.logger, "Deleted UE channel");
         self.receiver.close();
-        while let Ok(_) = self.receiver.recv().await {}
+
+        while !self.receiver.is_empty() {
+            debug!(self.logger, "Receive pending message");
+            let _ = self.receiver.recv().await;
+        }
 
         // If the message handler was asked to give away the NAS context, send it.
         if let Some(sender) = give_context {
@@ -99,5 +106,6 @@ impl<A: HandlerApi> UeMessageHandler<A> {
                 .delete_userplane_session(&session.userplane_info, &self.logger)
                 .await;
         }
+        debug!(self.logger, "Finished cleanup");
     }
 }
