@@ -108,9 +108,17 @@ impl<A: HandlerApi> EventHandler for NgapHandler<A> {
     async fn handle_event(&self, event: TnlaEvent, tnla_id: u32, logger: &Logger) {
         match event {
             TnlaEvent::Established(addr) => {
-                info!(logger, "NGAP TNLA {} established with DU {}", tnla_id, addr)
+                info!(
+                    logger,
+                    "NGAP TNLA {} established with gNB {}", tnla_id, addr
+                )
             }
-            TnlaEvent::Terminated => info!(logger, "NGAP TNLA {} closed", tnla_id),
+            TnlaEvent::Terminated => {
+                // Treat this as equivalent to NG termination.
+                // TODO - in the case of multiple TNLAs or multiple gNBs, this is too broad.
+                info!(logger, "NGAP TNLA {} closed", tnla_id);
+                self.delete_ue_channels().await;
+            }
         };
     }
 }

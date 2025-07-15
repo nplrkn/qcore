@@ -137,7 +137,12 @@ impl<A: HandlerApi> EventHandler for F1apHandler<A> {
             TnlaEvent::Established(addr) => {
                 info!(logger, "F1AP TNLA {} established with DU {}", tnla_id, addr)
             }
-            TnlaEvent::Terminated => info!(logger, "F1AP TNLA {} closed", tnla_id),
+            TnlaEvent::Terminated => {
+                // Treat this as equivalent to an F1 Removal.
+                // TODO - in the case of multiple TNLAs or multiple DUs, this is too broad.
+                info!(logger, "F1AP TNLA {} closed - delete UE channels", tnla_id);
+                self.delete_ue_channels().await;
+            }
         };
     }
 }
