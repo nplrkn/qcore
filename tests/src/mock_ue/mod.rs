@@ -46,22 +46,44 @@ pub trait Transport {
 }
 
 pub struct MockUe<T: Transport> {
-    imsi: String,
-    guti: Option<[u8; 10]>,
-    pub ipv4_addr: Ipv4Addr,
-    dnn: Option<&'static [u8]>,
+    pub data: MockUeData,
     transport: T,
     logger: Logger,
     use_wrong_imsi: bool,
 }
 
-impl<T: Transport> MockUe<T> {
-    pub fn new(imsi: String, ue_id: u32, transport: T, logger: &Logger) -> Self {
-        MockUe {
+// TODO split to separate file
+pub struct MockUeData {
+    imsi: String,
+    guti: Option<[u8; 10]>,
+    pub ipv4_addr: Ipv4Addr,
+    dnn: Option<&'static [u8]>,
+}
+
+impl MockUeData {
+    pub fn new(imsi: String) -> Self {
+        MockUeData {
             imsi,
             guti: None,
             ipv4_addr: Ipv4Addr::UNSPECIFIED,
             dnn: None,
+        }
+    }
+}
+
+impl<T: Transport> MockUe<T> {
+    pub fn new(imsi: String, ue_id: u32, transport: T, logger: &Logger) -> Self {
+        MockUe {
+            data: MockUeData::new(imsi),
+            transport,
+            logger: logger.new(o!("ue" => ue_id)),
+            use_wrong_imsi: false,
+        }
+    }
+
+    pub fn new_from_base(data: MockUeData, ue_id: u32, transport: T, logger: &Logger) -> Self {
+        MockUe {
+            data,
             transport,
             logger: logger.new(o!("ue" => ue_id)),
             use_wrong_imsi: false,
@@ -72,7 +94,7 @@ impl<T: Transport> MockUe<T> {
         &self.transport
     }
     pub fn use_guti(&mut self, guti: [u8; 10]) {
-        self.guti = Some(guti);
+        self.data.guti = Some(guti);
     }
 
     // Use the wrong imsi on the next IdentityResponse
@@ -81,7 +103,7 @@ impl<T: Transport> MockUe<T> {
     }
 
     pub fn use_dnn(&mut self, dnn: &'static [u8]) {
-        self.dnn = Some(dnn);
+        self.data.dnn = Some(dnn);
     }
 
     async fn send_nas(&mut self, nas_bytes: Vec<u8>) -> Result<()> {
@@ -104,10 +126,18 @@ impl<T: Transport> MockUe<T> {
     }
 
     fn build_register_request(&self) -> Result<Vec<u8>> {
-        if let Some(guti) = self.guti {
+        if let Some(guti) = self.data.guti {
             build_nas::registration_request(build_nas::mobile_identity_guti(&guti))
         } else {
-            build_nas::registration_request(build_nas::mobile_identity_supi(&self.imsi))
+            build_nas::registration_request(build_nas::mobile_identity_supi(&self.data.imsi))
+        }
+    }
+
+    fn build_service_request(&self) -> Result<Vec<u8>> {
+        if let Some(guti) = self.data.guti {
+            build_nas::service_request(build_nas::mobile_identity_guti(&guti))
+        } else {
+            bail!("GUTI missing")
         }
     }
 
@@ -144,7 +174,7 @@ impl<T: Transport> MockUe<T> {
             self.use_wrong_imsi = false;
             "543938298342342"
         } else {
-            &self.imsi
+            &self.data.imsi
         };
         let nas_identity_response = build_nas::identity_response(imsi)?;
         info!(&self.logger, "Nas IdentityResponse >>");
@@ -174,14 +204,14 @@ impl<T: Transport> MockUe<T> {
 
     pub async fn send_nas_pdu_session_establishment_request(&mut self) -> Result<()> {
         let nas_session_establishment_request =
-            build_nas::pdu_session_establishment_request(self.dnn)?;
+            build_nas::pdu_session_establishment_request(self.data.dnn)?;
         info!(&self.logger, "Nas PduSessionEstablishmentRequest >>");
         self.send_nas(nas_session_establishment_request).await
     }
 
     pub async fn send_nas_deregistration_request(&mut self) -> Result<()> {
         let nas_deregistration_request = build_nas::deregistration_request()?;
-        self.guti = None;
+        self.data.guti = None;
         info!(&self.logger, "Nas DeregistrationRequest >>");
         self.send_nas(nas_deregistration_request).await
     }
@@ -193,7 +223,7 @@ impl<T: Transport> MockUe<T> {
         dst_port: u16,
     ) -> Result<()> {
         self.transport
-            .send_userplane_packet(&self.ipv4_addr, dst_ip, src_port, dst_port)
+            .send_userplane_packet(&self.data.ipv4_addr, dst_ip, src_port, dst_port)
             .await
     }
 
@@ -236,7 +266,7 @@ impl<T: Transport> MockUe<T> {
 
         info!(&self.logger, "Nas PduSessionEstablishmentAccept <<");
 
-        self.ipv4_addr = Ipv4Addr::new(
+        self.data.ipv4_addr = Ipv4Addr::new(
             nas_pdu_address_ie[1],
             nas_pdu_address_ie[2],
             nas_pdu_address_ie[3],

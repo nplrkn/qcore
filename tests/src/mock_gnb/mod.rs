@@ -279,6 +279,13 @@ impl MockGnb {
         Ok(())
     }
 
+    pub async fn handle_initial_context_setup_with_session(
+        &self,
+        ue: &mut UeContext,
+    ) -> Result<()> {
+        todo!()
+    }
+
     pub async fn send_ue_radio_capability_info(&self, ue: &mut UeContext) -> Result<()> {
         let pdu = build_ngap::ue_radio_capability_info_indication(
             ue.amf_ue_ngap_id.unwrap(),

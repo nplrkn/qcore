@@ -90,8 +90,11 @@ pub async fn pass_through_downlink_ipv4<T: Transport>(
     dn: &DataNetwork,
     ue: &MockUe<T>,
 ) -> Result<()> {
-    dn.send_n6_udp_packet(SocketAddr::new(IpAddr::V4(ue.ipv4_addr), TEST_UDP_PORT))
-        .await?;
+    dn.send_n6_udp_packet(SocketAddr::new(
+        IpAddr::V4(ue.data.ipv4_addr),
+        TEST_UDP_PORT,
+    ))
+    .await?;
     let _ip_packet = ue.recv_f1u_data_packet().await?;
     Ok(())
 }
@@ -114,7 +117,7 @@ pub async fn pass_through_ue_to_ue_ipv4<T: Transport>(
     dst_ue: &MockUe<T>,
 ) -> Result<()> {
     src_ue
-        .send_userplane_packet(&dst_ue.ipv4_addr, TEST_UDP_PORT, TEST_UDP_PORT)
+        .send_userplane_packet(&dst_ue.data.ipv4_addr, TEST_UDP_PORT, TEST_UDP_PORT)
         .await?;
     let _ip_packet = dst_ue.recv_f1u_data_packet().await?;
     Ok(())

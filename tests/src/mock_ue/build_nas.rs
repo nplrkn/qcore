@@ -4,14 +4,14 @@ use oxirush_nas::{
     Nas5gmmMessage, Nas5gmmMessageType, Nas5gsMessage, Nas5gsSecurityHeaderType, Nas5gsmMessage,
     Nas5gsmMessageType, NasAuthenticationFailureParameter, NasAuthenticationResponseParameter,
     NasDeRegistrationType, NasDnn, NasFGmmCause, NasFGsMobileIdentity, NasFGsRegistrationType,
-    NasFGsmCapability, NasFGsmCause, NasIntegrityProtectionMaximumDataRate, NasPayloadContainer,
-    NasPayloadContainerType, NasPduSessionType, NasSscMode, NasUeSecurityCapability,
-    encode_nas_5gs_message,
+    NasFGsmCapability, NasFGsmCause, NasIntegrityProtectionMaximumDataRate, NasKeySetIdentifier,
+    NasMessageContainer, NasPayloadContainer, NasPayloadContainerType, NasPduSessionType,
+    NasSscMode, NasUeSecurityCapability, encode_nas_5gs_message,
     messages::{
         Nas5gmmHeader, Nas5gsmHeader, NasAuthenticationFailure, NasAuthenticationResponse,
         NasDeregistrationRequestFromUe, NasIdentityResponse, NasPduSessionEstablishmentRequest,
         NasPduSessionReleaseComplete, NasPduSessionReleaseRequest, NasRegistrationComplete,
-        NasRegistrationRequest, NasSecurityModeComplete, NasUlNasTransport,
+        NasRegistrationRequest, NasSecurityModeComplete, NasServiceRequest, NasUlNasTransport,
     },
 };
 
@@ -154,6 +154,57 @@ pub fn registration_request(fgs_mobile_identity: NasFGsMobileIdentity) -> Result
     Ok(encode_nas_5gs_message(&message)?)
 }
 
+pub fn service_request(fg_s_tmsi: NasFGsMobileIdentity) -> Result<Vec<u8>> {
+    let ngksi = NasKeySetIdentifier::new(1); // TODO
+    let inner_message = Nas5gmmMessage::ServiceRequest(NasServiceRequest {
+        ngksi: ngksi.clone(),
+        fg_s_tmsi: fg_s_tmsi.clone(),
+        uplink_data_status: None,
+        pdu_session_status: None,
+        allowed_pdu_session_status: None,
+        nas_message_container: None,
+        ue_request_type: None,
+        paging_restriction: None,
+    });
+    let inner_message = Nas5gsMessage::Gmm(
+        Nas5gmmHeader {
+            extended_protocol_discriminator: ExtendedProtocolDiscriminator::FIVEGMM,
+            security_header_type: SecurityHeaderType::PLAIN_5GS_NAS_MESSAGE_NOT_SECURITY_PROTECTED,
+            message_type: Nas5gmmMessageType::ServiceRequest,
+        },
+        inner_message,
+    );
+    let inner_message = encode_nas_5gs_message(&inner_message)?;
+
+    let outer_message = Nas5gmmMessage::ServiceRequest(NasServiceRequest {
+        ngksi,
+        fg_s_tmsi,
+        uplink_data_status: todo!(),
+        pdu_session_status: todo!(),
+        allowed_pdu_session_status: None,
+        nas_message_container: Some(NasMessageContainer::new(inner_message)),
+        ue_request_type: None,
+        paging_restriction: None,
+    });
+
+    let outer_message = Nas5gsMessage::Gmm(
+        Nas5gmmHeader {
+            extended_protocol_discriminator: ExtendedProtocolDiscriminator::FIVEGMM,
+            security_header_type: SecurityHeaderType::PLAIN_5GS_NAS_MESSAGE_NOT_SECURITY_PROTECTED,
+            message_type: Nas5gmmMessageType::ServiceRequest,
+        },
+        outer_message,
+    );
+
+    let message = Nas5gsMessage::protect(
+        outer_message,
+        Nas5gsSecurityHeaderType::IntegrityProtected,
+        0,
+        5,
+    );
+    Ok(encode_nas_5gs_message(&message)?)
+}
+
 pub fn authentication_response() -> Result<Vec<u8>> {
     let message = Nas5gmmMessage::AuthenticationResponse(NasAuthenticationResponse {
         authentication_response_parameter: Some(NasAuthenticationResponseParameter::new(vec![])),
@@ -164,7 +215,7 @@ pub fn authentication_response() -> Result<Vec<u8>> {
         Nas5gmmHeader {
             extended_protocol_discriminator: ExtendedProtocolDiscriminator::FIVEGMM,
             security_header_type: SecurityHeaderType::PLAIN_5GS_NAS_MESSAGE_NOT_SECURITY_PROTECTED,
-            message_type: Nas5gmmMessageType::AuthenticationResponse {},
+            message_type: Nas5gmmMessageType::AuthenticationResponse,
         },
         message,
     );
@@ -190,7 +241,7 @@ pub fn authentication_failure(cause: u8) -> Result<Vec<u8>> {
         Nas5gmmHeader {
             extended_protocol_discriminator: ExtendedProtocolDiscriminator::FIVEGMM,
             security_header_type: SecurityHeaderType::PLAIN_5GS_NAS_MESSAGE_NOT_SECURITY_PROTECTED,
-            message_type: Nas5gmmMessageType::AuthenticationFailure {},
+            message_type: Nas5gmmMessageType::AuthenticationFailure,
         },
         message,
     );
@@ -202,7 +253,7 @@ pub fn identity_response(imsi: &str) -> Result<Vec<u8>> {
         Nas5gmmHeader {
             extended_protocol_discriminator: ExtendedProtocolDiscriminator::FIVEGMM,
             security_header_type: SecurityHeaderType::PLAIN_5GS_NAS_MESSAGE_NOT_SECURITY_PROTECTED,
-            message_type: Nas5gmmMessageType::IdentityResponse {},
+            message_type: Nas5gmmMessageType::IdentityResponse,
         },
         Nas5gmmMessage::IdentityResponse(NasIdentityResponse::new(mobile_identity_supi(imsi))),
     );
@@ -214,7 +265,7 @@ pub fn security_mode_complete() -> Result<Vec<u8>> {
         Nas5gmmHeader {
             extended_protocol_discriminator: ExtendedProtocolDiscriminator::FIVEGMM,
             security_header_type: SecurityHeaderType::PLAIN_5GS_NAS_MESSAGE_NOT_SECURITY_PROTECTED,
-            message_type: Nas5gmmMessageType::SecurityModeComplete {},
+            message_type: Nas5gmmMessageType::SecurityModeComplete,
         },
         Nas5gmmMessage::SecurityModeComplete(NasSecurityModeComplete::new()),
     );
@@ -226,7 +277,7 @@ pub fn registration_complete() -> Result<Vec<u8>> {
         Nas5gmmHeader {
             extended_protocol_discriminator: ExtendedProtocolDiscriminator::FIVEGMM,
             security_header_type: SecurityHeaderType::PLAIN_5GS_NAS_MESSAGE_NOT_SECURITY_PROTECTED,
-            message_type: Nas5gmmMessageType::RegistrationComplete {},
+            message_type: Nas5gmmMessageType::RegistrationComplete,
         },
         Nas5gmmMessage::RegistrationComplete(NasRegistrationComplete::new()),
     );
