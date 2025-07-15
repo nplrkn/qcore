@@ -11,12 +11,12 @@ ru_sdr:
  device_driver: bladerf
  clock: internal
  srate: 23.04 
- lo_offset: 0
  tx_gain: 66
  rx_gain: 30
+ otw_format: sc16
 
 cell_cfg:
- dl_arfcn: 640000
+ dl_arfcn: 632628
  band: 78
  channel_bandwidth_MHz: 20
  common_scs: 30
