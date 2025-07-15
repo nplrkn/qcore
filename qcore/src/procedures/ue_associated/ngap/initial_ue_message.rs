@@ -16,6 +16,7 @@ impl<'a, A: HandlerApi> InitialUeMessageProcedure<'a, A> {
         else {
             bail!("Expected Nr user location information");
         };
+        self.ue.ran_ue_id = r.ran_ue_ngap_id.0;
         self.ue.nr_cgi = Some(nr_cgi);
         self.ue.tac = tai.tac.0;
 

@@ -247,6 +247,7 @@ impl MockGnb {
         let NgapPdu::InitiatingMessage(InitiatingMessage::DownlinkNasTransport(
             DownlinkNasTransport {
                 amf_ue_ngap_id,
+                ran_ue_ngap_id,
                 nas_pdu,
                 ..
             },
@@ -255,6 +256,7 @@ impl MockGnb {
             bail!("Unexpected Ngap message {:?}", pdu);
         };
         info!(logger, "Ngap DownlinkNasTransport <<");
+        assert_eq!(ran_ue_ngap_id.0, ue.ue_id);
 
         if ue.amf_ue_ngap_id.is_none() {
             ue.amf_ue_ngap_id = Some(amf_ue_ngap_id);
