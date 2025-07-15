@@ -9,7 +9,7 @@ cu_cp:
     supported_tracking_areas:
       - tac: 1
         plmn_list:
-          - plmn: "00101"
+          - plmn: "00106"
             tai_slice_support_list:
               - sst: 1
   inactivity_timer: 7200            # Sets the UE/PDU Session/DRB inactivity timer to 7200 seconds. Supported: [1 - 7200].
@@ -27,7 +27,7 @@ cell_cfg:
  band: 78
  channel_bandwidth_MHz: 20
  common_scs: 30
- plmn: "00101"
+ plmn: "00106"
  tac: 1
  slicing:
  - sst: 1

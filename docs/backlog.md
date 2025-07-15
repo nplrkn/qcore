@@ -1,6 +1,9 @@
 # Backlog
 
 ## In progress
+- Once IMSI is known (and SQN is stored), downlink nas transport has wrong 
+RAN ID (resulting in RAN sending UnknownLocalUeNgapId)
+- Servuce Request
 - Rejection of Registration Request from Security Mode Command if slice asked for is eMBB / SST 1 with "no network slices available"
   -  causes OnePlus phone to reregister with MIoT SST 3 / SD 0.
 -  Unhandled RrcReestablishmentRequest

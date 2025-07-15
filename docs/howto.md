@@ -2,12 +2,12 @@
 
 ## pwru
 ```
-sudo ./pwru 'host 10.255.0.1'
+sudo ./pwru 'host 10.255.0.2'
 ```
 
 Useful commands are
 - 'port 2152' - debug lost GTP
-- 'host 10.255.0.1' - debug N6 drops seen in test framework
+- 'host 10.255.0.2' - debug N6 drops seen in test framework
 - 'host 8.8.8.8' - debug N6 drops seen in live ping test
 
 Look for kfree_skb_reason().
@@ -45,13 +45,13 @@ tail -f /tmp/gnb.log | grep [E]
 ```
 
 - DU may be looking at NR RAN sequence numbers.
-- If Linux might be dropping it, pwru 'dest host 10.255.0.1'
+- If Linux might be dropping it, pwru 'dest host 10.255.0.2'
 
 ## UE dropping downlink packet 
 - Run tcpdump in UE namespace.
 - If Wireshark says that TCP checksum is 'partial', we introduced veth pair into downlink path to avoid this.  See ethtool -K
   incantation in setup-routing. 
-- pwru 'dest host 10.255.0.1'
+- pwru 'dest host 10.255.0.2'
 
 ## A few reasons seen for lost packets during QCore development
 

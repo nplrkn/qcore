@@ -20,7 +20,7 @@ cell_cfg:
  band: 78
  channel_bandwidth_MHz: 20
  common_scs: 30
- plmn: "00101"
+ plmn: "00106"
  tac: 1
  slicing:
  - sst: 1

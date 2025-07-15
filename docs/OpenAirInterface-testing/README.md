@@ -34,7 +34,7 @@ The first two commands need to be re-run following a reboot.
 #### Terminal 1 - tcpdump
 ```sh
 cd
-sudo tcpdump -w oai_test.pcap -i any sctp or port 2152 or host 10.255.0.1
+sudo tcpdump -w oai_test.pcap -i any sctp or port 2152 or host 10.255.0.2
 ```
 
 #### Terminal 2 - QCore
@@ -71,7 +71,7 @@ sudo ip netns exec ue1 bash            # get an interactive shell session in the
 
 ip link set lo up                      # enable loopback interface
 ip link set oaitun_ue1 up              # enable tunnel interface
-ip addr add 10.255.0.1 dev oaitun_ue1  # configure the UE's IP address
+ip addr add 10.255.0.2 dev oaitun_ue1  # configure the UE's IP address
 ip route add default dev oaitun_ue1    # give it a route out
 ping 8.8.8.8                           # ping outside world
 curl parrot.live                       # test TCP + HTTP access to outside world

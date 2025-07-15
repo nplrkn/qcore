@@ -18,7 +18,7 @@ use std::net::{IpAddr, Ipv4Addr};
 struct Args {
     /// Local IPv4 address of QCore.  QCore binds SCTP port 38472 (for F1-C)
     /// and UDP port 2152 (for F1-U) on this address.  Defaults to
-    /// the eth0 address.
+    /// the first non-loopback address (e.g. of eth0).
     #[arg(long, default_value_t = local_ip_address::local_ip().unwrap())]
     local_ip: IpAddr,
 
@@ -32,7 +32,7 @@ struct Args {
     #[arg(long)]
     mnc: String,
 
-    /// Name of the Linux Ethernet device used for userplane communication with the DU or gNB.  
+    /// Name of the Linux Ethernet device on which uplink packets from UEs will arrive via the DU or gNB.  
     /// If you are running the DU / gNB locally, this should be set to "lo".
     #[arg(long, default_value = "eth0")]
     ran_interface_name: String,
@@ -41,12 +41,12 @@ struct Args {
     #[arg(long, default_value = "veth1")]
     n6_interface_name: String,
 
-    /// Name of the Linux tun device to open for routing userplane packet to/from UEs on the N6 reference point.
+    /// Name of the Linux tun device to open for transmitting userplane packets.
     #[arg(long, default_value = "qcoretun")]
     tun_interface_name: String,
 
     /// UE subnet.  This is the network address of a /24 IPv4 subnet in dotted demical notation.  
-    /// The final byte must be 0.  UEs are allocated host numbers 1-254.
+    /// The final byte must be 0.  UEs are allocated host numbers 2-254.
     #[arg(long, default_value_t = Ipv4Addr::new(10,255,0,0))]
     ue_subnet: Ipv4Addr,
 
