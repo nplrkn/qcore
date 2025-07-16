@@ -48,8 +48,23 @@ impl Display for AmfIds {
     }
 }
 
+#[derive(Deref, Debug, Eq, PartialEq, Clone)]
+pub struct AmfSetAndPointer(pub [u8; 2]);
+impl Display for AmfSetAndPointer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:02x}{:02x}", self.0[0], self.0[1])
+    }
+}
+
+#[derive(Debug)]
+pub struct Guti(pub PlmnIdentity, pub AmfIds, pub Tmsi);
+
+#[derive(Debug)]
+pub struct STmsi(pub AmfSetAndPointer, pub Tmsi);
+
 #[derive(Debug)]
 pub enum MobileIdentity {
     Supi(PlmnIdentity, Imsi),
-    Guti(PlmnIdentity, AmfIds, Tmsi),
+    Guti(Guti),
+    STmsi(STmsi),
 }

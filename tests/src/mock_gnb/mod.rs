@@ -267,6 +267,21 @@ impl MockGnb {
     }
 
     pub async fn handle_initial_context_setup(&self, ue: &mut UeContext) -> Result<()> {
+        self.handle_initial_context_setup_common(ue, false).await
+    }
+
+    pub async fn handle_initial_context_setup_with_session(
+        &self,
+        ue: &mut UeContext,
+    ) -> Result<()> {
+        self.handle_initial_context_setup_common(ue, true).await
+    }
+
+    async fn handle_initial_context_setup_common(
+        &self,
+        ue: &mut UeContext,
+        _session: bool,
+    ) -> Result<()> {
         let ReceivedPdu { pdu, assoc_id } = self.receive_pdu_with_assoc_id().await?;
         self.check_and_store_initial_context_setup_request(pdu, ue)?;
         info!(&self.logger, "InitialContextSetupRequest <<");
@@ -277,13 +292,6 @@ impl MockGnb {
         info!(&self.logger, "InitialContextSetupResponse >>");
         self.send(&ue_setup_response, Some(assoc_id)).await;
         Ok(())
-    }
-
-    pub async fn handle_initial_context_setup_with_session(
-        &self,
-        ue: &mut UeContext,
-    ) -> Result<()> {
-        todo!()
     }
 
     pub async fn send_ue_radio_capability_info(&self, ue: &mut UeContext) -> Result<()> {

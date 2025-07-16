@@ -7,8 +7,9 @@ async fn ngap_service_request() -> anyhow::Result<()> {
     gnb.perform_ng_setup(qc.ip_addr()).await?;
     let ue =
         MockUeNgap::new_with_session(nth_imsi(0, &sims), 1, &gnb, qc.ip_addr(), &logger).await?;
+    qc.wait_until_idle().await;
 
-    // TODO - make this a method call
+    // TODO - make this a method call - disconnect_from_ran()
     let mock_ue = ue.base.data;
 
     // Disconnect the TNLA, then re-establish the NG interface.

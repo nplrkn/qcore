@@ -135,7 +135,7 @@ impl<T: Transport> MockUe<T> {
 
     fn build_service_request(&self) -> Result<Vec<u8>> {
         if let Some(guti) = self.data.guti {
-            build_nas::service_request(build_nas::mobile_identity_guti(&guti))
+            build_nas::service_request(build_nas::mobile_identity_stmsi(&guti))
         } else {
             bail!("GUTI missing")
         }

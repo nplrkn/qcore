@@ -17,7 +17,7 @@ mod prelude {
     pub use crate::define_procedure;
     pub use anyhow::{Result, anyhow, bail};
     pub use derive_deref::{Deref, DerefMut};
-    pub use slog::{Logger, debug, error, info, warn};
+    pub use slog::{Logger, debug, info, warn};
 }
 
 // Reduce procedure boilerplate by defining the newtype struct and the new() function.

@@ -19,7 +19,6 @@ impl<'a, A: HandlerApi> InitialUeMessageProcedure<'a, A> {
         self.ue.ran_ue_id = r.ran_ue_ngap_id.0;
         self.ue.nr_cgi = Some(nr_cgi);
         self.ue.tac = tai.tac.0;
-
         let nas = self.nas_decode(&r.nas_pdu.0)?;
         UplinkNasProcedure::new(self.0).run(nas).await
     }

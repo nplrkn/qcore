@@ -2,7 +2,7 @@
 use super::prelude::*;
 use super::{DeregistrationProcedure, RegistrationProcedure, SessionEstablishmentProcedure};
 use crate::data::DecodedNas;
-use crate::procedures::ue_associated::SessionReleaseProcedure;
+use crate::procedures::ue_associated::{ServiceProcedure, SessionReleaseProcedure};
 use crate::protocols::nas::FGMM_CAUSE_DNN_NOT_SUPPORTED_OR_NOT_SUBSCRIBED_IN_THE_SLICE;
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gsMessage, Nas5gsmMessage, decode_nas_5gs_message,
@@ -22,6 +22,11 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
         match mm_message {
             Nas5gmmMessage::RegistrationRequest(r) => {
                 RegistrationProcedure::new(self.0)
+                    .run(Box::new(r), security_header)
+                    .await?;
+            }
+            Nas5gmmMessage::ServiceRequest(r) => {
+                ServiceProcedure::new(self.0)
                     .run(Box::new(r), security_header)
                     .await?;
             }

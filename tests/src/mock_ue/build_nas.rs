@@ -5,8 +5,9 @@ use oxirush_nas::{
     Nas5gsmMessageType, NasAuthenticationFailureParameter, NasAuthenticationResponseParameter,
     NasDeRegistrationType, NasDnn, NasFGmmCause, NasFGsMobileIdentity, NasFGsRegistrationType,
     NasFGsmCapability, NasFGsmCause, NasIntegrityProtectionMaximumDataRate, NasKeySetIdentifier,
-    NasMessageContainer, NasPayloadContainer, NasPayloadContainerType, NasPduSessionType,
-    NasSscMode, NasUeSecurityCapability, encode_nas_5gs_message,
+    NasMessageContainer, NasPayloadContainer, NasPayloadContainerType, NasPduSessionStatus,
+    NasPduSessionType, NasSscMode, NasUeSecurityCapability, NasUplinkDataStatus,
+    encode_nas_5gs_message,
     messages::{
         Nas5gmmHeader, Nas5gsmHeader, NasAuthenticationFailure, NasAuthenticationResponse,
         NasDeregistrationRequestFromUe, NasIdentityResponse, NasPduSessionEstablishmentRequest,
@@ -80,6 +81,13 @@ pub fn mobile_identity_supi(imsi: &str) -> NasFGsMobileIdentity {
 pub fn mobile_identity_guti(guti: &[u8; 10]) -> NasFGsMobileIdentity {
     let mut v = vec![0b1111_0010]; // GUTI
     v.extend_from_slice(guti);
+    NasFGsMobileIdentity::new(v)
+}
+
+pub fn mobile_identity_stmsi(guti: &[u8; 10]) -> NasFGsMobileIdentity {
+    let mut v = vec![0b1111_0100]; // S-TMSI
+    // The S-TMSI is the last 6 bytes of the GUTI.
+    v.extend_from_slice(&guti[4..]);
     NasFGsMobileIdentity::new(v)
 }
 
@@ -176,11 +184,27 @@ pub fn service_request(fg_s_tmsi: NasFGsMobileIdentity) -> Result<Vec<u8>> {
     );
     let inner_message = encode_nas_5gs_message(&inner_message)?;
 
+    // We use the same bit field for the Uplink Data Status and Pdu Session Status - to indicate
+    // that session 1 is active and has data to send.
+    // See TS 24.501, 9.11.3.44 and 9.11.3.57.
+    let session_and_uplink_data_status_flags = vec![
+        0b00000010, // Sessions 7-0 - test framework always uses session 1
+        0b00000000, // Session status of sessions 15-8
+    ];
+
+    let uplink_data_status = Some(NasUplinkDataStatus::new(
+        session_and_uplink_data_status_flags.clone(),
+    ));
+
+    let pdu_session_status = Some(NasPduSessionStatus::new(
+        session_and_uplink_data_status_flags,
+    ));
+
     let outer_message = Nas5gmmMessage::ServiceRequest(NasServiceRequest {
         ngksi,
         fg_s_tmsi,
-        uplink_data_status: todo!(),
-        pdu_session_status: todo!(),
+        uplink_data_status,
+        pdu_session_status,
         allowed_pdu_session_status: None,
         nas_message_container: Some(NasMessageContainer::new(inner_message)),
         ue_request_type: None,

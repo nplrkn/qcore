@@ -5,12 +5,15 @@ use oxirush_nas::{
 use std::fmt::Write;
 use xxap::PlmnIdentity;
 
-use crate::data::UeSecurityCapabilities;
+use crate::{
+    data::UeSecurityCapabilities,
+    protocols::nas::{AmfSetAndPointer, Guti, STmsi},
+};
 
 use super::{AmfIds, Imsi, MobileIdentity, Tmsi}; // Import the Write trait for String
 
 pub fn fgs_mobile_identity(fgs_mobile_identity: &NasFGsMobileIdentity) -> Result<MobileIdentity> {
-    // Get the SUPI.  TODO: SUCI + GUTI support.
+    // Get the SUPI.  TODO: SUCI support.
     let NasFGsMobileIdentity {
         value: mobile_identity_ie,
         ..
@@ -55,14 +58,27 @@ pub fn fgs_mobile_identity(fgs_mobile_identity: &NasFGsMobileIdentity) -> Result
                     mobile_identity_ie
                 )
             }
-            Ok(MobileIdentity::Guti(
+            Ok(MobileIdentity::Guti(Guti(
                 PlmnIdentity(mobile_identity_ie[1..4].try_into().unwrap()),
                 AmfIds(mobile_identity_ie[4..7].try_into().unwrap()),
                 Tmsi(mobile_identity_ie[7..11].try_into().unwrap()),
-            ))
+            )))
+        }
+        // S-TMSI
+        0b100 => {
+            if mobile_identity_ie.len() != 7 {
+                bail!(
+                    "S-TMSI Mobile identity IE contents should be 7 bytes: {:?}",
+                    mobile_identity_ie
+                )
+            }
+            Ok(MobileIdentity::STmsi(STmsi(
+                AmfSetAndPointer(mobile_identity_ie[1..3].try_into().unwrap()),
+                Tmsi(mobile_identity_ie[3..7].try_into().unwrap()),
+            )))
         }
 
-        x => bail!("Mobile identity type {x} not supported - just SUPI and GUTI"),
+        x => bail!("Mobile identity type {x} not supported - just SUPI, GUTI, S-TMSI"),
     }
 }
 

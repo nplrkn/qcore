@@ -1,6 +1,7 @@
 # Backlog
 
 ## In progress
+- delete_ue_channels() should be disconnect_ues()
 - Service Request (e.g. if RAN restarted)
 - Rejection of Registration Request from Security Mode Command if slice asked for is eMBB / SST 1 with "no network slices available"
   -  causes OnePlus phone to reregister with MIoT SST 3 / SD 0.

@@ -9,9 +9,7 @@ use oxirush_nas::messages::{
     Nas5gsSecurityHeader, NasAuthenticationFailure, NasAuthenticationResponse,
     NasRegistrationRequest, NasSecurityModeComplete,
 };
-use oxirush_nas::{
-    Nas5gsSecurityHeaderType, NasMessageContainer, NasUeSecurityCapability, decode_nas_5gs_message,
-};
+use oxirush_nas::{NasMessageContainer, NasUeSecurityCapability, decode_nas_5gs_message};
 use security::{Challenge, resync_sqn};
 
 enum RegistrationType {
@@ -115,7 +113,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
             }
             (RegistrationType::Guti(amf_ids, tmsi), ue_security_capability) => {
                 let identity_procedure_needed = self
-                    .guti_registration(&amf_ids, &tmsi, security_header)
+                    .retrieve_ue(Some(amf_ids[0]), &amf_ids[1..3], &tmsi, security_header)
                     .await?;
 
                 if identity_procedure_needed {
@@ -124,6 +122,8 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                     self.supi_registration(&imsi, ue_security_capability)
                         .await?;
                 }
+
+                // TODO - refresh UE registration TTL
 
                 Ok(())
             }
@@ -310,91 +310,6 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
             .ok_or_else(|| anyhow!("Invalid AUTS signature on NAS authentication synch failure"))
     }
 
-    // Ok(true) if identity request is needed, Ok(false) if no action is needed, and
-    // Err(cause code) if we should reject the registration
-    async fn guti_registration(
-        &mut self,
-        amf_ids: &AmfIds,
-        tmsi: &Tmsi,
-        security_header: Option<Nas5gsSecurityHeader>,
-    ) -> Result<bool, u8> {
-        info!(self.logger, "GUTI registration for {tmsi}");
-
-        // We have already checked the PLMN, so we just need to check the AMF IDs
-        // at this stage.
-        let guami_matches = amf_ids == &self.config().amf_ids;
-        if !guami_matches {
-            warn!(
-                self.logger,
-                "Wrong AMF IDs in GUTI - theirs {} ours {}",
-                amf_ids,
-                self.config().amf_ids
-            );
-        }
-
-        // Deal with the case of a reregistration within a previously secured RRC channel.
-        if let Some(existing_tmsi) = &self.ue.tmsi {
-            info!(
-                self.logger,
-                "UE reregistration when security context is already in place"
-            );
-            if !self.ue.nas.security_activated() {
-                error!(self.logger, "Logic error - no security context exists");
-                return Err(FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED);
-            }
-            if existing_tmsi == tmsi && guami_matches {
-                // No need to activate either NAS or RRC security - just accept
-                // TODO - refresh UE registration TTL
-                return Ok(false);
-            } else {
-                warn!(self.logger, "UE not using GUTI it was given");
-                return Err(FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED);
-            }
-        }
-
-        // This leaves us in the mainline case of a GUTI registration on a new RRC channel,
-        // where the UE is trying to reinstate its previous NAS security context.
-        // In this case, the UE is meant to integrity protect its message.
-        let security_type = security_header
-            .map(|hdr| hdr.security_header_type)
-            .unwrap_or(Nas5gsSecurityHeaderType::PlainNasMessage);
-
-        if security_type != Nas5gsSecurityHeaderType::IntegrityProtected {
-            warn!(
-                self.logger,
-                "GUTI registration with wrong security protection {:?}", security_type
-            );
-            return Err(FGMM_CAUSE_SEMANTICALLY_INCORRECT_MESSAGE);
-        }
-
-        // Integrity protected GUTI registration
-        if guami_matches && self.restore_existing_nas_security_context(tmsi).await {
-            // Successful GUTI registration.  We can accept the registration.
-            return Ok(false);
-        }
-
-        // Identity procedure needed
-        debug!(
-            self.logger,
-            "GUTI with unknown AMF IDs or TMSI - trigger Identity Request"
-        );
-
-        Ok(true)
-    }
-
-    async fn restore_existing_nas_security_context(&mut self, tmsi: &Tmsi) -> bool {
-        match self.take_nas_context(tmsi).await {
-            Some(c) => {
-                self.ue.nas = c;
-                true
-            }
-            None => {
-                debug!(self.logger, "Unknown TMSI");
-                false
-            }
-        }
-    }
-
     fn check_registration_request(
         &self,
         registration_request: Box<NasRegistrationRequest>,
@@ -413,7 +328,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                     warn!(self.logger, "{e}");
                     FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED
                 })? {
-                MobileIdentity::Guti(plmn, amf_ids, tmsi) => (
+                MobileIdentity::Guti(Guti(plmn, amf_ids, tmsi)) => (
                     plmn,
                     (
                         RegistrationType::Guti(amf_ids, tmsi),
@@ -422,6 +337,13 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                 ),
                 MobileIdentity::Supi(plmn, imsi) => {
                     (plmn, (RegistrationType::Supi(imsi), ue_security_capability))
+                }
+                x => {
+                    warn!(
+                        self.logger,
+                        "Expected Guti or Supi identity on a registration request, got {x:?}",
+                    );
+                    return Err(FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED);
                 }
             };
 
