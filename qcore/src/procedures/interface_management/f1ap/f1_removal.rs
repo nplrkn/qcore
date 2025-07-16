@@ -22,7 +22,7 @@ impl<'a, A: HandlerApi> F1RemovalProcedure<'a, A> {
         // TODO - the UP sessions ought to be deactivated rather than deleted.  This is because the DU might reconnect
         // meaning the UE can then be paged and downlink data can be delivered to it.
         // TODO - this ought to be qualified by F1AP instance (for the case of multiple DUs).
-        self.api.delete_ue_channels().await;
+        self.api.disconnect_ues().await;
 
         let response = F1RemovalResponse {
             transaction_id: r.transaction_id,

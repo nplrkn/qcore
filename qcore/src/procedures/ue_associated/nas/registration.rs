@@ -65,25 +65,19 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     }
 
     async fn accept_registration(&mut self) -> Result<()> {
-        let tmsi = Tmsi(rand::random()); // TODO: 0xffffffff is not a valid TMSI (TS23.003, 2.4))
-        debug!(self.logger, "Assigned {}", tmsi);
+        let guti = self.allocate_tmsi().await;
         debug!(
             self.logger,
             "Allowed NSSAIs: SST {} with and without SD 0",
             self.config().sst
         );
+
         let r = crate::nas::build::registration_accept(
             self.config().sst,
+            guti,
             &self.config().plmn,
-            &self.config().amf_ids,
-            &tmsi.0,
             &self.ue.tac,
         );
-        // TODO: should register_new_tmsi be called allocate_tmsi() and return the TMSI?
-        self.api
-            .register_new_tmsi(tmsi.clone(), self.ue.key, self.logger)
-            .await;
-        self.ue.tmsi = Some(tmsi);
         self.log_message("<< Nas RegistrationAccept");
         let _rsp = self
             .nas_request(
@@ -472,8 +466,10 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     }
 
     async fn send_configuration_update(&mut self) -> Result<()> {
-        let command =
-            crate::nas::build::configuration_update_command(&self.config().network_display_name);
+        let command = crate::nas::build::configuration_update_command(
+            Some(&self.config().network_display_name),
+            None,
+        );
         self.log_message("<< Nas ConfigurationUpdateCommand");
         self.nas_indication(command).await
     }

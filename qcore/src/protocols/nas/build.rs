@@ -8,12 +8,13 @@ use oxirush_nas::{
     NasFGsIdentityType, NasFGsMobileIdentity, NasFGsNetworkFeatureSupport,
     NasFGsRegistrationResult, NasFGsTrackingAreaIdentityList, NasFGsmCause, NasKeySetIdentifier,
     NasNetworkName, NasNssai, NasPayloadContainer, NasPayloadContainerType, NasPduAddress,
-    NasPduSessionIdentity2, NasPduSessionType, NasQosFlowDescriptions, NasQosRules, NasSNssai,
-    NasSecurityAlgorithms, NasSessionAmbr, NasUeSecurityCapability, encode_nas_5gs_message,
+    NasPduSessionIdentity2, NasPduSessionReactivationResult, NasPduSessionStatus,
+    NasPduSessionType, NasQosFlowDescriptions, NasQosRules, NasSNssai, NasSecurityAlgorithms,
+    NasSessionAmbr, NasUeSecurityCapability, encode_nas_5gs_message,
     messages::{
         NasAuthenticationRequest, NasConfigurationUpdateCommand, NasDlNasTransport, NasFGmmStatus,
         NasIdentityRequest, NasPduSessionEstablishmentAccept, NasPduSessionReleaseCommand,
-        NasRegistrationAccept, NasRegistrationReject, NasSecurityModeCommand,
+        NasRegistrationAccept, NasRegistrationReject, NasSecurityModeCommand, NasServiceAccept,
     },
 };
 use security::NAS_ABBA;
@@ -66,7 +67,7 @@ pub fn security_mode_command(
     ))
 }
 
-fn nas_mobile_identity_guti(
+pub fn nas_mobile_identity_guti(
     plmn: &PlmnIdentity,
     amf_ids: &AmfIds,
     tmsi: &[u8; 4],
@@ -102,13 +103,10 @@ pub fn nssai(sst: u8) -> NasNssai {
 
 pub fn registration_accept(
     allowed_sst: u8,
+    fg_guti: NasFGsMobileIdentity,
     plmn: &PlmnIdentity,
-    amf_ids: &AmfIds,
-    tmsi: &[u8; 4],
     tac: &[u8; 3],
 ) -> Box<Nas5gsMessage> {
-    let fg_guti = Some(nas_mobile_identity_guti(plmn, amf_ids, tmsi));
-
     // Fake up IMS support - necessary to keep certain UEs registered.
     let fgs_network_feature_support = Some(NasFGsNetworkFeatureSupport::new(vec![0b00000001]));
 
@@ -123,7 +121,7 @@ pub fn registration_accept(
     Box::new(Nas5gsMessage::new_5gmm(
         Nas5gmmMessageType::RegistrationAccept,
         Nas5gmmMessage::RegistrationAccept(NasRegistrationAccept {
-            fg_guti,
+            fg_guti: Some(fg_guti),
             allowed_nssai: Some(nssai(allowed_sst)),
             tai_list,
             fgs_network_feature_support,
@@ -138,6 +136,21 @@ pub fn registration_reject(cause: u8) -> Box<Nas5gsMessage> {
     Box::new(Nas5gsMessage::new_5gmm(
         Nas5gmmMessageType::RegistrationReject,
         Nas5gmmMessage::RegistrationReject(NasRegistrationReject::new(NasFGmmCause::new(cause))),
+    ))
+}
+
+pub fn service_accept(session_status: [u8; 2], reactivation_result: [u8; 2]) -> Box<Nas5gsMessage> {
+    let pdu_session_status = Some(NasPduSessionStatus::new(session_status.into()));
+    let pdu_session_reactivation_result = Some(NasPduSessionReactivationResult::new(
+        reactivation_result.into(),
+    ));
+    Box::new(Nas5gsMessage::new_5gmm(
+        Nas5gmmMessageType::ServiceAccept,
+        Nas5gmmMessage::ServiceAccept(NasServiceAccept {
+            pdu_session_status,
+            pdu_session_reactivation_result,
+            ..NasServiceAccept::new()
+        }),
     ))
 }
 
@@ -350,17 +363,23 @@ fn extended_protocol_configuration_options(
     NasExtendedProtocolConfigurationOptions::new(epco)
 }
 
-pub fn configuration_update_command(ucs2_network_name: &[u8]) -> Box<Nas5gsMessage> {
+fn network_name(ucs2_network_name: &[u8]) -> NasNetworkName {
     let mut network_name_ie_value = vec![
         0b1_001_0_000, // coding scheme = 001: UCS2 (16 bit); add country initials = 0; number of spare bits in last octet = 000
     ];
     network_name_ie_value.extend_from_slice(ucs2_network_name);
-    let full_name_for_network = Some(NasNetworkName::new(network_name_ie_value));
+    NasNetworkName::new(network_name_ie_value)
+}
 
+pub fn configuration_update_command(
+    ucs2_network_name: Option<&[u8]>,
+    fg_guti: Option<NasFGsMobileIdentity>,
+) -> Box<Nas5gsMessage> {
     Box::new(Nas5gsMessage::new_5gmm(
         Nas5gmmMessageType::ConfigurationUpdateCommand,
         Nas5gmmMessage::ConfigurationUpdateCommand(NasConfigurationUpdateCommand {
-            full_name_for_network,
+            full_name_for_network: ucs2_network_name.map(network_name),
+            fg_guti,
             ..NasConfigurationUpdateCommand::new()
         }),
     ))

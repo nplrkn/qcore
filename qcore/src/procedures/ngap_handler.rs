@@ -117,7 +117,7 @@ impl<A: HandlerApi> EventHandler for NgapHandler<A> {
                 // Treat this as equivalent to NG termination.
                 // TODO - in the case of multiple TNLAs or multiple gNBs, this is too broad.
                 info!(logger, "NGAP TNLA {} closed", tnla_id);
-                self.delete_ue_channels().await;
+                self.disconnect_ues().await;
             }
         };
     }

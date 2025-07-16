@@ -26,7 +26,7 @@ use f1ap::{
 };
 use ngap::{AmfUeNgapId, NgapPdu};
 use oxirush_nas::{
-    Nas5gmmMessage, Nas5gsMessage, Nas5gsSecurityHeaderType, Nas5gsmMessage,
+    Nas5gmmMessage, Nas5gsMessage, Nas5gsSecurityHeaderType, Nas5gsmMessage, NasFGsMobileIdentity,
     decode_nas_5gs_message, messages::Nas5gsSecurityHeader,
 };
 use rrc::{
@@ -43,6 +43,7 @@ pub struct UeProcedure<'a, A: HandlerApi> {
     pub f1ap_release_cause: f1ap::Cause,
     pub ngap_release_cause: ngap::Cause,
     queued_messages: &'a mut VecDeque<UeMessage>,
+    disconnected: &'a mut bool,
 }
 
 impl<'a, A: HandlerApi> std::ops::Deref for UeProcedure<'a, A> {
@@ -66,6 +67,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         receiver: &'a Receiver<UeMessage>,
         give_context: &'a mut Option<Sender<NasContext>>,
         queued_messages: &'a mut VecDeque<UeMessage>,
+        disconnected: &'a mut bool,
     ) -> Self {
         UeProcedure {
             base: Procedure::new(api, logger),
@@ -75,6 +77,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
             f1ap_release_cause: f1ap::Cause::RadioNetwork(f1ap::CauseRadioNetwork::NormalRelease),
             ngap_release_cause: ngap::Cause::Nas(ngap::CauseNas::NormalRelease),
             queued_messages,
+            disconnected,
         }
     }
 
@@ -152,10 +155,15 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
     }
 
     pub async fn ran_context_release(self) -> Result<()> {
-        if self.ngap_mode() {
-            NgapUeContextReleaseProcedure::new(self).run().await
+        if !*self.disconnected {
+            if self.ngap_mode() {
+                NgapUeContextReleaseProcedure::new(self).run().await
+            } else {
+                F1apUeContextReleaseProcedure::new(self).run().await
+            }
         } else {
-            F1apUeContextReleaseProcedure::new(self).run().await
+            debug!(self.logger, "UE was disconnected - skip RAN release");
+            Ok(())
         }
     }
 
@@ -181,6 +189,14 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
                 );
                 *self.give_context = Some(sender);
                 Err(anyhow!("Take context"))
+            }
+            UeMessage::Disconnect => {
+                info!(
+                    &self.logger,
+                    "UE disconnected - exit message handler and store context"
+                );
+                *self.disconnected = true;
+                Err(anyhow!("Disconnected"))
             }
             UeMessage::Ping(sender) => {
                 debug!(self.logger, "Respond to ping");
@@ -541,6 +557,21 @@ impl<'a, A: HandlerApi> NasBase for UeProcedure<'a, A> {
 
             self.rrc_indication(SrbId(1), &rrc).await
         }
+    }
+
+    async fn allocate_tmsi(&mut self) -> NasFGsMobileIdentity {
+        let tmsi = Tmsi(rand::random()); // TODO: 0xffffffff is not a valid TMSI (TS23.003, 2.4))
+        debug!(self.logger, "Assigned {}", tmsi);
+        self.api
+            .register_new_tmsi(tmsi.clone(), self.ue.key, self.logger)
+            .await;
+        let guti = crate::protocols::nas::build::nas_mobile_identity_guti(
+            &self.config().plmn,
+            &self.config().amf_ids,
+            &tmsi.0,
+        );
+        self.ue.tmsi = Some(tmsi);
+        guti
     }
 
     // Ok(true) if identity request is needed, Ok(false) if no action is needed, and

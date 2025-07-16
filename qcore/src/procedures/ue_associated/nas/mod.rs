@@ -13,7 +13,9 @@ pub use service::*;
 
 use crate::{data::DecodedNas, protocols::nas::Tmsi};
 use anyhow::Result;
-use oxirush_nas::{Nas5gsMessage, Nas5gsmMessage, messages::Nas5gsSecurityHeader};
+use oxirush_nas::{
+    Nas5gsMessage, Nas5gsmMessage, NasFGsMobileIdentity, messages::Nas5gsSecurityHeader,
+};
 
 pub trait NasBase {
     async fn nas_request<T>(
@@ -36,6 +38,8 @@ pub trait NasBase {
         filter: fn(Nas5gsmMessage) -> Option<T>,
         expected: &str,
     ) -> Result<T>;
+
+    async fn allocate_tmsi(&mut self) -> NasFGsMobileIdentity;
 
     // Matches the UE TMSI, retrieves the NAS layer data and attaches it to this UE context.
     // If the UE has switched to a new RAN context, the old one will be cleaned up.

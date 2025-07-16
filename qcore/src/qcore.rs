@@ -319,8 +319,13 @@ impl HandlerApi for QCore {
         self.ue_tasks.lock().await.remove(&ue_id);
     }
 
-    async fn delete_ue_channels(&self) {
-        self.ue_tasks.lock().await.clear();
+    async fn disconnect_ues(&self) {
+        let task_ids: Vec<u32> = self.ue_tasks.lock().await.iter().map(|x| *x.0).collect();
+        for task_id in task_ids {
+            let _ = self
+                .dispatch_ue_message(task_id, UeMessage::Disconnect)
+                .await;
+        }
     }
 
     async fn xxap_request<P: Procedure>(

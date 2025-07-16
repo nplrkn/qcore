@@ -14,6 +14,7 @@ pub enum UeMessage {
     Nas(DecodedNas),
     Rrc(Box<UlDcchMessage>),
     TakeContext(Sender<NasContext>),
+    Disconnect,
 
     // Send this message to a message handler to get a notification when the current procedure has finished processing.
     // Useful for testing purposes, to ensure that QCore has finished processing a response that the test framework

@@ -42,6 +42,7 @@ impl<A: HandlerApi> UeMessageHandler<A> {
     ) -> Result<()> {
         let mut queue = VecDeque::new();
         let mut result = Ok(());
+        let mut disconnected = false;
         loop {
             let ue_procedure = UeProcedure::new(
                 &self.api,
@@ -50,6 +51,7 @@ impl<A: HandlerApi> UeMessageHandler<A> {
                 &self.receiver,
                 give_context,
                 &mut queue,
+                &mut disconnected,
             );
 
             // On success, keep dispatching.  On error, release the RAN context as a final
