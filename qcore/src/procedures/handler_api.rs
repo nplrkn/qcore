@@ -1,5 +1,5 @@
 use crate::{
-    Config, NasContext, SubscriberAuthParams, UserplaneSession, data::UeContext5GC, nas::Tmsi,
+    Config, SubscriberAuthParams, UserplaneSession, data::UeContext5GC, nas::Tmsi,
     procedures::UeMessage, qcore::ServedCellsStore,
 };
 use anyhow::Result;

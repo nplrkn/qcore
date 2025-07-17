@@ -1,3 +1,7 @@
+use ngap::InitialContextSetupResponse;
+
+use crate::data::PduSession;
+
 use super::prelude::*;
 
 define_ue_procedure!(InitialContextSetupProcedure);
@@ -25,41 +29,43 @@ impl<'a, A: HandlerApi> InitialContextSetupProcedure<'a, A> {
             .await?;
         self.log_message(">> Ngap InitialContextSetupResponse");
 
-        let reactivated_session_count = rsp
-            .pdu_session_resource_setup_list_cxt_res
-            .as_ref()
-            .map(|x| x.0.len())
-            .unwrap_or_default();
-        if reactivated_session_count != self.ue.core.pdu_sessions.len() {
-            warn!(
-                self.logger,
-                "Reactivated session count {reactivated_session_count}, expected {}",
-                self.ue.core.pdu_sessions.len()
-            );
-        }
-
-        // Enable downlink forwarding on any reactivated sessions.
-        if let Some(list) = rsp.pdu_session_resource_setup_list_cxt_res {
-            for item in list.0.iter() {
-                let id = item.pdu_session_id.0;
-                if let Some(pdu_session) = self.ue.core.pdu_sessions.iter_mut().find(|x| x.id == id)
-                {
-                    match super::connect_session_downlink(
-                        &item.pdu_session_resource_setup_response_transfer,
-                        pdu_session,
-                    ) {
-                        Ok(_) => debug!(self.logger, "Reactivated session {id}"),
-                        Err(e) => warn!(self.logger, "Failed to reactivate session {id} - {e}"),
-                    }
-                } else {
+        // Go through each PDU session on the UE reactivating it.  Delete if the reactivation failed.
+        let sessions = std::mem::take(&mut self.ue.core.pdu_sessions);
+        for mut session in sessions.into_iter() {
+            match self.connect_matching_session(&mut session, &rsp) {
+                Ok(()) => self.ue.core.pdu_sessions.push(session),
+                Err(e) => {
                     warn!(
                         self.logger,
-                        "Unknown session {id} in InitialContextSetupResponse"
-                    )
+                        "Failed to reactivate session {} - {e}", session.id
+                    );
+                    self.delete_userplane_session(&session.userplane_info, self.logger)
+                        .await;
                 }
             }
         }
 
         Ok(self.0)
+    }
+
+    fn connect_matching_session(
+        &self,
+        session: &mut PduSession,
+        rsp: &InitialContextSetupResponse,
+    ) -> Result<()> {
+        if let Some(ref list) = rsp.pdu_session_resource_setup_list_cxt_res {
+            if let Some(matching_item) = list
+                .0
+                .iter()
+                .find(|item| item.pdu_session_id.0 == session.id)
+            {
+                super::connect_session_downlink(
+                    &matching_item.pdu_session_resource_setup_response_transfer,
+                    session,
+                )?;
+                return Ok(());
+            }
+        }
+        bail!("GNB did not supply resource setup response")
     }
 }

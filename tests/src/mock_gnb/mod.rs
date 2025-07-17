@@ -300,9 +300,18 @@ impl MockGnb {
         let ReceivedPdu { pdu, assoc_id } = self.receive_pdu_with_assoc_id().await?;
         self.check_and_store_initial_context_setup_request(pdu, ue, session)?;
         info!(&self.logger, "Ngap InitialContextSetupRequest <<");
+
+        let teid = if session {
+            Some(&ue.session.as_ref().unwrap().local_teid.0)
+        } else {
+            None
+        };
+
         let ue_setup_response = build_ngap::initial_context_setup_response(
             ue.amf_ue_ngap_id.unwrap(),
             RanUeNgapId(ue.ue_id),
+            &self.local_ip,
+            teid,
         );
         info!(&self.logger, "Ngap InitialContextSetupResponse >>");
         self.send(&ue_setup_response, Some(assoc_id)).await;

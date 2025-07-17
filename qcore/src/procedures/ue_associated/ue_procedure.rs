@@ -616,7 +616,7 @@ impl<'a, A: HandlerApi> NasBase for UeProcedure<'a, A> {
             return Err(FGMM_CAUSE_SEMANTICALLY_INCORRECT_MESSAGE);
         }
 
-        // If we know about this GUTI, retrieve the NAS context and attach it to this UE.
+        // If we know about this GUTI, retrieve the core context and attach it to this UE.
         if guami_matches {
             match self.take_core_context(tmsi).await {
                 Some(c) => {

@@ -80,7 +80,7 @@ impl<A: HandlerApi> UeMessageHandler<A> {
         self.receiver.close();
 
         while !self.receiver.is_empty() {
-            debug!(self.logger, "Receive pending message");
+            debug!(self.logger, "Receive and discard pending message");
             let _ = self.receiver.recv().await;
         }
 
@@ -91,18 +91,15 @@ impl<A: HandlerApi> UeMessageHandler<A> {
                 .await;
         }
 
-        // If the message handler was asked to give away the NAS context, send it.
+        // If the message handler was asked to give away the core context, send it.
         if let Some(sender) = give_context {
             if let Err(e) = sender.send(ue_context.core).await {
-                warn!(self.logger, "Failed to send NAS context: {e}");
+                warn!(self.logger, "Failed to send core context: {e}");
             }
-
-            // TODO - give the sessions too.
         } else {
-            // If the UE has a TMSI, save off its NAS context, so that we can recover the security context
-            // based on GUTI later.
+            // If the UE has a TMSI, save off its core context, so that we can recover it based on GUTI later.
             if let Some(tmsi) = ue_context.tmsi.take() {
-                debug!(self.logger, "Store NAS context for TMSI {tmsi}");
+                debug!(self.logger, "Store core context for TMSI {tmsi}");
                 self.api
                     .put_core_context(
                         tmsi,
@@ -114,7 +111,5 @@ impl<A: HandlerApi> UeMessageHandler<A> {
                     .await;
             }
         }
-
-        debug!(self.logger, "Finished cleanup");
     }
 }

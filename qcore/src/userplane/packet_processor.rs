@@ -155,7 +155,7 @@ impl PacketProcessor {
 
         info!(
             logger,
-            "Set up userplane session {}, remote {}-{}, 5QI={}, sn-length={}",
+            "Activate userplane session {}, remote {}-{}, 5QI={}, sn-length={}",
             session,
             remote_tunnel_info.transport_layer_address,
             remote_tunnel_info.gtp_teid,

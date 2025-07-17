@@ -89,27 +89,34 @@ pub fn initial_ue_message(
 pub fn initial_context_setup_response(
     amf_ue_ngap_id: AmfUeNgapId,
     ran_ue_ngap_id: RanUeNgapId,
+    local_ip: &String,
+    local_teid: Option<&[u8; 4]>,
 ) -> Box<NgapPdu> {
+    let pdu_session_resource_setup_list_cxt_res = local_teid.map(|teid| {
+        PduSessionResourceSetupListCxtRes(nonempty![PduSessionResourceSetupItemCxtRes {
+            pdu_session_id: PduSessionId(1), // TODO - avoid hardcoding
+            pdu_session_resource_setup_response_transfer:
+                pdu_session_resource_setup_response_transfer(local_ip, teid).unwrap()
+        }])
+    });
     Box::new(NgapPdu::SuccessfulOutcome(
         SuccessfulOutcome::InitialContextSetupResponse(InitialContextSetupResponse {
             amf_ue_ngap_id,
             ran_ue_ngap_id,
-            pdu_session_resource_setup_list_cxt_res: None,
+            pdu_session_resource_setup_list_cxt_res,
             pdu_session_resource_failed_to_setup_list_cxt_res: None,
             criticality_diagnostics: None,
         }),
     ))
 }
 
-pub fn pdu_session_resource_setup_response(
-    amf_ue_ngap_id: AmfUeNgapId,
-    ran_ue_ngap_id: RanUeNgapId,
+fn pdu_session_resource_setup_response_transfer(
     local_ip: &String,
     local_teid: &[u8; 4],
-) -> Result<Box<NgapPdu>> {
+) -> Result<Vec<u8>> {
     let transport_layer_address = TransportLayerAddress::try_from(local_ip)?;
 
-    let pdu_session_resource_setup_response_transfer = PduSessionResourceSetupResponseTransfer {
+    Ok(PduSessionResourceSetupResponseTransfer {
         dl_qos_flow_per_tnl_information: QosFlowPerTnlInformation {
             up_transport_layer_information: UpTransportLayerInformation::GtpTunnel(GtpTunnel {
                 transport_layer_address,
@@ -129,7 +136,17 @@ pub fn pdu_session_resource_setup_response(
         used_rsn_information: None,
         global_ran_node_id: None,
     }
-    .as_bytes()?;
+    .as_bytes()?)
+}
+
+pub fn pdu_session_resource_setup_response(
+    amf_ue_ngap_id: AmfUeNgapId,
+    ran_ue_ngap_id: RanUeNgapId,
+    local_ip: &String,
+    local_teid: &[u8; 4],
+) -> Result<Box<NgapPdu>> {
+    let pdu_session_resource_setup_response_transfer =
+        pdu_session_resource_setup_response_transfer(local_ip, local_teid)?;
 
     Ok(Box::new(NgapPdu::SuccessfulOutcome(
         SuccessfulOutcome::PduSessionResourceSetupResponse(PduSessionResourceSetupResponse {

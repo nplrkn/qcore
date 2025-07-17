@@ -17,7 +17,7 @@ async fn guti_registration_f1ap() -> anyhow::Result<()> {
 
     // In the first variant, the UE message handler is not running.
 
-    // Drop the UE context causing the message handler to exit and park the NAS context.
+    // Drop the UE context causing the message handler to exit and park the core context.
     du.send_ue_context_release_request(ue.du_ue_context())
         .await?;
     du.handle_ue_context_release(ue.du_ue_context()).await?;
