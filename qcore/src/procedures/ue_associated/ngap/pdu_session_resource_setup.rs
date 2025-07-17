@@ -1,21 +1,13 @@
 use anyhow::ensure;
-use asn1_per::SerDes;
-use ngap::{
-    PduSessionResourceSetupListSuRes, PduSessionResourceSetupResponseTransfer,
-    UpTransportLayerInformation,
-};
-
-use crate::data::PduSession;
+use ngap::PduSessionResourceSetupListSuRes;
 
 use super::prelude::*;
 
 define_ue_procedure!(PduSessionResourceSetupProcedure);
 impl<'a, A: HandlerApi> PduSessionResourceSetupProcedure<'a, A> {
-    pub async fn run(
-        self,
-        pdu_session: &mut PduSession,
-        nas: Vec<u8>,
-    ) -> Result<UeProcedure<'a, A>> {
+    pub async fn run(mut self, session_index: usize, nas: Vec<u8>) -> Result<UeProcedure<'a, A>> {
+        let pdu_session = &self.ue.core.pdu_sessions[session_index];
+
         let req = crate::ngap::build::pdu_session_resource_setup_request(
             self.ue.amf_ue_ngap_id(),
             self.ue.ran_ue_ngap_id(),
@@ -28,6 +20,7 @@ impl<'a, A: HandlerApi> PduSessionResourceSetupProcedure<'a, A> {
             .xxap_request::<ngap::PduSessionResourceSetupProcedure>(req, self.logger)
             .await?;
         self.log_message(">> Ngap PduSessionResourceSetupResponse");
+
         match rsp.pdu_session_resource_setup_list_su_res {
             Some(PduSessionResourceSetupListSuRes(x)) => {
                 if x.len() > 1 {
@@ -39,17 +32,11 @@ impl<'a, A: HandlerApi> PduSessionResourceSetupProcedure<'a, A> {
                     x.first().pdu_session_id.0,
                     pdu_session.id
                 );
-                let pdu_session_resource_setup_response_transfer =
-                    PduSessionResourceSetupResponseTransfer::from_bytes(
-                        &x.first().pdu_session_resource_setup_response_transfer,
-                    )?;
 
-                let UpTransportLayerInformation::GtpTunnel(gtp_tunnel) =
-                    pdu_session_resource_setup_response_transfer
-                        .dl_qos_flow_per_tnl_information
-                        .up_transport_layer_information;
-
-                pdu_session.userplane_info.remote_tunnel_info = Some(gtp_tunnel);
+                super::connect_session_downlink(
+                    &x.first().pdu_session_resource_setup_response_transfer,
+                    &mut self.ue.core.pdu_sessions[session_index],
+                )?;
             }
             None => bail!("GNB failed session set up"),
         }

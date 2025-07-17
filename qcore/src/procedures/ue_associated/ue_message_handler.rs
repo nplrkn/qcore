@@ -1,5 +1,5 @@
 use super::UeProcedure;
-use crate::{HandlerApi, NasContext, UeContext, procedures::UeMessage};
+use crate::{HandlerApi, UeContext, data::UeContext5GC, procedures::UeMessage};
 use anyhow::Result;
 use async_std::channel::{self, Receiver, Sender};
 use slog::{Logger, debug, warn};
@@ -38,7 +38,7 @@ impl<A: HandlerApi> UeMessageHandler<A> {
     async fn dispatch_all(
         &self,
         ue_context: &mut UeContext,
-        give_context: &mut Option<Sender<NasContext>>,
+        give_context: &mut Option<Sender<UeContext5GC>>,
     ) -> Result<()> {
         let mut queue = VecDeque::new();
         let mut result = Ok(());
@@ -69,13 +69,13 @@ impl<A: HandlerApi> UeMessageHandler<A> {
 
     async fn cleanup(
         &self,
-        give_context: Option<Sender<NasContext>>,
+        give_context: Option<Sender<UeContext5GC>>,
         mut ue_context: Box<UeContext>,
     ) {
         debug!(self.logger, "Clean up UE context");
 
         // Remove the channel to this UE and drop all messages in it.
-        self.api.delete_ue_channel(ue_context.key).await;
+        self.api.delete_ue_channel(ue_context.local_ran_ue_id).await;
         debug!(self.logger, "Deleted UE channel");
         self.receiver.close();
 
@@ -84,9 +84,16 @@ impl<A: HandlerApi> UeMessageHandler<A> {
             let _ = self.receiver.recv().await;
         }
 
+        // Deactivate sessions.
+        for session in ue_context.core.pdu_sessions.iter() {
+            self.api
+                .deactivate_userplane_session(&session.userplane_info, &self.logger)
+                .await;
+        }
+
         // If the message handler was asked to give away the NAS context, send it.
         if let Some(sender) = give_context {
-            if let Err(e) = sender.send(ue_context.nas).await {
+            if let Err(e) = sender.send(ue_context.core).await {
                 warn!(self.logger, "Failed to send NAS context: {e}");
             }
 
@@ -97,17 +104,17 @@ impl<A: HandlerApi> UeMessageHandler<A> {
             if let Some(tmsi) = ue_context.tmsi.take() {
                 debug!(self.logger, "Store NAS context for TMSI {tmsi}");
                 self.api
-                    .put_nas_context(tmsi, ue_context.key, ue_context.nas, 0, &self.logger)
+                    .put_core_context(
+                        tmsi,
+                        ue_context.local_ran_ue_id,
+                        ue_context.core,
+                        0,
+                        &self.logger,
+                    )
                     .await;
             }
         }
 
-        // Clean up sessions.
-        for session in ue_context.pdu_sessions.drain(..) {
-            self.api
-                .delete_userplane_session(&session.userplane_info, &self.logger)
-                .await;
-        }
         debug!(self.logger, "Finished cleanup");
     }
 }

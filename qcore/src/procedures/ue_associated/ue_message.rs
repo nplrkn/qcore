@@ -5,7 +5,7 @@ use f1ap::F1apPdu;
 use ngap::NgapPdu;
 use rrc::UlDcchMessage;
 
-use crate::data::{DecodedNas, NasContext};
+use crate::data::{DecodedNas, UeContext5GC};
 
 #[derive(Debug)]
 pub enum UeMessage {
@@ -13,7 +13,7 @@ pub enum UeMessage {
     Ngap(Box<NgapPdu>),
     Nas(DecodedNas),
     Rrc(Box<UlDcchMessage>),
-    TakeContext(Sender<NasContext>),
+    TakeContext(Sender<UeContext5GC>),
     Disconnect,
 
     // Send this message to a message handler to get a notification when the current procedure has finished processing.

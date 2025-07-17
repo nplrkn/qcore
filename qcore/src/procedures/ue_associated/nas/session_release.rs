@@ -20,16 +20,17 @@ impl<'a, A: HandlerApi> SessionReleaseProcedure<'a, A> {
     async fn perform_session_release(mut self, session_id: u8) -> Result<UeProcedure<'a, A>> {
         let position = self
             .ue
+            .core
             .pdu_sessions
             .iter()
             .position(|session| session.id == session_id)
             .ok_or_else(|| anyhow!("Session id {session_id} not found"))?;
-        let released_session = self.ue.pdu_sessions.swap_remove(position);
+        let released_session = self.ue.core.pdu_sessions.swap_remove(position);
         let pdu_session_release_command = crate::nas::build::pdu_session_release_command(
             &released_session,
             FGSM_CAUSE_REGULAR_DEACTIVATION,
         )?;
-        let nas = self.ue.nas.encode(pdu_session_release_command)?;
+        let nas = self.ue.core.nas.encode(pdu_session_release_command)?;
         self.log_message("<< Nas PduSessionReleaseCommand");
         self.0 = self.0.ran_session_release(&released_session, nas).await?;
 

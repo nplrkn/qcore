@@ -1,6 +1,6 @@
 use crate::{
-    Config, NasContext, SubscriberAuthParams, UserplaneSession, nas::Tmsi, procedures::UeMessage,
-    qcore::ServedCellsStore,
+    Config, NasContext, SubscriberAuthParams, UserplaneSession, data::UeContext5GC, nas::Tmsi,
+    procedures::UeMessage, qcore::ServedCellsStore,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -23,15 +23,24 @@ pub trait HandlerApi: Send + Sync + Clone + 'static {
     async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
 
     async fn register_new_tmsi(&self, tmsi: Tmsi, ue_id: u32, logger: &Logger);
-    async fn take_nas_context(&self, tmsi: &Tmsi) -> Option<NasContext>;
-    async fn put_nas_context(
+    async fn take_core_context(&self, tmsi: &Tmsi) -> Option<UeContext5GC>;
+    async fn put_core_context(
         &self,
         tmsi: Tmsi,
         ue_id: u32,
-        c: NasContext,
-        ttl_secs: u32,
+        c: UeContext5GC,
+        _ttl_secs: u32,
         logger: &Logger,
     );
+
+    // async fn put_nas_context(
+    //     &self,
+    //     tmsi: Tmsi,
+    //     ue_id: u32,
+    //     c: NasContext,
+    //     ttl_secs: u32,
+    //     logger: &Logger,
+    // );
 
     async fn spawn_ue_message_handler(&self) -> u32;
     async fn dispatch_ue_message(&self, ue_id: u32, message: UeMessage) -> Result<()>;
@@ -51,5 +60,6 @@ pub trait HandlerApi: Send + Sync + Clone + 'static {
         session: &UserplaneSession,
         logger: &Logger,
     ) -> Result<()>;
+    async fn deactivate_userplane_session(&self, session: &UserplaneSession, logger: &Logger);
     async fn delete_userplane_session(&self, session: &UserplaneSession, logger: &Logger);
 }

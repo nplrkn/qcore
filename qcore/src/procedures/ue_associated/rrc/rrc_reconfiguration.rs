@@ -13,7 +13,7 @@ impl<'a, A: HandlerApi> RrcReconfigurationProcedure<'a, A> {
         session_index: usize,
         cell_group_config: Vec<u8>,
     ) -> Result<UeProcedure<'a, A>> {
-        let session = &self.ue.pdu_sessions[session_index];
+        let session = &self.ue.core.pdu_sessions[session_index];
         let rrc_reconfiguration = crate::rrc::build::reconfiguration(
             0,
             Some(nonempty![nas]),

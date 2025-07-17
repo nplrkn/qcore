@@ -1,5 +1,5 @@
 //! build_f1ap - construction of F1AP messages
-use crate::data::PduSession;
+use crate::data::{PduSession, UeContext};
 use anyhow::Result;
 use asn1_per::*;
 use ngap::*;
@@ -40,13 +40,13 @@ pub fn ng_setup_response(
 }
 
 pub fn initial_context_setup_request(
-    amf_ue_ngap_id: AmfUeNgapId,
-    ran_ue_ngap_id: RanUeNgapId,
     guami: Guami,
     kgnb: &[u8; 32],
     sst: u8,
-    ue_security_capabilities: &crate::UeSecurityCapabilities,
-) -> Box<InitialContextSetupRequest> {
+    nas_pdu: Option<Vec<u8>>,
+    ue: &UeContext,
+    transport_layer_address: TransportLayerAddress,
+) -> Result<Box<InitialContextSetupRequest>> {
     let allowed_nssai = AllowedNssai(nonempty![
         AllowedNssaiItem {
             snssai: Snssai(sst, None).into()
@@ -56,25 +56,47 @@ pub fn initial_context_setup_request(
         }
     ]);
 
+    // UE Security Capabilities
     // These are 16 bit bitstrings.  Our UeSecurityCapabilities type follows the NAS format from 24.501, Figure 9.11.3.54.1.
     // This needs to be converted into the format from 38.413, 9.3.1.86.
     // We blank the EUTRA fields, since we do not support 4G.
-    let nr_encryption_algorithms =
-        NrEncryptionAlgorithms(BitVec::from_slice(&[ue_security_capabilities[0] << 1, 0]));
+    let nr_encryption_algorithms = NrEncryptionAlgorithms(BitVec::from_slice(&[
+        ue.core.security_capabilities[0] << 1,
+        0,
+    ]));
     let nr_integrity_protection_algorithms =
-        NrIntegrityProtectionAlgorithms(BitVec::from_slice(&[ue_security_capabilities[1] << 1, 0]));
+        NrIntegrityProtectionAlgorithms(BitVec::from_slice(&[
+            ue.core.security_capabilities[1] << 1,
+            0,
+        ]));
     let eutr_aencryption_algorithms = EutrAencryptionAlgorithms(BitVec::from_slice(&[0u8; 2]));
     let eutr_aintegrity_protection_algorithms =
         EutrAintegrityProtectionAlgorithms(BitVec::from_slice(&[0u8; 2]));
 
-    Box::new(InitialContextSetupRequest {
-        amf_ue_ngap_id,
-        ran_ue_ngap_id,
+    // Sessions
+    let mut session_setup_items = vec![];
+    for session in ue.core.pdu_sessions.iter() {
+        let pdu_session_resource_setup_request_transfer =
+            pdu_session_resource_setup_request_transfer(session, &transport_layer_address)?;
+
+        session_setup_items.push(PduSessionResourceSetupItemCxtReq {
+            pdu_session_id: PduSessionId(session.id),
+            nas_pdu: None,
+            snssai: session.snssai.into(),
+            pdu_session_resource_setup_request_transfer,
+        })
+    }
+    let pdu_session_resource_setup_list_cxt_req =
+        NonEmpty::from_vec(session_setup_items).map(PduSessionResourceSetupListCxtReq);
+
+    Ok(Box::new(InitialContextSetupRequest {
+        amf_ue_ngap_id: ue.amf_ue_ngap_id(),
+        ran_ue_ngap_id: ue.ran_ue_ngap_id(),
         old_amf: None,
         ue_aggregate_maximum_bit_rate: None,
         core_network_assistance_information_for_inactive: None,
         guami,
-        pdu_session_resource_setup_list_cxt_req: None,
+        pdu_session_resource_setup_list_cxt_req,
         allowed_nssai,
         ue_security_capabilities: UeSecurityCapabilities {
             nr_encryption_algorithms,
@@ -88,7 +110,7 @@ pub fn initial_context_setup_request(
         ue_radio_capability: None,
         index_to_rfsp: None,
         masked_imeisv: None,
-        nas_pdu: None,
+        nas_pdu: nas_pdu.map(NasPdu),
         emergency_fallback_indicator: None,
         rrc_inactive_transition_report_request: None,
         ue_radio_capability_for_paging: None,
@@ -110,7 +132,7 @@ pub fn initial_context_setup_request(
         rg_level_wireline_access_characteristics: None,
         management_based_mdt_plmn_list: None,
         ue_radio_capability_id: None,
-    })
+    }))
 }
 
 pub fn downlink_nas_transport(
@@ -154,20 +176,17 @@ pub fn ue_context_release_command(
     })
 }
 
-pub fn pdu_session_resource_setup_request(
-    amf_ue_ngap_id: AmfUeNgapId,
-    ran_ue_ngap_id: RanUeNgapId,
+fn pdu_session_resource_setup_request_transfer(
     pdu_session: &PduSession,
-    transport_layer_address: TransportLayerAddress,
-    nas: Vec<u8>,
-) -> Result<Box<PduSessionResourceSetupRequest>> {
-    let pdu_session_resource_setup_request_transfer = PduSessionResourceSetupRequestTransfer {
+    transport_layer_address: &TransportLayerAddress,
+) -> Result<Vec<u8>> {
+    Ok(PduSessionResourceSetupRequestTransfer {
         pdu_session_aggregate_maximum_bit_rate: Some(PduSessionAggregateMaximumBitRate {
             pdu_session_aggregate_maximum_bit_rate_dl: BitRate(768_000_000),
             pdu_session_aggregate_maximum_bit_rate_ul: BitRate(768_000_000),
         }),
         ul_ngu_up_tnl_information: UpTransportLayerInformation::GtpTunnel(GtpTunnel {
-            transport_layer_address,
+            transport_layer_address: transport_layer_address.clone(),
             gtp_teid: pdu_session.userplane_info.uplink_gtp_teid,
         }),
         additional_ul_ngu_up_tnl_information: None,
@@ -208,7 +227,19 @@ pub fn pdu_session_resource_setup_request(
         redundant_common_network_instance: None,
         redundant_pdu_session_information: None,
     }
-    .as_bytes()?;
+    .as_bytes()?)
+}
+
+pub fn pdu_session_resource_setup_request(
+    amf_ue_ngap_id: AmfUeNgapId,
+    ran_ue_ngap_id: RanUeNgapId,
+    pdu_session: &PduSession,
+    transport_layer_address: TransportLayerAddress,
+    nas: Vec<u8>,
+) -> Result<Box<PduSessionResourceSetupRequest>> {
+    let pdu_session_resource_setup_request_transfer =
+        pdu_session_resource_setup_request_transfer(pdu_session, &transport_layer_address)?;
+
     Ok(Box::new(PduSessionResourceSetupRequest {
         amf_ue_ngap_id,
         ran_ue_ngap_id,

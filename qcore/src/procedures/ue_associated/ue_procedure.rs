@@ -1,7 +1,7 @@
 use super::prelude::*;
 use crate::{
-    NasContext, UeContext,
-    data::{DecodedNas, PduSession},
+    UeContext,
+    data::{DecodedNas, PduSession, UeContext5GC},
     procedures::{
         UeMessage,
         ue_associated::{
@@ -20,10 +20,7 @@ use crate::{
 };
 use asn1_per::SerDes;
 use async_std::channel::{Receiver, Sender};
-use f1ap::{
-    CellGroupConfig, DlRrcMessageTransferProcedure, F1apPdu, RrcContainer, SrbId,
-    UlRrcMessageTransfer,
-};
+use f1ap::{DlRrcMessageTransferProcedure, F1apPdu, RrcContainer, SrbId, UlRrcMessageTransfer};
 use ngap::{AmfUeNgapId, NgapPdu};
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gsMessage, Nas5gsSecurityHeaderType, Nas5gsmMessage, NasFGsMobileIdentity,
@@ -39,7 +36,7 @@ pub struct UeProcedure<'a, A: HandlerApi> {
     base: Procedure<'a, A>,
     pub ue: &'a mut UeContext,
     receiver: &'a Receiver<UeMessage>,
-    give_context: &'a mut Option<Sender<NasContext>>,
+    give_context: &'a mut Option<Sender<UeContext5GC>>,
     pub f1ap_release_cause: f1ap::Cause,
     pub ngap_release_cause: ngap::Cause,
     queued_messages: &'a mut VecDeque<UeMessage>,
@@ -54,18 +51,13 @@ impl<'a, A: HandlerApi> std::ops::Deref for UeProcedure<'a, A> {
     }
 }
 
-pub enum RanSessionSetupState {
-    Ngap,
-    F1ap(CellGroupConfig, Vec<u8>),
-}
-
 impl<'a, A: HandlerApi> UeProcedure<'a, A> {
     pub fn new(
         api: &'a A,
         ue: &'a mut UeContext,
         logger: &'a Logger,
         receiver: &'a Receiver<UeMessage>,
-        give_context: &'a mut Option<Sender<NasContext>>,
+        give_context: &'a mut Option<Sender<UeContext5GC>>,
         queued_messages: &'a mut VecDeque<UeMessage>,
         disconnected: &'a mut bool,
     ) -> Self {
@@ -81,13 +73,26 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         }
     }
 
-    pub async fn ran_ue_registration(self, kgnb: &[u8; 32]) -> Result<Self> {
+    // Enables a secure RAN channel for this UE, and reactivates any PDU sessions.
+    pub async fn ran_context_create(self, nas_pdu: Option<Vec<u8>>) -> Result<Self> {
+        debug!(
+            self.logger,
+            "UL NAS COUNT for kGNB derivation {}",
+            self.ue.core.nas.ul_nas_count()
+        );
+        let kgnb = security::derive_kgnb(&self.ue.core.kamf, self.ue.core.nas.ul_nas_count());
+
         if self.ngap_mode() {
-            InitialContextSetupProcedure::new(self).run(kgnb).await
+            let mut s = InitialContextSetupProcedure::new(self)
+                .run(&kgnb, nas_pdu)
+                .await?;
+
+            s.commit_userplane_sessions().await?;
+            Ok(s)
         } else {
             // TODO: this should be a procedure of its own.  This function should not contain the implementation of
             // 'ran ue registration'.  It should just swtich to ngap::RanUeRegistration or f1ap::.
-            let s = RrcSecurityModeProcedure::new(self).run(kgnb).await?;
+            let s = RrcSecurityModeProcedure::new(self).run(&kgnb).await?;
 
             let s = if s.ue.rat_capabilities.is_none() {
                 RrcUeCapabilityEnquiryProcedure::new(s).run().await?
@@ -98,44 +103,35 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         }
     }
 
-    pub async fn ran_session_setup_phase1(
-        self,
-        session: &mut PduSession,
-        nas_accept: Vec<u8>,
-    ) -> Result<(Self, RanSessionSetupState)> {
-        if self.ngap_mode() {
-            self.log_message("<< Nas PduSessionEstablishmentAccept");
-            PduSessionResourceSetupProcedure::new(self)
-                .run(session, nas_accept)
-                .await
-                .map(|inner| (inner, RanSessionSetupState::Ngap))
-        } else {
-            UeContextSetupProcedure::new(self).run(session).await.map(
-                |(inner, cell_group_config)| {
-                    (
-                        inner,
-                        RanSessionSetupState::F1ap(cell_group_config, nas_accept),
-                    )
-                },
-            )
+    async fn commit_userplane_sessions(&mut self) -> Result<()> {
+        for session in self.ue.core.pdu_sessions.iter_mut() {
+            self.base
+                .commit_userplane_session(&mut session.userplane_info, self.base.logger)
+                .await?;
         }
+        Ok(())
     }
 
-    pub async fn ran_session_setup_phase2(
-        self,
-        session_index: usize,
-        ran_session_setup_state: RanSessionSetupState,
-    ) -> Result<()> {
-        match ran_session_setup_state {
-            RanSessionSetupState::Ngap => Ok(()),
-            RanSessionSetupState::F1ap(cell_group_config, nas) => {
-                self.log_message("<< Nas PduSessionEstablishmentAccept");
-                let _ = RrcReconfigurationProcedure::new(self)
-                    .add_session(nas, session_index, cell_group_config.0)
-                    .await;
-                Ok(())
-            }
+    pub async fn ran_session_setup(self, session_index: usize, nas_accept: Vec<u8>) -> Result<()> {
+        if self.ngap_mode() {
+            self.log_message("<< Nas PduSessionEstablishmentAccept");
+            let mut inner = PduSessionResourceSetupProcedure::new(self)
+                .run(session_index, nas_accept)
+                .await?;
+
+            inner.commit_userplane_sessions().await?;
+        } else {
+            let (mut inner, cell_group_config) = UeContextSetupProcedure::new(self)
+                .run(session_index)
+                .await?;
+            inner.log_message("<< Nas PduSessionEstablishmentAccept");
+            inner.commit_userplane_sessions().await?;
+
+            let _ = RrcReconfigurationProcedure::new(inner)
+                .add_session(nas_accept, session_index, cell_group_config.0)
+                .await?;
         }
+        Ok(())
     }
 
     pub async fn ran_session_release(
@@ -405,7 +401,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         &mut self,
         bytes: &[u8],
     ) -> Result<(Box<Nas5gsMessage>, Option<Nas5gsSecurityHeader>)> {
-        self.ue.nas.decode(bytes, self.logger)
+        self.ue.core.nas.decode(bytes, self.logger)
     }
 
     fn extract_ul_dcch_message(&self, r: &UlRrcMessageTransfer) -> Result<Box<UlDcchMessage>> {
@@ -473,7 +469,7 @@ impl<'a, A: HandlerApi> super::RrcBase for UeProcedure<'a, A> {
         };
 
         let dl_message = crate::f1ap::build::dl_rrc_message_transfer(
-            self.ue.key,
+            self.ue.local_ran_ue_id,
             self.ue.gnb_du_ue_f1ap_id(),
             RrcContainer(rrc_bytes),
             srb,
@@ -537,10 +533,10 @@ impl<'a, A: HandlerApi> NasBase for UeProcedure<'a, A> {
     }
 
     async fn nas_indication(&mut self, nas: Box<Nas5gsMessage>) -> Result<()> {
-        let nas_bytes = self.ue.nas.encode(nas)?;
+        let nas_bytes = self.ue.core.nas.encode(nas)?;
         if self.ngap_mode() {
             let ngap = crate::ngap::build::downlink_nas_transport(
-                AmfUeNgapId(self.ue.key as u64),
+                AmfUeNgapId(self.ue.local_ran_ue_id as u64),
                 self.ue.ran_ue_ngap_id(),
                 nas_bytes,
             );
@@ -563,7 +559,7 @@ impl<'a, A: HandlerApi> NasBase for UeProcedure<'a, A> {
         let tmsi = Tmsi(rand::random()); // TODO: 0xffffffff is not a valid TMSI (TS23.003, 2.4))
         debug!(self.logger, "Assigned {}", tmsi);
         self.api
-            .register_new_tmsi(tmsi.clone(), self.ue.key, self.logger)
+            .register_new_tmsi(tmsi.clone(), self.ue.local_ran_ue_id, self.logger)
             .await;
         let guti = crate::protocols::nas::build::nas_mobile_identity_guti(
             &self.config().plmn,
@@ -622,9 +618,9 @@ impl<'a, A: HandlerApi> NasBase for UeProcedure<'a, A> {
 
         // If we know about this GUTI, retrieve the NAS context and attach it to this UE.
         if guami_matches {
-            match self.take_nas_context(tmsi).await {
+            match self.take_core_context(tmsi).await {
                 Some(c) => {
-                    self.ue.nas = c;
+                    self.ue.core = c;
                     return Ok(false);
                 }
                 None => {

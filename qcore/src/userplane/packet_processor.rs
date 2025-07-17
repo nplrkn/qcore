@@ -111,6 +111,7 @@ impl PacketProcessor {
         Ok(ebpf)
     }
 
+    /// Allocates an IP address and TEID for a userplane session.
     pub async fn reserve_userplane_session(
         &self,
         five_qi: u8,
@@ -127,22 +128,10 @@ impl PacketProcessor {
         teid[3] = idx as u8;
 
         // Generate a UE IP.  We currently hardcode assumptions of 1 PDU session
-        // per UE, and max 254 UEs.
+        // per UE, and max 253 UEs.
         let mut ue_addr_octets = self.ue_subnet.octets();
         ue_addr_octets[3] = idx;
         let ue_ipv4_addr = Ipv4Addr::from(ue_addr_octets);
-
-        let pdcp_header_length = match pdcp_sn_length {
-            PdcpSequenceNumberLength::TwelveBits => 2,
-            PdcpSequenceNumberLength::EighteenBits => 3,
-        };
-
-        let v = UlForwardingEntry {
-            teid_top_bytes: teid[0..3].try_into().unwrap(),
-            pdcp_header_length,
-        };
-        let mut array = self.uplink_forwarding_table.lock().await;
-        array.set(idx as u32, v, 0)?;
 
         Ok(UserplaneSession {
             uplink_gtp_teid: GtpTeid(teid),
@@ -194,6 +183,13 @@ impl PacketProcessor {
             PdcpSequenceNumberLength::EighteenBits => 3,
         };
 
+        let v = UlForwardingEntry {
+            teid_top_bytes: session.uplink_gtp_teid.0[0..3].try_into().unwrap(),
+            pdcp_header_length,
+        };
+        let mut array = self.uplink_forwarding_table.lock().await;
+        array.set(idx as u32, v, 0)?;
+
         let v = DlForwardingEntry {
             next_pdcp_seq_num: 0,
             next_nr_seq_num: 0,
@@ -212,13 +208,27 @@ impl PacketProcessor {
         Ok(())
     }
 
+    // Deactivating the userplane session returns it to the reserved state.  It can be
+    // reactivated by calling commit_userplane_session().
+    // Currently the local TEID of the session is retained across de/reactivation.
+    pub async fn deactivate_userplane_session(&self, session: &UserplaneSession, logger: &Logger) {
+        let idx = session.uplink_gtp_teid.0[3] as u32;
+        self.clear_forwarding_entries(idx, logger).await;
+        info!(logger, "Deactivated userplane session {}", session);
+    }
+
     pub async fn delete_userplane_session(&self, session: &UserplaneSession, logger: &Logger) {
         let idx = session.uplink_gtp_teid.0[3] as u32;
+        self.clear_forwarding_entries(idx, logger).await;
 
         if let Err(e) = self.index_pool.lock().await.return_id(idx as usize) {
             warn!(logger, "Error returning UE index {} - {}", idx, e)
         }
 
+        info!(logger, "Deleted userplane session {}", session);
+    }
+
+    async fn clear_forwarding_entries(&self, idx: u32, logger: &Logger) {
         let mut array = self.downlink_forwarding_table.lock().await;
         if let Err(e) = array.set(idx, DlForwardingEntry::default(), 0) {
             warn!(
@@ -234,8 +244,6 @@ impl PacketProcessor {
                 "Error clearing uplink forwarding entry {} - {}", idx, e
             )
         }
-
-        info!(logger, "Deleted userplane session {}", session);
     }
 }
 

@@ -35,20 +35,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         self.log_message(">> Nas RegistrationRequest");
         match self.handle_registration(r, security_header).await {
             Ok(()) => {
-                // Derive Kgnb, and from that kRRCInt.
-
-                /* TS33.501, 6.8.1.1.2.3: "The NAS (uplink and downlink) COUNTs are set to start
-                   values, and the start value of the uplink NAS COUNT shall be used as freshness 
-                   parameter in the KgNB derivation from the fresh KAMF (after primary authentication) 
-                   when UE receives AS SMC the KgNB is derived from the current 5G NAS security context, 
-                   i.e., the fresh KAMF is used to derive the KgNB." */
-
-                /* 6.8.1.1.2.2: When the UE receives the AS SMC without having received a NAS Security Mode Command after the Registration Request
-                with "PDU session(s) to be re-activated", it shall use the uplink NAS COUNT of the Registration Request message that
-                triggered the AS SMC to be sent as freshness parameter in the derivation of the initial KgNB/KeNB.           */
-                debug!(self.logger, "UL NAS COUNT {}", self.ue.nas.ul_nas_count());
-                let kgnb = security::derive_kgnb(&self.ue.kamf, self.ue.nas.ul_nas_count());
-                self.0 = self.0.ran_ue_registration(&kgnb).await?;
+                self.0 = self.0.ran_context_create(None).await?;
                 self.accept_registration().await?;
                 self.send_configuration_update().await?;
             }
@@ -76,7 +63,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
             self.config().sst,
             guti,
             &self.config().plmn,
-            &self.ue.tac,
+            &self.ue.core.tac,
         );
         self.log_message("<< Nas RegistrationAccept");
         let _rsp = self
@@ -164,7 +151,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         loop {
             match self.perform_nas_authentication(imsi).await? {
                 NasAuthOutcome::Kseaf(kseaf) => {
-                    self.ue.kamf = security::derive_kamf(&kseaf, imsi.as_bytes());
+                    self.ue.core.kamf = security::derive_kamf(&kseaf, imsi.as_bytes());
                     return Ok(());
                 }
                 NasAuthOutcome::RetryWithNewKSI if !ksi_retry_done => {
@@ -193,7 +180,8 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         ue_security_capabilities: NasUeSecurityCapability,
     ) -> Result<()> {
         self.configure_nas_security(&ue_security_capabilities);
-        let r = crate::nas::build::security_mode_command(ue_security_capabilities, *self.ue.ksi);
+        let r =
+            crate::nas::build::security_mode_command(ue_security_capabilities, *self.ue.core.ksi);
         self.log_message("<< NascSecurityModeCommand");
         let Ok(security_mode_complete) = self
             .nas_request(
@@ -217,7 +205,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         let req = crate::nas::build::authentication_request(
             &challenge.rand,
             &challenge.autn,
-            *self.ue.ksi,
+            *self.ue.core.ksi,
         );
 
         self.log_message("<< NasAuthenticationRequest");
@@ -368,7 +356,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         debug!(self.logger, "SQN for challenge: {:02x?}", auth_params.sqn);
 
         // Generate a new KSI for each challenge.
-        self.ue.ksi.inc();
+        self.ue.core.ksi.inc();
 
         let challenge = security::generate_challenge(
             &auth_params.sim_creds.ki,
@@ -457,12 +445,12 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     }
 
     fn configure_nas_security(&mut self, ue_security_capabilities: &NasUeSecurityCapability) {
-        self.ue.security_capabilities =
+        self.ue.core.security_capabilities =
             crate::nas::parse::nas_ue_security_capability(ue_security_capabilities);
 
         // TS33.501, 6.7.2: AMF starts integrity protection before transmitting SecurityModeCommand.
-        let knasint = security::derive_knasint(&self.ue.kamf);
-        self.ue.nas.enable_security(knasint);
+        let knasint = security::derive_knasint(&self.ue.core.kamf);
+        self.ue.core.nas.enable_security(knasint);
     }
 
     async fn send_configuration_update(&mut self) -> Result<()> {

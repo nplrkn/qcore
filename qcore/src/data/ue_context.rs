@@ -23,19 +23,29 @@ impl Ksi {
 }
 
 #[derive(Debug, Default)]
-pub struct UeContext {
-    pub key: u32,
-    pub tmsi: Option<Tmsi>,
+pub struct UeContext5GC {
+    // 5G Core UE context data, indexed by TMSI
+    // This data is independent of the RAN context and persists when the UE is idle.
     pub kamf: [u8; 32],
     pub ksi: Ksi,
     pub pdu_sessions: Vec<PduSession>,
-    pub nr_cgi: Option<NrCgi>,
     pub nas: NasContext,
-    pub ran_ue_id: u32,
     pub security_capabilities: UeSecurityCapabilities,
     pub tac: [u8; 3],
+}
 
-    // CU only data
+#[derive(Debug, Default)]
+pub struct UeContext {
+    pub tmsi: Option<Tmsi>,
+    pub core: UeContext5GC,
+
+    // RAN UE context data, indexed by the local_ran_ue_id = NGAP AMF UE ID or F1AP CU UE ID as appropriate
+    // This data is tied to the RAN channel and only exists when the UE is connected.
+    pub local_ran_ue_id: u32,
+    pub remote_ran_ue_id: u32,
+    pub nr_cgi: Option<NrCgi>,
+
+    // CU only RAN data
     pub pdcp_tx: PdcpTx,
     pub rat_capabilities: Option<Vec<u8>>, // ASN.1 encoded Rrc UE-CapabilityRAT-ContainerList
 }
@@ -43,28 +53,28 @@ pub struct UeContext {
 impl UeContext {
     pub fn new(ue_id: u32) -> Self {
         UeContext {
-            key: ue_id,
+            local_ran_ue_id: ue_id,
             ..UeContext::default()
         }
     }
 
     pub fn amf_ue_ngap_id(&self) -> AmfUeNgapId {
-        AmfUeNgapId(self.key as u64)
+        AmfUeNgapId(self.local_ran_ue_id as u64)
     }
 
     pub fn gnb_du_ue_f1ap_id(&self) -> GnbDuUeF1apId {
-        GnbDuUeF1apId(self.ran_ue_id)
+        GnbDuUeF1apId(self.remote_ran_ue_id)
     }
     pub fn ran_ue_ngap_id(&self) -> RanUeNgapId {
-        RanUeNgapId(self.ran_ue_id)
+        RanUeNgapId(self.remote_ran_ue_id)
     }
 
     pub fn reset_nas_security(&mut self) {
         // Leave ksi as it is, to ensure that it differs
         // between successive authentication requests for a given
         // TMSI.
-        self.nas = NasContext::default();
-        self.kamf = [0u8; 32];
+        self.core.nas = NasContext::default();
+        self.core.kamf = [0u8; 32];
         self.tmsi = None;
     }
 }

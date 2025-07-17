@@ -11,9 +11,9 @@ impl<'a, A: HandlerApi> InitialUlRrcMessageTransferProcedure<'a, A> {
     pub async fn run(mut self, r: Box<InitialUlRrcMessageTransfer>) -> Result<()> {
         self.log_message(">> F1ap InitialUlRrcMessageTransfer");
 
-        self.ue.ran_ue_id = r.gnb_du_ue_f1ap_id.0;
+        self.ue.remote_ran_ue_id = r.gnb_du_ue_f1ap_id.0;
         self.ue.nr_cgi = Some(r.nr_cgi);
-        self.ue.tac = [0, 0, 1]; // TODO
+        self.ue.core.tac = [0, 0, 1]; // TODO
 
         let Some(DuToCuRrcContainer(cell_group_config)) = r.du_to_cu_rrc_container else {
             bail!("Missing DuToCuRrcContainer on initial UL RRC message")

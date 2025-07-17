@@ -272,7 +272,7 @@ pub fn ue_context_setup_request(
     )]));
 
     Ok(Box::new(UeContextSetupRequest {
-        gnb_cu_ue_f1ap_id: GnbCuUeF1apId(ue.key),
+        gnb_cu_ue_f1ap_id: GnbCuUeF1apId(ue.local_ran_ue_id),
         gnb_du_ue_f1ap_id: Some(ue.gnb_du_ue_f1ap_id()),
         sp_cell_id: ue.nr_cgi.as_ref().expect("NR CGI must be present").clone(),
         serv_cell_index: f1ap::ServCellIndex(0), // TODO
@@ -380,7 +380,7 @@ pub fn ue_context_modification_request(
         drb_id: DrbId(1)
     }]));
     Box::new(UeContextModificationRequest {
-        gnb_cu_ue_f1ap_id: GnbCuUeF1apId(ue.key),
+        gnb_cu_ue_f1ap_id: GnbCuUeF1apId(ue.local_ran_ue_id),
         gnb_du_ue_f1ap_id: ue.gnb_du_ue_f1ap_id(),
         sp_cell_id: None,
         serv_cell_index: None,
@@ -479,7 +479,7 @@ pub fn ue_context_modification_request(
 
 pub fn ue_context_release_command(ue: &UeContext, cause: Cause) -> Box<UeContextReleaseCommand> {
     Box::new(UeContextReleaseCommand {
-        gnb_cu_ue_f1ap_id: GnbCuUeF1apId(ue.key),
+        gnb_cu_ue_f1ap_id: GnbCuUeF1apId(ue.local_ran_ue_id),
         gnb_du_ue_f1ap_id: ue.gnb_du_ue_f1ap_id(),
         cause,
         rrc_container: None,

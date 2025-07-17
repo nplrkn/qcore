@@ -48,27 +48,11 @@ impl<'a, A: HandlerApi> ServiceProcedure<'a, A> {
             Ok(()) => {
                 // Reactivate sessions
                 let mut session_status = [0u8; 2];
-                for session in self.ue.pdu_sessions.iter() {
+                for session in self.ue.core.pdu_sessions.iter() {
                     let id = session.id;
                     ensure!(id < 16, "Session ID >= 16 not supported");
                     session_status[(id / 8) as usize] |= 1 << id % 8;
                 }
-
-                // TODO - commonize
-                // Derive Kgnb, and from that kRRCInt.
-
-                /* TS33.501, 6.8.1.1.2.3: "The NAS (uplink and downlink) COUNTs are set to start
-                   values, and the start value of the uplink NAS COUNT shall be used as freshness 
-                   parameter in the KgNB derivation from the fresh KAMF (after primary authentication) 
-                   when UE receives AS SMC the KgNB is derived from the current 5G NAS security context, 
-                   i.e., the fresh KAMF is used to derive the KgNB." */
-
-                /* 6.8.1.1.2.2: When the UE receives the AS SMC without having received a NAS Security Mode Command after the Registration Request
-                with "PDU session(s) to be re-activated", it shall use the uplink NAS COUNT of the Registration Request message that
-                triggered the AS SMC to be sent as freshness parameter in the derivation of the initial KgNB/KeNB.           */
-                debug!(self.logger, "UL NAS COUNT {}", self.ue.nas.ul_nas_count());
-                let _kgnb = security::derive_kgnb(&self.ue.kamf, self.ue.nas.ul_nas_count());
-                //self.0 = self.0.ran_ue_registration(&kgnb).await?;
 
                 // If the UE is asking to reactivate a session that does not exist, set the relevant bit in the result
                 let reactivation_result = [
@@ -77,8 +61,9 @@ impl<'a, A: HandlerApi> ServiceProcedure<'a, A> {
                 ];
 
                 let accept = crate::nas::build::service_accept(session_status, reactivation_result);
+                let accept = self.ue.core.nas.encode(accept)?;
                 self.log_message("<< Nas ServiceAccept");
-                self.nas_indication(accept).await?;
+                self.0 = self.0.ran_context_create(Some(accept)).await?;
 
                 // Regenerate GUTI and send a configuration update to update it.
                 let guti = self.allocate_tmsi().await;
