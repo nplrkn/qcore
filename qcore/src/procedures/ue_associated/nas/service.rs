@@ -3,18 +3,44 @@ use crate::nas::*;
 use anyhow::ensure;
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gsMessage, NasFGsMobileIdentity, decode_nas_5gs_message,
-    messages::{Nas5gsSecurityHeader, NasServiceRequest},
+    messages::NasServiceRequest,
 };
 
 define_ue_procedure!(ServiceProcedure);
 
 impl<'a, A: HandlerApi> ServiceProcedure<'a, A> {
-    pub async fn run(
-        mut self,
-        r: Box<NasServiceRequest>,
-        security_header: Option<Nas5gsSecurityHeader>,
-    ) -> Result<()> {
+    pub async fn run(mut self, r: Box<NasServiceRequest>) -> Result<()> {
         self.log_message(">> Nas ServiceRequest");
+
+        // Ensure that the UE security context has been retrieved based on the TMSI in the outer message.
+        if !self.ue.core.nas.security_activated() {
+            warn!(
+                self.logger,
+                "Service request with unknown or missing TMSI in outer message - reject"
+            );
+            self.reject(FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED)
+                .await?;
+            return Ok(());
+        }
+
+        // Check that the TMSI in the inner message matches that in UE context (and hence the one in the outer message).
+        let mut tmsi_matches = false;
+        if let Ok(MobileIdentity::STmsi(x)) = crate::nas::parse::fgs_mobile_identity(&r.fg_s_tmsi) {
+            if let Some(tmsi) = &self.ue.tmsi {
+                if tmsi.0 == *x.1 && self.config().amf_ids[1..3] == x.0.0 {
+                    tmsi_matches = true;
+                }
+            } else {
+                debug!(self.logger, "No TMSI on this UE");
+            }
+        } else {
+            debug!(self.logger, "Non S-TMSI identity on Service request");
+        }
+        if !tmsi_matches {
+            warn!(self.logger, "S-TMSI mismatch in Service request");
+            self.reject(FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED)
+                .await?;
+        }
 
         // There should be an inner ServiceRequest message contained in this.
         let Some(ref inner_message) = r.nas_message_container else {
@@ -32,7 +58,7 @@ impl<'a, A: HandlerApi> ServiceProcedure<'a, A> {
                 x
             } else {
                 bail!(
-                    "Security mode complete contained non-registration nas message {:?}",
+                    "Service Request outer message non-Service Request inner message {:?}",
                     inner_message
                 )
             };
@@ -44,39 +70,28 @@ impl<'a, A: HandlerApi> ServiceProcedure<'a, A> {
                 vec![0u8; 2]
             };
 
-        match self.lookup_ue(&r, security_header).await {
-            Ok(()) => {
-                // Reactivate sessions
-                let mut session_status = [0u8; 2];
-                for session in self.ue.core.pdu_sessions.iter() {
-                    let id = session.id;
-                    ensure!(id < 16, "Session ID >= 16 not supported");
-                    session_status[(id / 8) as usize] |= 1 << id % 8;
-                }
-
-                // If the UE is asking to reactivate a session that does not exist, set the relevant bit in the result
-                let reactivation_result = [
-                    sessions_to_reactivate[0] & !session_status[0],
-                    sessions_to_reactivate[1] & !session_status[1],
-                ];
-
-                let accept = crate::nas::build::service_accept(session_status, reactivation_result);
-                let accept = self.ue.core.nas.encode(accept)?;
-                self.log_message("<< Nas ServiceAccept");
-                self.0 = self.0.ran_context_create(Some(accept)).await?;
-
-                // Regenerate GUTI and send a configuration update to update it.
-                let guti = self.allocate_tmsi().await;
-                self.send_configuration_update(guti).await?;
-            }
-            Err(cause) => {
-                if cause != ABORT_PROCEDURE {
-                    self.reject(cause).await?
-                } else {
-                    bail!("Abort registration procedure")
-                }
-            }
+        // Reactivate sessions
+        let mut session_status = [0u8; 2];
+        for session in self.ue.core.pdu_sessions.iter() {
+            let id = session.id;
+            ensure!(id < 16, "Session ID >= 16 not supported");
+            session_status[(id / 8) as usize] |= 1 << id % 8;
         }
+
+        // If the UE is asking to reactivate a session that does not exist, set the relevant bit in the result
+        let reactivation_result = [
+            sessions_to_reactivate[0] & !session_status[0],
+            sessions_to_reactivate[1] & !session_status[1],
+        ];
+
+        let accept = crate::nas::build::service_accept(session_status, reactivation_result);
+        let accept = self.ue.core.nas.encode(accept)?;
+        self.log_message("<< Nas ServiceAccept");
+        self.0 = self.0.ran_context_create(Some(accept)).await?;
+
+        // Regenerate GUTI and send a configuration update to update it.
+        let guti = self.allocate_tmsi().await;
+        self.send_configuration_update(guti).await?;
 
         Ok(())
     }
@@ -85,38 +100,6 @@ impl<'a, A: HandlerApi> ServiceProcedure<'a, A> {
         let reject = crate::nas::build::service_reject(cause);
         self.log_message("<< Nas ServiceReject");
         self.nas_indication(reject).await
-    }
-
-    async fn lookup_ue(
-        &mut self,
-        request: &NasServiceRequest,
-        security_header: Option<Nas5gsSecurityHeader>,
-    ) -> Result<(), u8> {
-        let STmsi(amf_set_and_pointer, tmsi) = self.check_service_request(request)?;
-        match self
-            .retrieve_ue(None, &amf_set_and_pointer.0, &tmsi, security_header)
-            .await
-        {
-            Ok(true) => Err(FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED),
-            Ok(false) => Ok(()),
-            Err(e) => Err(e),
-        }
-    }
-
-    fn check_service_request(&self, service_request: &NasServiceRequest) -> Result<STmsi, u8> {
-        match crate::nas::parse::fgs_mobile_identity(&service_request.fg_s_tmsi) {
-            Ok(MobileIdentity::STmsi(x)) => return Ok(x),
-            Ok(x) => {
-                warn!(
-                    self.logger,
-                    "Expected STmsi mobile identity on service request, got {x:?}"
-                );
-            }
-            Err(e) => {
-                warn!(self.logger, "{e}");
-            }
-        }
-        Err(FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED)
     }
 
     async fn send_configuration_update(&mut self, guti: NasFGsMobileIdentity) -> Result<()> {

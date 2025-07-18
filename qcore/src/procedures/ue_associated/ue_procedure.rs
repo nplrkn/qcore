@@ -408,6 +408,58 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         let rrc_message_bytes = pdcp::view_inner(&r.rrc_container.0)?;
         Ok(Box::new(UlDcchMessage::from_bytes(rrc_message_bytes)?))
     }
+
+    // TODO
+    pub async fn retrieve_ue2(
+        &mut self,
+        amf_region: Option<u8>,
+        amf_set_and_pointer: &[u8],
+        tmsi: &Tmsi,
+    ) -> Result<bool, u8> {
+        let guami_matches = amf_set_and_pointer == &self.config().amf_ids[1..3]
+            && amf_region
+                .map(|x| x == self.config().amf_ids[0])
+                .unwrap_or(true);
+        if !guami_matches {
+            warn!(
+                self.logger,
+                "Wrong AMF IDs in GUTI/STMSI - theirs {:?}, {:?} ours {}",
+                amf_region,
+                amf_set_and_pointer,
+                self.config().amf_ids
+            );
+        }
+
+        // Has the UE already obtained a TMSI on its current radio channel?
+        if let Some(existing_tmsi) = &self.ue.tmsi {
+            if existing_tmsi == tmsi && guami_matches {
+                debug!(self.logger, "Normal case of UE using its existing GUTI");
+                return Ok(false);
+            } else {
+                warn!(self.logger, "UE not using GUTI it was given");
+                return Err(FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED);
+            }
+        }
+
+        // If we know about this GUTI, retrieve the core context and attach it to this UE.
+        if guami_matches {
+            match self.take_core_context(tmsi).await {
+                Some(c) => {
+                    self.ue.core = c;
+                    self.ue.tmsi = Some(tmsi.clone());
+                    return Ok(false);
+                }
+                None => {
+                    debug!(self.logger, "Unknown TMSI");
+                }
+            }
+        }
+
+        // Identity procedure needed
+        debug!(self.logger, "GUTI/TMSI with unknown AMF IDs or TMSI");
+
+        Ok(true)
+    }
 }
 
 impl<'a, A: HandlerApi> super::RrcBase for UeProcedure<'a, A> {
@@ -621,6 +673,7 @@ impl<'a, A: HandlerApi> NasBase for UeProcedure<'a, A> {
             match self.take_core_context(tmsi).await {
                 Some(c) => {
                     self.ue.core = c;
+                    self.ue.tmsi = Some(tmsi.clone());
                     return Ok(false);
                 }
                 None => {

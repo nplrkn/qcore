@@ -33,7 +33,12 @@ pub mod mock_ue_ngap;
 
 #[async_trait]
 pub trait Transport {
-    async fn send_nas(&mut self, nas_bytes: Vec<u8>, logger: &Logger) -> Result<()>;
+    async fn send_nas(
+        &mut self,
+        nas_bytes: Vec<u8>,
+        guti: &Option<[u8; 10]>,
+        logger: &Logger,
+    ) -> Result<()>;
     async fn receive_nas(&mut self, logger: &Logger) -> Result<Vec<u8>>;
     async fn send_userplane_packet(
         &self,
@@ -107,7 +112,9 @@ impl<T: Transport> MockUe<T> {
     }
 
     async fn send_nas(&mut self, nas_bytes: Vec<u8>) -> Result<()> {
-        self.transport.send_nas(nas_bytes, &self.logger).await
+        self.transport
+            .send_nas(nas_bytes, &self.data.guti, &self.logger)
+            .await
     }
 
     async fn receive_nas(&mut self) -> Result<Box<Nas5gsMessage>> {

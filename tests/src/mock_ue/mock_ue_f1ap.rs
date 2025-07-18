@@ -57,7 +57,12 @@ impl<'a> UeF1apMode<'a> {
 
 #[async_trait]
 impl<'a> Transport for UeF1apMode<'a> {
-    async fn send_nas(&mut self, nas_bytes: Vec<u8>, logger: &Logger) -> Result<()> {
+    async fn send_nas(
+        &mut self,
+        nas_bytes: Vec<u8>,
+        _guti: &Option<[u8; 10]>,
+        logger: &Logger,
+    ) -> Result<()> {
         let rrc = build_rrc::ul_information_transfer(nas_bytes);
         info!(logger, "Rrc UlInformationTransfer >>");
         self.du.send_ul_rrc(&mut self.du_ue_context, &rrc).await

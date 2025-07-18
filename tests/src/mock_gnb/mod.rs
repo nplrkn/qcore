@@ -220,6 +220,7 @@ impl MockGnb {
         &self,
         ue: &UeContext,
         nas_bytes: Vec<u8>,
+        guti: &Option<[u8; 10]>,
         logger: &Logger,
     ) -> Result<()> {
         // Use an NG Initial UE Message or NG Uplink NAS transport depending on whether we have a NGAP UE
@@ -251,7 +252,7 @@ impl MockGnb {
             )
         } else {
             info!(logger, "Ngap InitialUeMessage >>");
-            build_ngap::initial_ue_message(ran_ue_ngap_id, nas_pdu, user_location_information)
+            build_ngap::initial_ue_message(ran_ue_ngap_id, nas_pdu, guti, user_location_information)
         };
         self.send(&pdu, Some(ue.binding.assoc_id)).await;
         Ok(())

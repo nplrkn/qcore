@@ -43,9 +43,14 @@ impl<'a> UeNgapMode<'a> {
 
 #[async_trait]
 impl<'a> Transport for UeNgapMode<'a> {
-    async fn send_nas(&mut self, nas_bytes: Vec<u8>, logger: &Logger) -> Result<()> {
+    async fn send_nas(
+        &mut self,
+        nas_bytes: Vec<u8>,
+        guti: &Option<[u8; 10]>,
+        logger: &Logger,
+    ) -> Result<()> {
         self.gnb
-            .send_nas(&self.gnb_ue_context, nas_bytes, logger)
+            .send_nas(&self.gnb_ue_context, nas_bytes, guti, logger)
             .await
     }
 

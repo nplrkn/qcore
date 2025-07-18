@@ -26,9 +26,7 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
                     .await?;
             }
             Nas5gmmMessage::ServiceRequest(r) => {
-                ServiceProcedure::new(self.0)
-                    .run(Box::new(r), security_header)
-                    .await?;
+                ServiceProcedure::new(self.0).run(Box::new(r)).await?;
             }
             Nas5gmmMessage::DeregistrationRequestFromUe(r) => {
                 DeregistrationProcedure::new(self.0).run(r).await?;

@@ -182,7 +182,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         self.configure_nas_security(&ue_security_capabilities);
         let r =
             crate::nas::build::security_mode_command(ue_security_capabilities, *self.ue.core.ksi);
-        self.log_message("<< NascSecurityModeCommand");
+        self.log_message("<< NasSecurityModeCommand");
         let Ok(security_mode_complete) = self
             .nas_request(
                 r,

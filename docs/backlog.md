@@ -2,30 +2,45 @@
 
 ## In progress
 - Service Request (e.g. if RAN restarted)
+
+- srsRAN gNB rejects InitialContextSetupRequest.
+```
+2025-07-18T07:38:06.428564 [RRC     ] [I] ue=0 c-rnti=0x4601: DCCH DL securityModeCommand
+    0000: 00 00 22 08 10 56 77 3c 53
+2025-07-18T07:38:06.457955 [SEC     ] [W] Integrity check failed. count=1
+2025-07-18T07:38:06.457956 [SEC     ] [W] K_int:
+        ff 0f 93 26 98 ce 6d 2a a4 e6 2f 75 a3 86 3b 3a
+2025-07-18T07:38:06.457956 [SEC     ] [W] MAC received:
+        00 00 00 00
+2025-07-18T07:38:06.457956 [SEC     ] [W] MAC expected:
+        fb 50 c3 a5
+2025-07-18T07:38:06.457957 [SEC     ] [W] Message input:
+    0000: 00 01 32 00
+2025-07-18T07:38:06.457957 [PDCP    ] [W] ue=0 SRB1 UL: Integrity failed, dropping PDU. count=1
+2025-07-18T07:38:06.457959 [PDCP    ] [W] Requesting UE release. Cause: Received integrity failure from PDCP Rx
+```
+
+- Use S-TMSI on Registration Request like with Service Request
+- Registration Request with session to reactivate
 - Split procedures into those acting on UeContext5GC and UeContextRan?  e.g. CoreUeProcedure, RanUeProcedure?
 - Sessions / IP addresses should not persist forever.  Timeout; flush on TMSI register/service request without session reactivation; flush on IMSI registration? 
 - Rejection of Registration Request from Security Mode Command if slice asked for is eMBB / SST 1 with "no network slices available"
   -  causes OnePlus phone to reregister with MIoT SST 3 / SD 0.
 -  Unhandled RrcReestablishmentRequest
--  See f1ap-samsung.log.
-
-- NGAP mode 
-  - move ran_session_setup_phase1 + 2 out of ue_procedure.rs
-  - if initial context setup request fails, 'unhandled message' and we don't save off the GUTI
-  - Registration accept should piggyback on NGAP Initial Context Setup request
-  - use different forwarding tables for NGAP vs F1AP 
-  - DlDropUnknownUe incrementing when no phones attached
-- Session establishment with real phone
-   -  OnePlus 
-      -  refuses to set up a session and sends a ServiceRequest
-   -  OPPO 
-      -  SQN resync not working - fixed??
-      -  Identity Request not working - registration reject?
-   -  Samsung (working)
-   -  Motorola (working)
+- move ran_session_setup out of ue_procedure.rs
+- Registration accept should piggyback on NGAP Initial Context Setup request
+- use different forwarding tables for NGAP vs F1AP 
 - "NG setup with GNB name" - log line - trace of bitvec global gnb ID is ugly 
 - PDU session release command should flow on SRB 2, not SRB 1  
- 
+- Following doesn't work.  The derefs needlessly borrow self.  Should we remove Derefs - see https://rust-unofficial.github.io/patterns/anti_patterns/deref.html.  "The Deref trait is designed for the implementation of custom pointer types."  See https://crates.io/crates/ambassador for delegating a whole trait.  (e.g. HandlerApi)
+        let session = &mut self.ue.core.pdu_sessions[0];
+        debug!(self.logger, "Hi {}", session.id);
+
+  This does work (if base is made public) via "splitting borrows":
+        let session = &mut self.0.ue.core.pdu_sessions[0];
+        debug!(self.0.base.logger, "Hi {}", session.id);
+
+
 ## Performance
 - iperf framework
 - Release build perf profiling + tuning

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use asn1_per::{Msb0, SerDes, bitvec, nonempty};
+use asn1_per::*;
 use ngap::*;
 use xxap::*;
 
@@ -62,15 +62,22 @@ pub fn uplink_nas_transport(
 pub fn initial_ue_message(
     ran_ue_ngap_id: RanUeNgapId,
     nas_pdu: NasPdu,
+    guti: &Option<[u8; 10]>,
     user_location_information: UserLocationInformation,
 ) -> Box<NgapPdu> {
+    let five_g_s_tmsi = guti.map(|guti| FiveGSTmsi {
+        amf_set_id: AmfSetId(guti[4..6].view_bits::<Msb0>()[0..10].to_bitvec()),
+        amf_pointer: AmfPointer(guti[5].view_bits::<Msb0>()[2..8].to_bitvec()),
+        five_g_tmsi: FiveGTmsi(guti[6..10].try_into().unwrap()),
+    });
+
     Box::new(NgapPdu::InitiatingMessage(
         InitiatingMessage::InitialUeMessage(InitialUeMessage {
             ran_ue_ngap_id,
             nas_pdu,
             user_location_information,
             rrc_establishment_cause: RrcEstablishmentCause::MtAccess,
-            five_g_s_tmsi: None,
+            five_g_s_tmsi,
             amf_set_id: None,
             ue_context_request: None,
             allowed_nssai: None,
