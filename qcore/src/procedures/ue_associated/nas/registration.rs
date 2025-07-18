@@ -34,14 +34,20 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     ) -> Result<()> {
         self.log_message(">> Nas RegistrationRequest");
 
-        // If the message has a security header but security is not activated on the UE, then this indicates
-        // that we failed to retrieve the UE context based on the TMSI in the outer message.
-        if security_header.is_some() && !self.ue.core.nas.security_activated() {
+        // TODO magic number
+        let is_registration_update = r.fgs_registration_type.value != 1;
+
+        // If this is a registration update and security is not activated then we failed to retrieve the UE context
+        // based on the TMSI in the outer message.  Tell the UE it needs to do an initial registration.
+        if is_registration_update && !self.ue.core.nas.security_activated() {
             warn!(
                 self.logger,
-                "Security protected register with unknown or missing TMSI in outer message - reject"
+                "Reject security protected registration update with unknown or missing TMSI in outer message"
             );
-            self.reject_registration(FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED)
+            // TS24.501 5.5.1.3.5
+            // "The UE shall enter the state 5GMM-DEREGISTERED.NORMAL-SERVICE. The UE shall delete any mapped 5G NAS
+            // security context or partial native 5G NAS security context."
+            self.reject_registration(FGMM_CAUSE_IMPLICITLY_DEREGISTERED)
                 .await?;
             return Ok(());
         }
