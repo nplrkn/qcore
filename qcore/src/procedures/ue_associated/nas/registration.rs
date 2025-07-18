@@ -35,7 +35,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         self.log_message(">> Nas RegistrationRequest");
 
         // TODO magic number
-        let is_registration_update = r.fgs_registration_type.value != 1;
+        let is_registration_update = r.fgs_registration_type.value & 0b111 != 1;
 
         // If this is a registration update and security is not activated then we failed to retrieve the UE context
         // based on the TMSI in the outer message.  Tell the UE it needs to do an initial registration.
