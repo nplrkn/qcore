@@ -51,7 +51,7 @@ RUST_LOG=debug cargo run -- --mcc 001 --mnc 06 --local-ip 127.0.0.1 --ran-interf
 cd ~/srsRAN-5G/build/apps/gnb && sudo ./gnb -c gnb-bladerf.yml
 ```
 
-Type `t ue`on the 
+Type `t ue`on the console to check radio strength.
 
 ## NGAP mode / SRS CU / SRS DU
 

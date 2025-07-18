@@ -33,6 +33,19 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         security_header: Option<Nas5gsSecurityHeader>,
     ) -> Result<()> {
         self.log_message(">> Nas RegistrationRequest");
+
+        // If the message has a security header but security is not activated on the UE, then this indicates
+        // that we failed to retrieve the UE context based on the TMSI in the outer message.
+        if security_header.is_some() && !self.ue.core.nas.security_activated() {
+            warn!(
+                self.logger,
+                "Security protected register with unknown or missing TMSI in outer message - reject"
+            );
+            self.reject_registration(FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED)
+                .await?;
+            return Ok(());
+        }
+
         match self.handle_registration(r, security_header).await {
             Ok(()) => {
                 self.0 = self.0.ran_context_create(None).await?;

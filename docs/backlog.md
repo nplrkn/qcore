@@ -21,6 +21,7 @@
 ```
 
 - Use S-TMSI on Registration Request like with Service Request
+- Registration request with unrecognised TMSI and no security capabilities.
 - Registration Request with session to reactivate
 - Split procedures into those acting on UeContext5GC and UeContextRan?  e.g. CoreUeProcedure, RanUeProcedure?
 - Sessions / IP addresses should not persist forever.  Timeout; flush on TMSI register/service request without session reactivation; flush on IMSI registration? 
