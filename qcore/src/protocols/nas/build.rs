@@ -15,6 +15,7 @@ use oxirush_nas::{
         NasAuthenticationRequest, NasConfigurationUpdateCommand, NasDlNasTransport, NasFGmmStatus,
         NasIdentityRequest, NasPduSessionEstablishmentAccept, NasPduSessionReleaseCommand,
         NasRegistrationAccept, NasRegistrationReject, NasSecurityModeCommand, NasServiceAccept,
+        NasServiceReject,
     },
 };
 use security::NAS_ABBA;
@@ -150,6 +151,15 @@ pub fn service_accept(session_status: [u8; 2], reactivation_result: [u8; 2]) -> 
             pdu_session_status,
             pdu_session_reactivation_result,
             ..NasServiceAccept::new()
+        }),
+    ))
+}
+
+pub fn service_reject(cause: u8) -> Box<Nas5gsMessage> {
+    Box::new(Nas5gsMessage::new_5gmm(
+        Nas5gmmMessageType::ServiceReject,
+        Nas5gmmMessage::ServiceReject(NasServiceReject {
+            ..NasServiceReject::new(NasFGmmCause::new(cause))
         }),
     ))
 }

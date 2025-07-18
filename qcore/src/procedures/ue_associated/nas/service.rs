@@ -81,11 +81,10 @@ impl<'a, A: HandlerApi> ServiceProcedure<'a, A> {
         Ok(())
     }
 
-    async fn reject(&mut self, _cause: u8) -> Result<()> {
-        //let reject = crate::nas::build::service_reject(cause);
+    async fn reject(&mut self, cause: u8) -> Result<()> {
+        let reject = crate::nas::build::service_reject(cause);
         self.log_message("<< Nas ServiceReject");
-        //self.nas_indication(reject).await
-        todo!()
+        self.nas_indication(reject).await
     }
 
     async fn lookup_ue(
