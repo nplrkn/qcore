@@ -21,7 +21,7 @@ pdcp = { path = "../5g-libs/pdcp" }
 rrc = { path = "../5g-libs/rrc" }
 asn1-per = { path = "../5g-libs/asn1-per" }
 stop-token = "0.7.0"
-oxirush-nas = { git = "https://github.com/nplrkn/oxirush-nas", rev = "5835253" }
+oxirush-nas = { git = "https://github.com/nplrkn/oxirush-nas", rev = "1bcd889" }
 hex-literal = "1.0.0"
 rand = "0.9.0"
 index-pool = "1.0.11"

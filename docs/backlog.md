@@ -2,27 +2,9 @@
 
 ## In progress
 - Service Request (e.g. if RAN restarted)
-
-- srsRAN gNB rejects InitialContextSetupRequest.
-```
-2025-07-18T07:38:06.428564 [RRC     ] [I] ue=0 c-rnti=0x4601: DCCH DL securityModeCommand
-    0000: 00 00 22 08 10 56 77 3c 53
-2025-07-18T07:38:06.457955 [SEC     ] [W] Integrity check failed. count=1
-2025-07-18T07:38:06.457956 [SEC     ] [W] K_int:
-        ff 0f 93 26 98 ce 6d 2a a4 e6 2f 75 a3 86 3b 3a
-2025-07-18T07:38:06.457956 [SEC     ] [W] MAC received:
-        00 00 00 00
-2025-07-18T07:38:06.457956 [SEC     ] [W] MAC expected:
-        fb 50 c3 a5
-2025-07-18T07:38:06.457957 [SEC     ] [W] Message input:
-    0000: 00 01 32 00
-2025-07-18T07:38:06.457957 [PDCP    ] [W] ue=0 SRB1 UL: Integrity failed, dropping PDU. count=1
-2025-07-18T07:38:06.457959 [PDCP    ] [W] Requesting UE release. Cause: Received integrity failure from PDCP Rx
-```
-
-- Use S-TMSI on Registration Request like with Service Request
-- Registration request with unrecognised TMSI and no security capabilities.
+- Failed to reactivate session is being logged on a register when we didn't ask to reactivate a session
 - Registration Request with session to reactivate
+- thread 'async-std/runtime' panicked at /home/sens/.cargo/git/checkouts/oxirush-nas-81df6faf3b9ba684/5835253/src/messages.rs:7136:66: not yet implemented
 - Split procedures into those acting on UeContext5GC and UeContextRan?  e.g. CoreUeProcedure, RanUeProcedure?
 - Sessions / IP addresses should not persist forever.  Timeout; flush on TMSI register/service request without session reactivation; flush on IMSI registration? 
 - Rejection of Registration Request from Security Mode Command if slice asked for is eMBB / SST 1 with "no network slices available"

@@ -1521,7 +1521,7 @@ dependencies = [
 [[package]]
 name = "oxirush-nas"
 version = "0.1.2"
-source = "git+https://github.com/nplrkn/oxirush-nas?rev=5835253#583525389f37ac01bf96306fa152e49e812e103a"
+source = "git+https://github.com/nplrkn/oxirush-nas?rev=1bcd889#1bcd8897df5e776b9166b12d26b0abeffc98ddc5"
 dependencies = [
  "anyhow",
  "base64",

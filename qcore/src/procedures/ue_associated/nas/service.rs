@@ -16,7 +16,7 @@ impl<'a, A: HandlerApi> ServiceProcedure<'a, A> {
         if !self.ue.core.nas.security_activated() {
             warn!(
                 self.logger,
-                "Service request with unknown or missing TMSI in outer message - reject"
+                "Rejecting Service Request with unknown or missing TMSI in outer message"
             );
             self.reject(FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED)
                 .await?;
