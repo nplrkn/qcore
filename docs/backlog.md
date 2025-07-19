@@ -3,6 +3,7 @@
 ## In progress
 - Service request and session reactivation
   - F1AP service request including testing with live phone
+  - Don't rely on TMSI in outer message
   - Registration Request with session to reactivate
   - self review + TODOs introduced in the pull request
 

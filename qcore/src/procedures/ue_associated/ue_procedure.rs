@@ -11,7 +11,7 @@ use crate::{
             NgapUeContextReleaseProcedure, PduSessionResourceSetupProcedure, RrcBase,
             RrcReconfigurationProcedure, RrcSecurityModeProcedure, RrcUeCapabilityEnquiryProcedure,
             UeContextSetupProcedure, UlInformationTransferProcedure, UplinkNasProcedure,
-            UplinkNasTransportProcedure, nas,
+            UplinkNasTransportProcedure,
         },
     },
     protocols::nas::{
@@ -205,7 +205,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
     }
 
     async fn nas_dispatch(self, pdu: DecodedNas) -> Result<()> {
-        UplinkNasProcedure::new(self).run(pdu).await
+        UplinkNasProcedure::new(self).run_decoded(pdu).await
     }
 
     // Return Err if the UE handler should exit.
@@ -245,8 +245,8 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         Ok(())
     }
 
-    async fn rrc_dispatch(self, mut rrc: Box<UlDcchMessage>) -> Result<()> {
-        match &mut rrc.message {
+    async fn rrc_dispatch(self, rrc: Box<UlDcchMessage>) -> Result<()> {
+        match rrc.message {
             UlDcchMessageType::C1(C1_6::UlInformationTransfer(ul_information_transfer)) => {
                 UlInformationTransferProcedure::new(self)
                     .run(ul_information_transfer)
@@ -403,7 +403,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         &mut self,
         bytes: &[u8],
     ) -> Result<(Box<Nas5gsMessage>, Option<Nas5gsSecurityHeader>)> {
-        self.ue.core.nas.decode(bytes, self.logger)
+        self.ue.core.nas.decode(bytes)
     }
 
     fn extract_ul_dcch_message(&self, r: &UlRrcMessageTransfer) -> Result<Box<UlDcchMessage>> {

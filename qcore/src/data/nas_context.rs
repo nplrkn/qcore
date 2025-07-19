@@ -3,7 +3,6 @@ use anyhow::{Result, anyhow, bail};
 use oxirush_nas::{
     Nas5gsMessage, decode_nas_5gs_message, encode_nas_5gs_message, messages::Nas5gsSecurityHeader,
 };
-use slog::Logger;
 
 #[derive(Debug, Default)]
 pub struct NasContext {
@@ -24,7 +23,7 @@ impl NasContext {
             .unwrap_or_default()
     }
 
-    pub fn decode(&mut self, data: &[u8], logger: &Logger) -> Result<DecodedNas> {
+    pub fn decode(&mut self, data: &[u8]) -> Result<DecodedNas> {
         let nas_message = Box::new(
             decode_nas_5gs_message(data)
                 .map_err(|e| anyhow!("NAS decode error - {e} - message bytes: {:?}", data))?,
@@ -36,10 +35,23 @@ impl NasContext {
         };
 
         if let Some(security_context) = &mut self.security_context {
-            security_context.admit_message(security_header.as_ref(), data, logger)?;
+            security_context.admit_message(security_header.as_ref(), data)?;
         }
 
         Ok((nas, security_header))
+    }
+
+    pub fn admit_message(
+        &mut self,
+        security_header: Option<&Nas5gsSecurityHeader>,
+        bytes: &[u8],
+    ) -> Result<()> {
+        if let Some(security_context) = &mut self.security_context {
+            security_context.admit_message(security_header, bytes)?;
+        } else {
+            bail!("Cannot admit message without a security context");
+        }
+        Ok(())
     }
 
     pub fn enable_security(&mut self, knasint: [u8; 16]) {

@@ -159,6 +159,9 @@ impl<'a> MockUeNgap<'a> {
 
     pub async fn send_nas_register_request(&mut self) -> Result<()> {
         let nas_bytes = self.build_register_request()?;
-        self.send_nas(nas_bytes).await
+
+        // On a GUTI register request, the UE does not include the STMSI in its Rrc Setup Complete
+        // so it is not available to look up the NAS context.
+        self.send_nas_no_outer_stmsi(nas_bytes).await
     }
 }

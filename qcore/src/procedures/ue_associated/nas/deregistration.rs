@@ -5,7 +5,7 @@ define_ue_procedure!(DeregistrationProcedure);
 
 impl<'a, A: HandlerApi> DeregistrationProcedure<'a, A> {
     pub async fn run(self, _r: NasDeregistrationRequestFromUe) -> Result<()> {
-        self.log_message(">> DeregistrationRequestFromUe");
+        self.log_message(">> Nas DeregistrationRequestFromUe");
 
         info!(self.logger, "UE deregistration");
 

@@ -24,6 +24,16 @@ enum NasAuthOutcome {
     ResyncSqn([u8; 6]),
 }
 
+// Called before the procedure starts to extract a GUTI mobile identity.
+pub fn peek_mobile_identity(r: &Nas5gsMessage) -> Result<MobileIdentity> {
+    match r {
+        Nas5gsMessage::Gmm(_header, Nas5gmmMessage::RegistrationRequest(registration_request)) => {
+            crate::nas::parse::fgs_mobile_identity(&registration_request.fgs_mobile_identity)
+        }
+        _ => bail!("Not a registration request"),
+    }
+}
+
 define_ue_procedure!(RegistrationProcedure);
 
 impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
@@ -111,6 +121,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
             (RegistrationType::Supi(Imsi(imsi)), ue_security_capability) => {
                 self.supi_registration(&imsi, ue_security_capability).await
             }
+            // TODO: we have already done the retrieve UE
             (RegistrationType::Guti(amf_ids, tmsi), ue_security_capability) => {
                 let identity_procedure_needed = self
                     .retrieve_ue(Some(amf_ids[0]), &amf_ids[1..3], &tmsi, security_header)

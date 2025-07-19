@@ -3,7 +3,6 @@ use oxirush_nas::{
     Nas5gsMessage, Nas5gsSecurityHeaderType, encode_nas_5gs_message, messages::Nas5gsSecurityHeader,
 };
 use security::nia2::calculate_nia2_mac;
-use slog::{Logger, warn};
 
 #[derive(Debug)]
 pub struct SecurityContext {
@@ -25,7 +24,6 @@ impl SecurityContext {
         &mut self,
         security_header: Option<&Nas5gsSecurityHeader>,
         _bytes: &[u8], // for integrity check in future
-        logger: &Logger,
     ) -> Result<()> {
         if let Some(security_header) = security_header {
             // TODO: Check the security header type
@@ -47,18 +45,17 @@ impl SecurityContext {
 
                 // We also need to be careful about reordering - can this occur?  If so, the sequence number will go backwards but
                 // should not be dropped.
-                warn!(
-                    logger,
-                    "NAS sequence number {} did not advance from last {} - dropped for replay protection",
-                    security_header.sequence_number,
-                    last_rcvd_seq_num
-                );
+                // bail!(
+                //     "NAS sequence number {} did not advance from last {} - dropped for replay protection",
+                //     security_header.sequence_number,
+                //     last_rcvd_seq_num
+                // );
             }
 
             self.ul_count = (self.ul_count & 0x00ffff00) | security_header.sequence_number as u32;
         } else {
             // TODO: Do not allow plain messages (without security header) except for specific cases
-            warn! {logger, "Non security protected NAS message"};
+            //bail!("Non security protected NAS message");
         }
 
         Ok(())

@@ -24,29 +24,23 @@ impl<'a, A: HandlerApi> RrcSetupProcedure<'a, A> {
             ..
         })) = response.message
         else {
-            bail!("Expected Rrc Setup complete, got {:?}", response)
+            bail!("Expected Rrc SetupComplete, got {:?}", response)
         };
+        self.log_message(">> Rrc SetupComplete");
 
-        // If there is a valid S-TMSI, retrieve the UE context now, so the NAS context is in place for the NAS decode.
-        if let Some(Ng5gSTmsiValue::Ng5gSTmsi(Ng5gSTmsi(x))) =
+        let stmsi: Option<Vec<u8>> = if let Some(Ng5gSTmsiValue::Ng5gSTmsi(Ng5gSTmsi(x))) =
             rrc_setup_complete_ies.ng_5g_s_tmsi_value
         {
-            let s_tmsi_bytes = x.as_raw_slice();
-            match self
-                .retrieve_ue2(None, &s_tmsi_bytes[0..2], &s_tmsi_bytes[2..6])
-                .await
-            {
-                Ok(false) => debug!(
-                    self.logger,
-                    "Successfully retrieved TMSI prior to NAS decode"
-                ),
-                Ok(true) => debug!(self.logger, "Unknown S-TMSI in Rrc Setup Complete"),
-                Err(e) => warn!(self.logger, "Error retrieving UE based on Rrc S-TMSI {e}"),
-            }
-        }
+            Some(x.into())
+        } else {
+            None
+        };
 
-        self.log_message(">> Rrc SetupComplete");
-        let nas = self.nas_decode(&rrc_setup_complete_ies.dedicated_nas_message.0)?;
-        UplinkNasProcedure::new(self.0).run(nas).await
+        UplinkNasProcedure::new(self.0)
+            .run_initial(
+                rrc_setup_complete_ies.dedicated_nas_message.0,
+                stmsi.as_deref(),
+            )
+            .await
     }
 }

@@ -5,7 +5,7 @@ cu_cp:
     supported_tracking_areas:             # Configure the TA associated with the CU-CP
       - tac: 7
         plmn_list:
-          - plmn: "00101"
+          - plmn: "00106"
             tai_slice_support_list:
               - sst: 1
   f1ap:

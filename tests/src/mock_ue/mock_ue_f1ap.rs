@@ -170,16 +170,17 @@ impl<'a> MockUeF1ap<'a> {
     pub async fn perform_rrc_setup(&mut self) -> Result<()> {
         let registration_request = self.build_register_request()?;
         info!(&self.logger, "Nas RegistrationRequest >>");
-        self.perform_rrc_setup_common(registration_request).await
+        self.perform_rrc_setup_common(registration_request, false)
+            .await
     }
 
     pub async fn perform_rrc_setup_with_service_request(&mut self) -> Result<()> {
-        let service_request = self.build_service_request()?;
+        let service_request = self.base.build_service_request()?;
         info!(&self.logger, "Nas ServiceRequest >>");
-        self.perform_rrc_setup_common(service_request).await
+        self.perform_rrc_setup_common(service_request, true).await
     }
 
-    async fn perform_rrc_setup_common(&mut self, nas: Vec<u8>) -> Result<()> {
+    async fn perform_rrc_setup_common(&mut self, nas: Vec<u8>, include_stmsi: bool) -> Result<()> {
         let rrc_setup_request = build_rrc::setup_request();
         info!(self.logger, "Rrc SetupRequest >>");
         self.transport
@@ -190,11 +191,9 @@ impl<'a> MockUeF1ap<'a> {
             bail!("Unexpected RRC message {:?}", message)
         };
         info!(&self.logger, "Rrc Setup <<");
-        let rrc_setup_complete = build_rrc::setup_complete(
-            rrc_setup.rrc_transaction_identifier,
-            nas,
-            &self.base.data.guti,
-        );
+        let guti = if include_stmsi { self.data.guti } else { None };
+        let rrc_setup_complete =
+            build_rrc::setup_complete(rrc_setup.rrc_transaction_identifier, nas, &guti);
         info!(&self.logger, "Rrc SetupComplete >>");
         self.transport.send_ul_rrc(&rrc_setup_complete).await
     }

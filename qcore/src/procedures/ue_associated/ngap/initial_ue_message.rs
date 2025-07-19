@@ -20,28 +20,16 @@ impl<'a, A: HandlerApi> InitialUeMessageProcedure<'a, A> {
         self.ue.nr_cgi = Some(nr_cgi);
         self.ue.core.tac = tai.tac.0;
 
-        // If there is a valid S-TMSI, retrieve the UE context now, so the NAS context is in place for the NAS decode.
-        if let Some(x) = r.five_g_s_tmsi {
-            let mut amf_set_and_pointer = x.amf_set_id.0.clone();
-            amf_set_and_pointer.extend_from_bitslice(&x.amf_pointer.0);
-            let amf_set_and_pointer = amf_set_and_pointer.as_raw_slice();
-            match self
-                .retrieve_ue2(None, amf_set_and_pointer, &x.five_g_tmsi.0)
-                .await
-            {
-                Ok(false) => debug!(
-                    self.logger,
-                    "Successfully retrieved TMSI prior to NAS decode"
-                ),
-                Ok(true) => debug!(self.logger, "Unknown TMSI in outer NGAP message"),
-                Err(e) => warn!(self.logger, "Error retrieving UE {e}"),
-            }
-        }
+        let stmsi: Option<Vec<u8>> = r.five_g_s_tmsi.map(|x| {
+            let mut stmsi = x.amf_set_id.0.clone();
+            stmsi.extend_from_bitslice(&x.amf_pointer.0);
+            let mut stmsi: Vec<u8> = stmsi.into();
+            stmsi.extend_from_slice(&x.five_g_tmsi.0);
+            stmsi
+        });
 
-        // TODO - protect against retrieval of UE context by a TMSI that does not actually pass its integrity check
-        // TODO - cross check inner TMSI against outer TMSI
-
-        let nas = self.nas_decode(&r.nas_pdu.0)?;
-        UplinkNasProcedure::new(self.0).run(nas).await
+        UplinkNasProcedure::new(self.0)
+            .run_initial(r.nas_pdu.0, stmsi.as_deref())
+            .await
     }
 }

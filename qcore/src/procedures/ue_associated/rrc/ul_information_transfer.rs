@@ -7,7 +7,7 @@ use rrc::{
 define_ue_procedure!(UlInformationTransferProcedure);
 
 impl<'a, A: HandlerApi> UlInformationTransferProcedure<'a, A> {
-    pub async fn run(mut self, ul_information_transfer: &mut UlInformationTransfer) -> Result<()> {
+    pub async fn run(self, ul_information_transfer: UlInformationTransfer) -> Result<()> {
         self.log_message(">> Rrc UlInformationTransfer");
         let UlInformationTransfer {
             critical_extensions:
@@ -19,7 +19,6 @@ impl<'a, A: HandlerApi> UlInformationTransferProcedure<'a, A> {
         else {
             bail!("Expected NAS message in UlInformationTransfer, got {ul_information_transfer:?}");
         };
-        let nas = self.nas_decode(nas_bytes)?;
-        UplinkNasProcedure::new(self.0).run(nas).await
+        UplinkNasProcedure::new(self.0).run(nas_bytes).await
     }
 }

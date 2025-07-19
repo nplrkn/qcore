@@ -105,6 +105,12 @@ impl<T: Transport> MockUe<T> {
             .await
     }
 
+    async fn send_nas_no_outer_stmsi(&mut self, nas_bytes: Vec<u8>) -> Result<()> {
+        self.transport
+            .send_nas(nas_bytes, &None, &self.logger)
+            .await
+    }
+
     async fn receive_nas(&mut self) -> Result<Box<Nas5gsMessage>> {
         let nas = self.transport.receive_nas(&self.logger).await?;
         self.decode_nas(nas)

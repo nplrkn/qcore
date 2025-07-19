@@ -2,8 +2,12 @@
 use super::prelude::*;
 use super::{DeregistrationProcedure, RegistrationProcedure, SessionEstablishmentProcedure};
 use crate::data::DecodedNas;
-use crate::procedures::ue_associated::{ServiceProcedure, SessionReleaseProcedure};
-use crate::protocols::nas::FGMM_CAUSE_DNN_NOT_SUPPORTED_OR_NOT_SUBSCRIBED_IN_THE_SLICE;
+use crate::procedures::ue_associated::{
+    ServiceProcedure, SessionReleaseProcedure, peek_mobile_identity,
+};
+use crate::protocols::nas::{
+    FGMM_CAUSE_DNN_NOT_SUPPORTED_OR_NOT_SUBSCRIBED_IN_THE_SLICE, Guti, MobileIdentity,
+};
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gsMessage, Nas5gsmMessage, decode_nas_5gs_message,
     messages::NasUlNasTransport,
@@ -12,7 +16,65 @@ use oxirush_nas::{
 define_ue_procedure!(UplinkNasProcedure);
 
 impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
-    pub async fn run(mut self, nas: DecodedNas) -> Result<()> {
+    pub async fn run(mut self, nas: Vec<u8>) -> Result<()> {
+        let nas = self.nas_decode(&nas)?;
+        self.run_decoded(nas).await
+    }
+
+    // Called for the first NAS message from the UE on a new RAN context.
+    pub async fn run_initial(mut self, nas_bytes: Vec<u8>, stmsi: Option<&[u8]>) -> Result<()> {
+        // If UE supplied a S-TMSI on its Rrc message, retrieve the UE context now, so the NAS context
+        // is in place for the NAS decode.
+        if let Some(stmsi) = stmsi {
+            match self.retrieve_ue2(None, &stmsi[0..2], &stmsi[2..6]).await {
+                Ok(false) => debug!(self.logger, "Using TMSI from outer message for NAS admit"),
+                Ok(true) => debug!(self.logger, "Unknown TMSI in outer message"),
+                Err(e) => warn!(self.logger, "Error retrieving UE {e}"),
+            }
+        }
+
+        // TODO - protect against retrieval of UE context by a TMSI that does not actually pass its integrity check
+        // TODO - cross check inner TMSI against outer TMSI
+
+        let nas = self.nas_decode(&nas_bytes)?;
+
+        // If the NAS message is security protected, and security is not yet activated on the UE, this means that
+        // the S-TMSI retrieval arm above didn't happen, which means that the UE didn't supply S-TMSI to the gNB,
+        // which means the UE is not registered in the tracking area.  See 38.331, 5.3.3.3:
+        //   NOTE 1: Upper layers provide the 5G-S-TMSI if the UE is registered in the TA of the current cell.
+        //
+        // Therefore this is typically a GUTI initial registration.  We need to get hold of the security context now,
+        // because this is the last point at which we have the raw message bytes to perform integrity checking.
+        // We peek inside the message to get out the GUTI, retrieve the security context, and then admit the message.
+        if let (nas, Some(security_header)) = &nas {
+            if !self.ue.core.nas.security_activated() {
+                if let Ok(MobileIdentity::Guti(Guti(_plmn, amf_ids, tmsi))) =
+                    peek_mobile_identity(&nas)
+                {
+                    match self
+                        .retrieve_ue2(Some(amf_ids[0]), &amf_ids[1..3], &tmsi.0)
+                        .await
+                    {
+                        Ok(false) => {
+                            debug!(
+                                self.logger,
+                                "Using TMSI from registration message peek for NAS admit"
+                            );
+                            self.ue
+                                .core
+                                .nas
+                                .admit_message(Some(&security_header), &nas_bytes)?;
+                        }
+                        Ok(true) => debug!(self.logger, "Unknown TMSI in registration"),
+                        Err(e) => warn!(self.logger, "Error retrieving UE {e}"),
+                    }
+                }
+            }
+        }
+        self.run_decoded(nas).await
+    }
+
+    pub async fn run_decoded(mut self, nas: DecodedNas) -> Result<()> {
         let (message, security_header) = nas;
         let Nas5gsMessage::Gmm(_, mm_message) = *message else {
             warn!(self.logger, "Expected MM message, got {:?}", message);
