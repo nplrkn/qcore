@@ -11,7 +11,7 @@ use crate::{
             NgapUeContextReleaseProcedure, PduSessionResourceSetupProcedure, RrcBase,
             RrcReconfigurationProcedure, RrcSecurityModeProcedure, RrcUeCapabilityEnquiryProcedure,
             UeContextSetupProcedure, UlInformationTransferProcedure, UplinkNasProcedure,
-            UplinkNasTransportProcedure,
+            UplinkNasTransportProcedure, nas,
         },
     },
     protocols::nas::{
@@ -100,6 +100,15 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
             } else {
                 s
             };
+
+            // If there are PDU sessions to reactivate, create the UE context.
+            // Currently, we infer this from the presence of a NAS PDU, which might need to be changed
+            // in future.
+            let s = if let Some(nas) = nas_pdu {
+                s.ran_session_setup(nas).await?
+            } else {
+                s
+            };
             Ok(s)
         }
     }
@@ -113,26 +122,18 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         Ok(())
     }
 
-    pub async fn ran_session_setup(self, session_index: usize, nas_accept: Vec<u8>) -> Result<()> {
-        if self.ngap_mode() {
-            self.log_message("<< Nas PduSessionEstablishmentAccept");
-            let mut inner = PduSessionResourceSetupProcedure::new(self)
-                .run(session_index, nas_accept)
-                .await?;
-
+    pub async fn ran_session_setup(self, nas: Vec<u8>) -> Result<Self> {
+        Ok(if self.ngap_mode() {
+            let mut inner = PduSessionResourceSetupProcedure::new(self).run(nas).await?;
             inner.commit_userplane_sessions().await?;
+            inner
         } else {
-            let (mut inner, cell_group_config) = UeContextSetupProcedure::new(self)
-                .run(session_index)
-                .await?;
-            inner.log_message("<< Nas PduSessionEstablishmentAccept");
+            let (mut inner, cell_group_config) = UeContextSetupProcedure::new(self).run().await?;
             inner.commit_userplane_sessions().await?;
-
-            let _ = RrcReconfigurationProcedure::new(inner)
-                .add_session(nas_accept, session_index, cell_group_config.0)
-                .await?;
-        }
-        Ok(())
+            RrcReconfigurationProcedure::new(inner)
+                .add_session(nas, cell_group_config.0)
+                .await?
+        })
     }
 
     pub async fn ran_session_release(

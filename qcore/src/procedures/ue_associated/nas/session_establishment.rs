@@ -28,9 +28,9 @@ impl<'a, A: HandlerApi> SessionEstablishmentProcedure<'a, A> {
             self.config().sst,
         )?;
         self.ue.core.pdu_sessions.push(session);
-        let session_index = self.ue.core.pdu_sessions.len() - 1;
-
         let accept = self.ue.core.nas.encode(accept)?;
-        self.0.ran_session_setup(session_index, accept).await
+        self.log_message("<< Nas PduSessionEstablishmentAccept");
+        let _ = self.0.ran_session_setup(accept).await?;
+        Ok(())
     }
 }

@@ -4,7 +4,7 @@
 - Service request and session reactivation
   - F1AP service request including testing with live phone
   - Registration Request with session to reactivate
-  - TODOs introduced in the pull request
+  - self review + TODOs introduced in the pull request
 
 - Tidying + Refactoring
   - Split procedures into those acting on UeContext5GC and UeContextRan?  e.g. CoreUeProcedure, RanUeProcedure?

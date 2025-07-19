@@ -5,7 +5,9 @@ use super::prelude::*;
 
 define_ue_procedure!(PduSessionResourceSetupProcedure);
 impl<'a, A: HandlerApi> PduSessionResourceSetupProcedure<'a, A> {
-    pub async fn run(mut self, session_index: usize, nas: Vec<u8>) -> Result<UeProcedure<'a, A>> {
+    pub async fn run(mut self, nas: Vec<u8>) -> Result<UeProcedure<'a, A>> {
+        // TODO - support > 1 session
+        let session_index = 0usize;
         let pdu_session = &self.ue.core.pdu_sessions[session_index];
 
         let req = crate::ngap::build::pdu_session_resource_setup_request(

@@ -7,11 +7,10 @@ use xxap::GtpTunnel;
 
 define_ue_procedure!(UeContextSetupProcedure);
 impl<'a, A: HandlerApi> UeContextSetupProcedure<'a, A> {
-    pub async fn run(
-        mut self,
-        session_index: usize,
-    ) -> Result<(UeProcedure<'a, A>, CellGroupConfig)> {
-        let session = &self.ue.core.pdu_sessions[session_index];
+    pub async fn run(mut self) -> Result<(UeProcedure<'a, A>, CellGroupConfig)> {
+        // TODO - support >1 session
+        let session_idx = 0usize;
+        let session = &self.ue.core.pdu_sessions[session_idx];
         let ue_context_setup_request = crate::f1ap::build::ue_context_setup_request(
             self.ue,
             self.config().ip_addr.into(),
@@ -23,7 +22,7 @@ impl<'a, A: HandlerApi> UeContextSetupProcedure<'a, A> {
             .await?;
         self.log_message(">> F1ap UeContextSetupResponse");
         let (cell_group_config, gtp_tunnel) = self.check_ue_context_setup_response(rsp)?;
-        self.ue.core.pdu_sessions[session_index]
+        self.ue.core.pdu_sessions[session_idx]
             .userplane_info
             .remote_tunnel_info = Some(gtp_tunnel);
         Ok((self.0, cell_group_config))
