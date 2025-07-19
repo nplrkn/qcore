@@ -2,7 +2,7 @@ use qcore_tests::{MockUeF1ap, framework::*};
 
 #[async_std::test]
 async fn deregistration() -> anyhow::Result<()> {
-    let (mut du, qc, _dn, sims, logger) = init().await?;
+    let (mut du, qc, _dn, sims, logger) = init_f1ap().await?;
 
     // Given an established UE context at the DU
     du.perform_f1_setup(qc.ip_addr()).await?;

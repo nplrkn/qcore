@@ -5,7 +5,7 @@ use crate::{
     mock::{Mock, Pdu, ReceivedPdu},
     packet::Packet,
 };
-use anyhow::{Result, bail};
+use anyhow::{Result, bail, ensure};
 use asn1_per::{Msb0, NonEmpty, SerDes, bitvec};
 use async_net::IpAddr;
 use ngap::*;
@@ -283,23 +283,32 @@ impl MockGnb {
     }
 
     pub async fn handle_initial_context_setup(&self, ue: &mut UeContext) -> Result<()> {
-        self.handle_initial_context_setup_common(ue, false).await
+        let nas = self.handle_initial_context_setup_common(ue, false).await?;
+        ensure!(
+            nas.is_none(),
+            "Expected no NAS PDU in InitialContextSetupRequest, got {:?}",
+            nas
+        );
+        Ok(())
     }
 
-    pub async fn handle_initial_context_setup_with_session(
+    pub async fn handle_initial_context_setup_with_service_accept(
         &self,
         ue: &mut UeContext,
-    ) -> Result<()> {
-        self.handle_initial_context_setup_common(ue, true).await
+    ) -> Result<Vec<u8>> {
+        let Some(nas) = self.handle_initial_context_setup_common(ue, true).await? else {
+            bail!("Expected Nas PDU in InitialContextSetupRequest, got None");
+        };
+        Ok(nas.0)
     }
 
     async fn handle_initial_context_setup_common(
         &self,
         ue: &mut UeContext,
         session: bool,
-    ) -> Result<()> {
+    ) -> Result<Option<NasPdu>> {
         let ReceivedPdu { pdu, assoc_id } = self.receive_pdu_with_assoc_id().await?;
-        self.check_and_store_initial_context_setup_request(pdu, ue, session)?;
+        let nas_pdu = self.check_and_store_initial_context_setup_request(pdu, ue, session)?;
         info!(&self.logger, "Ngap InitialContextSetupRequest <<");
 
         let teid = if session {
@@ -316,7 +325,7 @@ impl MockGnb {
         );
         info!(&self.logger, "Ngap InitialContextSetupResponse >>");
         self.send(&ue_setup_response, Some(assoc_id)).await;
-        Ok(())
+        Ok(nas_pdu)
     }
 
     pub async fn send_ue_radio_capability_info(&self, ue: &mut UeContext) -> Result<()> {
@@ -334,11 +343,12 @@ impl MockGnb {
         pdu: Box<NgapPdu>,
         ue: &mut UeContext,
         session_reactivation: bool,
-    ) -> Result<()> {
+    ) -> Result<Option<NasPdu>> {
         let NgapPdu::InitiatingMessage(InitiatingMessage::InitialContextSetupRequest(
             InitialContextSetupRequest {
                 amf_ue_ngap_id,
                 pdu_session_resource_setup_list_cxt_req,
+                nas_pdu,
                 ..
             },
         )) = *pdu
@@ -368,7 +378,7 @@ impl MockGnb {
             assert_eq!(session_reactivation, false);
         }
 
-        Ok(())
+        Ok(nas_pdu)
     }
 
     pub async fn send_ue_context_release_request(&self, ue: &UeContext) -> Result<()> {

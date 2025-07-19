@@ -10,7 +10,7 @@ use slog::{Drain, Logger, o};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use xxap::PlmnIdentity;
 
-pub async fn init() -> Result<(MockDu, ProgramHandle, DataNetwork, SubscriberDb, Logger)> {
+pub async fn init_f1ap() -> Result<(MockDu, ProgramHandle, DataNetwork, SubscriberDb, Logger)> {
     let logger = init_logging();
     let du_ip = "127.0.0.2";
     let du = MockDu::new(du_ip, &logger).await?;

@@ -1,27 +1,28 @@
 # Backlog
 
 ## In progress
-- Service Request (e.g. if RAN restarted)
-- Failed to reactivate session is being logged on a register when we didn't ask to reactivate a session
-- Registration Request with session to reactivate
+- Service request and session reactivation
+  - F1AP service request including testing with live phone
+  - Registration Request with session to reactivate
+  - TODOs introduced in the pull request
+
+- Tidying + Refactoring
+  - Split procedures into those acting on UeContext5GC and UeContextRan?  e.g. CoreUeProcedure, RanUeProcedure?
+  - move ran_session_setup out of ue_procedure.rs
+  - Registration accept should piggyback on NGAP Initial Context Setup request
+  - Sort out UeProcedures
+        let session = &mut self.ue.core.pdu_sessions[0];
+        debug!(self.logger, "{}", session.id);
+
+
 - thread 'async-std/runtime' panicked at /home/sens/.cargo/git/checkouts/oxirush-nas-81df6faf3b9ba684/5835253/src/messages.rs:7136:66: not yet implemented
-- Split procedures into those acting on UeContext5GC and UeContextRan?  e.g. CoreUeProcedure, RanUeProcedure?
 - Sessions / IP addresses should not persist forever.  Timeout; flush on TMSI register/service request without session reactivation; flush on IMSI registration? 
 - Rejection of Registration Request from Security Mode Command if slice asked for is eMBB / SST 1 with "no network slices available"
   -  causes OnePlus phone to reregister with MIoT SST 3 / SD 0.
 -  Unhandled RrcReestablishmentRequest
-- move ran_session_setup out of ue_procedure.rs
-- Registration accept should piggyback on NGAP Initial Context Setup request
 - use different forwarding tables for NGAP vs F1AP 
 - "NG setup with GNB name" - log line - trace of bitvec global gnb ID is ugly 
 - PDU session release command should flow on SRB 2, not SRB 1  
-- Following doesn't work.  The derefs needlessly borrow self.  Should we remove Derefs - see https://rust-unofficial.github.io/patterns/anti_patterns/deref.html.  "The Deref trait is designed for the implementation of custom pointer types."  See https://crates.io/crates/ambassador for delegating a whole trait.  (e.g. HandlerApi)
-        let session = &mut self.ue.core.pdu_sessions[0];
-        debug!(self.logger, "Hi {}", session.id);
-
-  This does work (if base is made public) via "splitting borrows":
-        let session = &mut self.0.ue.core.pdu_sessions[0];
-        debug!(self.0.base.logger, "Hi {}", session.id);
 
 
 ## Performance

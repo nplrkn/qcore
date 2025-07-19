@@ -1,4 +1,4 @@
-use asn1_per::{bitvec, Msb0};
+use asn1_per::*;
 use rrc::*;
 
 pub fn setup_request() -> UlCcchMessage {
@@ -16,7 +16,12 @@ pub fn setup_request() -> UlCcchMessage {
 pub fn setup_complete(
     rrc_transaction_identifier: RrcTransactionIdentifier,
     nas_bytes: Vec<u8>,
+    guti: &Option<[u8; 10]>,
 ) -> UlDcchMessage {
+    let ng_5g_s_tmsi_value = guti.map(|guti| {
+        let bits = guti[4..10].view_bits::<Msb0>();
+        Ng5gSTmsiValue::Ng5gSTmsi(Ng5gSTmsi(bits.into()))
+    });
     UlDcchMessage {
         message: UlDcchMessageType::C1(C1_6::RrcSetupComplete(RrcSetupComplete {
             rrc_transaction_identifier,
@@ -26,7 +31,7 @@ pub fn setup_complete(
                 guami_type: None,
                 snssai_list: None,
                 dedicated_nas_message: DedicatedNasMessage(nas_bytes),
-                ng_5g_s_tmsi_value: None,
+                ng_5g_s_tmsi_value,
                 late_non_critical_extension: None,
                 non_critical_extension: None,
             }),

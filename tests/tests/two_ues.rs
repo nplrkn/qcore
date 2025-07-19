@@ -2,7 +2,7 @@ use qcore_tests::{MockUeF1ap, framework::*};
 
 #[async_std::test]
 async fn two_ues() -> anyhow::Result<()> {
-    let (mut du, qc, _dn, sims, logger) = init().await?;
+    let (mut du, qc, _dn, sims, logger) = init_f1ap().await?;
 
     // DU connects to CU
     du.perform_f1_setup(qc.ip_addr()).await?;

@@ -1,3 +1,6 @@
+mod mock_ue_5gc;
+pub use mock_ue_5gc::*;
+
 use anyhow::{Result, anyhow, bail};
 use async_trait::async_trait;
 use oxirush_nas::{
@@ -51,48 +54,33 @@ pub trait Transport {
 }
 
 pub struct MockUe<T: Transport> {
-    pub data: MockUeData,
+    pub data: MockUe5GCData,
     transport: T,
     logger: Logger,
     use_wrong_imsi: bool,
 }
 
-// TODO split to separate file
-pub struct MockUeData {
-    imsi: String,
-    guti: Option<[u8; 10]>,
-    pub ipv4_addr: Ipv4Addr,
-    dnn: Option<&'static [u8]>,
-}
-
-impl MockUeData {
-    pub fn new(imsi: String) -> Self {
-        MockUeData {
-            imsi,
-            guti: None,
-            ipv4_addr: Ipv4Addr::UNSPECIFIED,
-            dnn: None,
-        }
-    }
-}
-
 impl<T: Transport> MockUe<T> {
     pub fn new(imsi: String, ue_id: u32, transport: T, logger: &Logger) -> Self {
         MockUe {
-            data: MockUeData::new(imsi),
+            data: MockUe5GCData::new(imsi),
             transport,
             logger: logger.new(o!("ue" => ue_id)),
             use_wrong_imsi: false,
         }
     }
 
-    pub fn new_from_base(data: MockUeData, ue_id: u32, transport: T, logger: &Logger) -> Self {
+    pub fn new_from_base(data: MockUe5GCData, ue_id: u32, transport: T, logger: &Logger) -> Self {
         MockUe {
             data,
             transport,
             logger: logger.new(o!("ue" => ue_id)),
             use_wrong_imsi: false,
         }
+    }
+
+    pub fn disconnect(self) -> MockUe5GCData {
+        self.data
     }
 
     pub fn transport(&self) -> &T {
@@ -118,10 +106,14 @@ impl<T: Transport> MockUe<T> {
     }
 
     async fn receive_nas(&mut self) -> Result<Box<Nas5gsMessage>> {
-        let nas_bytes = self.transport.receive_nas(&self.logger).await?;
+        let nas = self.transport.receive_nas(&self.logger).await?;
+        self.decode_nas(nas)
+    }
+
+    fn decode_nas(&mut self, nas: Vec<u8>) -> Result<Box<Nas5gsMessage>> {
         let outer = Box::new(
-            decode_nas_5gs_message(&nas_bytes)
-                .map_err(|e| anyhow!("Nas decode error - {e} - message bytes: {:?}", nas_bytes))?,
+            decode_nas_5gs_message(&nas)
+                .map_err(|e| anyhow!("Nas decode error - {e} - message bytes: {:?}", nas))?,
         );
         let (nas, _security_header) = match *outer {
             Nas5gsMessage::Gmm(_, _) => (outer, None),
@@ -223,6 +215,13 @@ impl<T: Transport> MockUe<T> {
         self.send_nas(nas_deregistration_request).await
     }
 
+    pub async fn send_nas_service_request(&mut self) -> Result<()> {
+        // Potential fields needed in the InitialUeMessage:
+        // - UEContextRequest
+        let nas_bytes = self.build_service_request()?;
+        self.send_nas(nas_bytes).await
+    }
+
     pub async fn send_userplane_packet(
         &self,
         dst_ip: &Ipv4Addr,
@@ -256,7 +255,7 @@ impl<T: Transport> MockUe<T> {
         Ok(())
     }
 
-    pub fn handle_session_accept(&mut self, nas_bytes: Vec<u8>) -> Result<()> {
+    pub fn handle_nas_session_accept(&mut self, nas_bytes: Vec<u8>) -> Result<()> {
         let message = decode_security_protected_sm(nas_bytes)?;
         let Nas5gsmMessage::PduSessionEstablishmentAccept(NasPduSessionEstablishmentAccept {
             selected_pdu_session_type: NasPduSessionType { value: 1, .. },
@@ -282,13 +281,19 @@ impl<T: Transport> MockUe<T> {
         Ok(())
     }
 
+    pub fn check_nas_service_accept(&mut self, nas: Vec<u8>) -> Result<()> {
+        ensure_nas!(ServiceAccept, self.decode_nas(nas)?);
+        info!(&self.logger, "Nas ServiceAccept <<");
+        Ok(())
+    }
+
     pub async fn send_nas_pdu_session_release_request(&mut self) -> Result<()> {
         let nas_session_release_request = build_nas::pdu_session_release_request()?;
         info!(&self.logger, "Nas PduSessionReleaseRequest >>");
         self.send_nas(nas_session_release_request).await
     }
 
-    pub async fn handle_session_release(&mut self, nas_bytes: Vec<u8>) -> Result<()> {
+    pub async fn handle_nas_session_release(&mut self, nas_bytes: Vec<u8>) -> Result<()> {
         let message = decode_security_protected_sm(nas_bytes)?;
         let Nas5gsmMessage::PduSessionReleaseCommand(NasPduSessionReleaseCommand { .. }) = message
         else {

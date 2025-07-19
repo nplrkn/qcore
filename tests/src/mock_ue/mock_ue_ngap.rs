@@ -8,7 +8,7 @@ use std::{
 
 use crate::{
     GnbUeContext, MockGnb, MockUe,
-    mock_ue::{MockUeData, Transport},
+    mock_ue::{MockUe5GCData, Transport},
     packet::Packet,
 };
 
@@ -25,6 +25,12 @@ impl<'a> Deref for MockUeNgap<'a> {
 impl DerefMut for MockUeNgap<'_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.base
+    }
+}
+
+impl Into<MockUe5GCData> for MockUeNgap<'_> {
+    fn into(self) -> MockUe5GCData {
+        self.base.data
     }
 }
 
@@ -78,7 +84,7 @@ impl<'a> Transport for UeNgapMode<'a> {
 
 impl<'a> MockUeNgap<'a> {
     pub async fn new_from_base(
-        data: MockUeData,
+        data: MockUe5GCData,
         ue_id: u32,
         gnb: &'a MockGnb,
         amf_ip_addr: &IpAddr,
@@ -143,7 +149,7 @@ impl<'a> MockUeNgap<'a> {
         let nas_accept = gnb
             .handle_pdu_session_resource_setup_with_session_accept(ue.gnb_ue_context())
             .await?;
-        ue.handle_session_accept(nas_accept)?;
+        ue.handle_nas_session_accept(nas_accept)?;
         Ok(ue)
     }
 
@@ -153,14 +159,6 @@ impl<'a> MockUeNgap<'a> {
 
     pub async fn send_nas_register_request(&mut self) -> Result<()> {
         let nas_bytes = self.build_register_request()?;
-        self.send_nas(nas_bytes).await
-    }
-
-    pub async fn send_nas_service_request(&mut self) -> Result<()> {
-        // Potential fields needed in the InitialUeMessage:
-        // - 5G S-TMSI
-        // - UEContextRequest
-        let nas_bytes = self.build_service_request()?;
         self.send_nas(nas_bytes).await
     }
 }

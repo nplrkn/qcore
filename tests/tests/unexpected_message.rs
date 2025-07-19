@@ -2,7 +2,7 @@ use qcore_tests::{MockUeF1ap, framework::*};
 
 #[async_std::test]
 async fn unexpected_release_during_registration() -> anyhow::Result<()> {
-    let (mut du, qc, _dn, sims, logger) = init().await?;
+    let (mut du, qc, _dn, sims, logger) = init_f1ap().await?;
 
     du.perform_f1_setup(qc.ip_addr()).await?;
 

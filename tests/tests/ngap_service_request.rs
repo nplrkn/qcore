@@ -9,8 +9,7 @@ async fn ngap_service_request() -> anyhow::Result<()> {
         MockUeNgap::new_with_session(nth_imsi(0, &sims), 1, &gnb, qc.ip_addr(), &logger).await?;
     qc.wait_until_idle().await;
 
-    // TODO - make this a method call - disconnect_from_ran()
-    let mock_ue = ue.base.data;
+    let mock_ue = ue.into();
 
     // Disconnect the TNLA, then re-establish the NG interface.
     gnb.disconnect().await;
@@ -23,8 +22,10 @@ async fn ngap_service_request() -> anyhow::Result<()> {
     let mut ue = MockUeNgap::new_from_base(mock_ue, 1, &gnb, qc.ip_addr(), &logger).await?;
     ue.send_nas_service_request().await?;
 
-    gnb.handle_initial_context_setup_with_session(ue.gnb_ue_context())
+    let nas = gnb
+        .handle_initial_context_setup_with_service_accept(ue.gnb_ue_context())
         .await?;
+    ue.check_nas_service_accept(nas)?;
     ue.receive_nas_configuration_update().await?;
 
     pass_through_uplink_ipv4(&ue, &dn).await?;

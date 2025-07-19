@@ -2,7 +2,7 @@ use qcore_tests::{MockUeF1ap, framework::*};
 
 #[async_std::test]
 async fn attach() -> anyhow::Result<()> {
-    let (mut du, qc, dn, sims, logger) = init().await?;
+    let (mut du, qc, dn, sims, logger) = init_f1ap().await?;
 
     // This test carries out the attach flow - see docs/attach.md.
 
