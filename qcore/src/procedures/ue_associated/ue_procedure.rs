@@ -15,7 +15,8 @@ use crate::{
         },
     },
     protocols::nas::{
-        FGMM_CAUSE_SEMANTICALLY_INCORRECT_MESSAGE, FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED, Tmsi,
+        ABORT_PROCEDURE, FGMM_CAUSE_SEMANTICALLY_INCORRECT_MESSAGE,
+        FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED, Tmsi,
     },
 };
 use asn1_per::SerDes;
@@ -414,7 +415,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         &mut self,
         amf_region: Option<u8>,
         amf_set_and_pointer: &[u8],
-        tmsi: &Tmsi,
+        tmsi: &[u8],
     ) -> Result<bool, u8> {
         let guami_matches = amf_set_and_pointer == &self.config().amf_ids[1..3]
             && amf_region
@@ -432,7 +433,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
 
         // Has the UE already obtained a TMSI on its current radio channel?
         if let Some(existing_tmsi) = &self.ue.tmsi {
-            if existing_tmsi == tmsi && guami_matches {
+            if existing_tmsi.0 == tmsi && guami_matches {
                 debug!(self.logger, "Normal case of UE using its existing GUTI");
                 return Ok(false);
             } else {
@@ -446,7 +447,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
             match self.take_core_context(tmsi).await {
                 Some(c) => {
                     self.ue.core = c;
-                    self.ue.tmsi = Some(tmsi.clone());
+                    self.ue.tmsi = Some(Tmsi(tmsi.try_into().map_err(|_| ABORT_PROCEDURE)?));
                     return Ok(false);
                 }
                 None => {
@@ -670,7 +671,7 @@ impl<'a, A: HandlerApi> NasBase for UeProcedure<'a, A> {
 
         // If we know about this GUTI, retrieve the core context and attach it to this UE.
         if guami_matches {
-            match self.take_core_context(tmsi).await {
+            match self.take_core_context(&tmsi.0).await {
                 Some(c) => {
                     self.ue.core = c;
                     self.ue.tmsi = Some(tmsi.clone());

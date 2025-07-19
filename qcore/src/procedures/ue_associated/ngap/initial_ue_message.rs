@@ -1,5 +1,5 @@
 use super::prelude::*;
-use crate::{procedures::ue_associated::UplinkNasProcedure, protocols::nas::Tmsi};
+use crate::procedures::ue_associated::UplinkNasProcedure;
 use ngap::{InitialUeMessage, UserLocationInformation, UserLocationInformationNr};
 
 define_ue_procedure!(InitialUeMessageProcedure);
@@ -20,15 +20,15 @@ impl<'a, A: HandlerApi> InitialUeMessageProcedure<'a, A> {
         self.ue.nr_cgi = Some(nr_cgi);
         self.ue.core.tac = tai.tac.0;
 
-        // If there is a valid S-TMSI, retrieve the UE context now.
-        // This is so that we can process the integrity protection on the NAS decode
-        // using the existing NAS security context.
+        // If there is a valid S-TMSI, retrieve the UE context now, so the NAS context is in place for the NAS decode.
         if let Some(x) = r.five_g_s_tmsi {
             let mut amf_set_and_pointer = x.amf_set_id.0.clone();
             amf_set_and_pointer.extend_from_bitslice(&x.amf_pointer.0);
             let amf_set_and_pointer = amf_set_and_pointer.as_raw_slice();
-            let tmsi = Tmsi(x.five_g_tmsi.0);
-            match self.retrieve_ue2(None, amf_set_and_pointer, &tmsi).await {
+            match self
+                .retrieve_ue2(None, amf_set_and_pointer, &x.five_g_tmsi.0)
+                .await
+            {
                 Ok(false) => debug!(
                     self.logger,
                     "Successfully retrieved TMSI prior to NAS decode"

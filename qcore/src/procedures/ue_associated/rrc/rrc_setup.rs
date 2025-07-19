@@ -1,7 +1,10 @@
 use super::prelude::*;
 use crate::procedures::ue_associated::UplinkNasProcedure;
 use f1ap::SrbId;
-use rrc::{C1_6, CriticalExtensions22, RrcSetupComplete, RrcSetupRequest, UlDcchMessageType};
+use rrc::{
+    C1_6, CriticalExtensions22, Ng5gSTmsi, Ng5gSTmsiValue, RrcSetupComplete, RrcSetupRequest,
+    UlDcchMessageType,
+};
 
 define_ue_procedure!(RrcSetupProcedure);
 
@@ -23,6 +26,24 @@ impl<'a, A: HandlerApi> RrcSetupProcedure<'a, A> {
         else {
             bail!("Expected Rrc Setup complete, got {:?}", response)
         };
+
+        // If there is a valid S-TMSI, retrieve the UE context now, so the NAS context is in place for the NAS decode.
+        if let Some(Ng5gSTmsiValue::Ng5gSTmsi(Ng5gSTmsi(x))) =
+            rrc_setup_complete_ies.ng_5g_s_tmsi_value
+        {
+            let s_tmsi_bytes = x.as_raw_slice();
+            match self
+                .retrieve_ue2(None, &s_tmsi_bytes[0..2], &s_tmsi_bytes[2..6])
+                .await
+            {
+                Ok(false) => debug!(
+                    self.logger,
+                    "Successfully retrieved TMSI prior to NAS decode"
+                ),
+                Ok(true) => debug!(self.logger, "Unknown S-TMSI in Rrc Setup Complete"),
+                Err(e) => warn!(self.logger, "Error retrieving UE based on Rrc S-TMSI {e}"),
+            }
+        }
 
         self.log_message(">> Rrc SetupComplete");
         let nas = self.nas_decode(&rrc_setup_complete_ies.dedicated_nas_message.0)?;

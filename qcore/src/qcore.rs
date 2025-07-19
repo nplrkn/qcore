@@ -37,7 +37,7 @@ pub struct QCore {
     packet_processor: PacketProcessor,
     ue_tasks: Arc<Mutex<HashMap<u32, Sender<UeMessage>>>>,
     sub_db: Arc<Mutex<SubscriberDb>>,
-    tmsis: Arc<Mutex<HashMap<Tmsi, CoreContextLocator>>>,
+    tmsis: Arc<Mutex<HashMap<[u8; 4], CoreContextLocator>>>,
     served_cells: ServedCellsStore,
     ngap_mode: bool,
 }
@@ -195,7 +195,7 @@ impl QCore {
         ue_id: u32,
         logger: &Logger,
     ) {
-        let old = self.tmsis.lock().await.insert(tmsi.clone(), v);
+        let old = self.tmsis.lock().await.insert(tmsi.0.clone(), v);
 
         match old {
             Some(CoreContextLocator::Stored(_)) => {
@@ -249,7 +249,7 @@ impl HandlerApi for QCore {
             .map(|entry| entry.sqn = sqn)
     }
 
-    async fn take_core_context(&self, tmsi: &Tmsi) -> Option<UeContext5GC> {
+    async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC> {
         let entry = self.tmsis.lock().await.remove(tmsi)?;
 
         match entry {

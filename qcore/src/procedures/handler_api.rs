@@ -23,7 +23,7 @@ pub trait HandlerApi: Send + Sync + Clone + 'static {
     async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
 
     async fn register_new_tmsi(&self, tmsi: Tmsi, ue_id: u32, logger: &Logger);
-    async fn take_core_context(&self, tmsi: &Tmsi) -> Option<UeContext5GC>;
+    async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
     async fn put_core_context(
         &self,
         tmsi: Tmsi,

@@ -21,6 +21,8 @@ async fn f1ap_service_request() -> anyhow::Result<()> {
     // UE sends a service request with GUTI to reactivate its previous session.
     let mut ue = MockUeF1ap::new_from_base(ue_data, 1, &du, qc.ip_addr(), &logger).await?;
     ue.perform_rrc_setup_with_service_request().await?;
+    ue.handle_rrc_security_mode().await?;
+    ue.handle_capability_enquiry().await?;
     du.handle_f1_ue_context_setup(ue.du_ue_context()).await?;
     ue.handle_rrc_reconfiguration_with_service_accept().await?;
     ue.receive_nas_configuration_update().await?;
