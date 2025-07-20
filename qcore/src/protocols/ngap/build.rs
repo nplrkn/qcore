@@ -93,7 +93,7 @@ pub fn initial_context_setup_request(
         amf_ue_ngap_id: ue.amf_ue_ngap_id(),
         ran_ue_ngap_id: ue.ran_ue_ngap_id(),
         old_amf: None,
-        ue_aggregate_maximum_bit_rate: None,
+        ue_aggregate_maximum_bit_rate: Some(ue_aggregate_maximum_bit_rate()), // Must be supplied if there are sessions.
         core_network_assistance_information_for_inactive: None,
         guami,
         pdu_session_resource_setup_list_cxt_req,
@@ -253,11 +253,15 @@ pub fn pdu_session_resource_setup_request(
                 pdu_session_resource_setup_request_transfer
             }
         ]),
-        ue_aggregate_maximum_bit_rate: Some(UeAggregateMaximumBitRate {
-            ue_aggregate_maximum_bit_rate_dl: BitRate(768_000_000),
-            ue_aggregate_maximum_bit_rate_ul: BitRate(768_000_000),
-        }),
+        ue_aggregate_maximum_bit_rate: Some(ue_aggregate_maximum_bit_rate()),
     }))
+}
+
+fn ue_aggregate_maximum_bit_rate() -> UeAggregateMaximumBitRate {
+    UeAggregateMaximumBitRate {
+        ue_aggregate_maximum_bit_rate_dl: BitRate(768_000_000),
+        ue_aggregate_maximum_bit_rate_ul: BitRate(768_000_000),
+    }
 }
 
 pub fn pdu_session_resource_release_command(

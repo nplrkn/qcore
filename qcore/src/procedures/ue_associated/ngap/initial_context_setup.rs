@@ -1,4 +1,5 @@
-use ngap::InitialContextSetupResponse;
+use asn1_per::SerDes;
+use ngap::{InitialContextSetupResponse, PduSessionResourceSetupUnsuccessfulTransfer};
 
 use crate::data::PduSession;
 
@@ -44,6 +45,22 @@ impl<'a, A: HandlerApi> InitialContextSetupProcedure<'a, A> {
                     //self.delete_userplane_session(&session.userplane_info, self.logger).await;
                 }
             }
+        }
+
+        // Log any errors returned by the gNB.
+        for item in rsp
+            .pdu_session_resource_failed_to_setup_list_cxt_res
+            .map(|x| x.0)
+            .iter()
+            .flatten()
+        {
+            let xfer = PduSessionResourceSetupUnsuccessfulTransfer::from_bytes(
+                &item.pdu_session_resource_setup_unsuccessful_transfer,
+            )?;
+            warn!(
+                self.logger,
+                "GNB error for session {}: {:?}", item.pdu_session_id.0, xfer.cause
+            );
         }
 
         Ok(self.0)
