@@ -2,8 +2,8 @@
 
 ## In progress
 - Service request and session reactivation
-  - F1AP service request including testing with live phone
-  - Don't rely on TMSI in outer message
+  - UE message handler exiting: NAS decode error - Unknown message type - NasConfigurationUpdateCommand
+  - F1AP service request including testing with live phone (reboot RAN and then fail to reestablish sessions on register)
   - Registration Request with session to reactivate
   - self review + TODOs introduced in the pull request
 

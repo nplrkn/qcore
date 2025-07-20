@@ -66,7 +66,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
             Ok(()) => {
                 self.0 = self.0.ran_context_create(None).await?;
                 self.accept_registration().await?;
-                self.send_configuration_update().await?;
+                self.perform_configuration_update().await?;
             }
             Err(cause) => {
                 if cause != ABORT_PROCEDURE {
@@ -483,12 +483,21 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         self.ue.core.nas.enable_security(knasint);
     }
 
-    async fn send_configuration_update(&mut self) -> Result<()> {
+    // TODO: commonize with service.rs
+    async fn perform_configuration_update(&mut self) -> Result<()> {
         let command = crate::nas::build::configuration_update_command(
             Some(&self.config().network_display_name),
             None,
         );
         self.log_message("<< Nas ConfigurationUpdateCommand");
-        self.nas_indication(command).await
+        let _configuration_update_complete = self
+            .nas_request(
+                command,
+                nas_filter!(ConfigurationUpdateComplete),
+                "Configuration update complete",
+            )
+            .await?;
+        self.log_message(">> Nas ConfigurationUpdateComplete");
+        Ok(())
     }
 }

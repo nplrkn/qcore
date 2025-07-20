@@ -13,7 +13,7 @@ async fn guti_registration_f1ap() -> anyhow::Result<()> {
     ue.handle_rrc_security_mode().await?;
     ue.handle_capability_enquiry().await?;
     ue.handle_nas_registration_accept().await?;
-    ue.receive_nas_configuration_update().await?;
+    ue.handle_nas_configuration_update().await?;
 
     // In the first variant, the UE message handler is not running.
 
@@ -28,7 +28,7 @@ async fn guti_registration_f1ap() -> anyhow::Result<()> {
     ue.handle_rrc_security_mode().await?;
     ue.handle_capability_enquiry().await?;
     ue.handle_nas_registration_accept().await?;
-    ue.receive_nas_configuration_update().await?;
+    ue.handle_nas_configuration_update().await?;
 
     // In the second variant, the UE message handler is running.
 
@@ -41,7 +41,7 @@ async fn guti_registration_f1ap() -> anyhow::Result<()> {
     ue.handle_rrc_security_mode().await?;
     ue.handle_capability_enquiry().await?;
     ue.handle_nas_registration_accept().await?;
-    ue.receive_nas_configuration_update().await?;
+    ue.handle_nas_configuration_update().await?;
 
     Ok(())
 }

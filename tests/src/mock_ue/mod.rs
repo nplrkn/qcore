@@ -201,10 +201,17 @@ impl<T: Transport> MockUe<T> {
         self.send_nas(nas_registration_complete).await
     }
 
-    pub async fn receive_nas_configuration_update(&mut self) -> Result<()> {
-        let _message = ensure_nas!(ConfigurationUpdateCommand, self.receive_nas().await?);
+    pub async fn handle_nas_configuration_update(&mut self) -> Result<()> {
+        let message = ensure_nas!(ConfigurationUpdateCommand, self.receive_nas().await?);
         info!(&self.logger, "Nas ConfigurationUpdateCommand <<");
-        Ok(())
+        if let Some(guti_ie) = message.fg_guti {
+            let guti = &guti_ie.value[1..11];
+            info!(&self.logger, "UE was assigned GUTI {:02x?}", guti);
+            self.use_guti(guti.try_into().unwrap());
+        }
+        let configuration_update_complete = build_nas::configuration_update_complete()?;
+        info!(&self.logger, "Nas ConfigurationUpdateComplete >>");
+        self.send_nas(configuration_update_complete).await
     }
 
     pub async fn send_nas_pdu_session_establishment_request(&mut self) -> Result<()> {

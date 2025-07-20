@@ -10,9 +10,10 @@ use oxirush_nas::{
     encode_nas_5gs_message,
     messages::{
         Nas5gmmHeader, Nas5gsmHeader, NasAuthenticationFailure, NasAuthenticationResponse,
-        NasDeregistrationRequestFromUe, NasIdentityResponse, NasPduSessionEstablishmentRequest,
-        NasPduSessionReleaseComplete, NasPduSessionReleaseRequest, NasRegistrationComplete,
-        NasRegistrationRequest, NasSecurityModeComplete, NasServiceRequest, NasUlNasTransport,
+        NasConfigurationUpdateComplete, NasDeregistrationRequestFromUe, NasIdentityResponse,
+        NasPduSessionEstablishmentRequest, NasPduSessionReleaseComplete,
+        NasPduSessionReleaseRequest, NasRegistrationComplete, NasRegistrationRequest,
+        NasSecurityModeComplete, NasServiceRequest, NasUlNasTransport,
     },
 };
 
@@ -304,6 +305,18 @@ pub fn registration_complete() -> Result<Vec<u8>> {
             message_type: Nas5gmmMessageType::RegistrationComplete,
         },
         Nas5gmmMessage::RegistrationComplete(NasRegistrationComplete::new()),
+    );
+    Ok(encode_nas_5gs_message(&message)?)
+}
+
+pub fn configuration_update_complete() -> Result<Vec<u8>> {
+    let message = Nas5gsMessage::Gmm(
+        Nas5gmmHeader {
+            extended_protocol_discriminator: ExtendedProtocolDiscriminator::FIVEGMM,
+            security_header_type: SecurityHeaderType::PLAIN_5GS_NAS_MESSAGE_NOT_SECURITY_PROTECTED,
+            message_type: Nas5gmmMessageType::ConfigurationUpdateComplete,
+        },
+        Nas5gmmMessage::ConfigurationUpdateComplete(NasConfigurationUpdateComplete),
     );
     Ok(encode_nas_5gs_message(&message)?)
 }

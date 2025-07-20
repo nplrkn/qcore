@@ -4,13 +4,14 @@ use anyhow::{Result, bail};
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gmmMessageType, Nas5gsMessage, Nas5gsmMessage, Nas5gsmMessageType, NasAbba,
     NasAdditionalFGSecurityInformation, NasAuthenticationParameterAutn,
-    NasAuthenticationParameterRand, NasDnn, NasExtendedProtocolConfigurationOptions, NasFGmmCause,
-    NasFGsIdentityType, NasFGsMobileIdentity, NasFGsNetworkFeatureSupport,
-    NasFGsRegistrationResult, NasFGsTrackingAreaIdentityList, NasFGsmCause, NasKeySetIdentifier,
-    NasNetworkName, NasNssai, NasPayloadContainer, NasPayloadContainerType, NasPduAddress,
-    NasPduSessionIdentity2, NasPduSessionReactivationResult, NasPduSessionStatus,
-    NasPduSessionType, NasQosFlowDescriptions, NasQosRules, NasSNssai, NasSecurityAlgorithms,
-    NasSessionAmbr, NasUeSecurityCapability, encode_nas_5gs_message,
+    NasAuthenticationParameterRand, NasConfigurationUpdateIndication, NasDnn,
+    NasExtendedProtocolConfigurationOptions, NasFGmmCause, NasFGsIdentityType,
+    NasFGsMobileIdentity, NasFGsNetworkFeatureSupport, NasFGsRegistrationResult,
+    NasFGsTrackingAreaIdentityList, NasFGsmCause, NasKeySetIdentifier, NasNetworkName, NasNssai,
+    NasPayloadContainer, NasPayloadContainerType, NasPduAddress, NasPduSessionIdentity2,
+    NasPduSessionReactivationResult, NasPduSessionStatus, NasPduSessionType,
+    NasQosFlowDescriptions, NasQosRules, NasSNssai, NasSecurityAlgorithms, NasSessionAmbr,
+    NasUeSecurityCapability, encode_nas_5gs_message,
     messages::{
         NasAuthenticationRequest, NasConfigurationUpdateCommand, NasDlNasTransport, NasFGmmStatus,
         NasIdentityRequest, NasPduSessionEstablishmentAccept, NasPduSessionReleaseCommand,
@@ -388,6 +389,7 @@ pub fn configuration_update_command(
     Box::new(Nas5gsMessage::new_5gmm(
         Nas5gmmMessageType::ConfigurationUpdateCommand,
         Nas5gmmMessage::ConfigurationUpdateCommand(NasConfigurationUpdateCommand {
+            configuration_update_indication: Some(NasConfigurationUpdateIndication::new(0b00_0_1)), // spare; RED; ACK
             full_name_for_network: ucs2_network_name.map(network_name),
             fg_guti,
             ..NasConfigurationUpdateCommand::new()

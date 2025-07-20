@@ -21,7 +21,7 @@ async fn guti_registration_ngap() -> anyhow::Result<()> {
     gnb.handle_initial_context_setup(ue.gnb_ue_context())
         .await?;
     ue.handle_nas_registration_accept().await?;
-    ue.receive_nas_configuration_update().await?;
+    ue.handle_nas_configuration_update().await?;
 
     Ok(())
 }
