@@ -75,7 +75,7 @@ impl<'a, A: HandlerApi> ServiceProcedure<'a, A> {
         for session in self.ue.core.pdu_sessions.iter() {
             let id = session.id;
             ensure!(id < 16, "Session ID >= 16 not supported");
-            session_status[(id / 8) as usize] |= 1 << id % 8;
+            session_status[(id / 8) as usize] |= 1 << (id % 8);
         }
 
         // If the UE is asking to reactivate a session that does not exist, set the relevant bit in the result
@@ -83,6 +83,14 @@ impl<'a, A: HandlerApi> ServiceProcedure<'a, A> {
             sessions_to_reactivate[0] & !session_status[0],
             sessions_to_reactivate[1] & !session_status[1],
         ];
+        debug!(
+            self.logger,
+            "Service request session status (1s are active): {:08b} {:08b}, reactivation result (1s are failures): {:08b} {:08b}",
+            session_status[0],
+            session_status[1],
+            reactivation_result[0],
+            reactivation_result[1],
+        );
 
         let accept = crate::nas::build::service_accept(session_status, reactivation_result);
         let accept = self.ue.core.nas.encode(accept)?;
