@@ -18,7 +18,7 @@ impl<'a, A: HandlerApi> UeContextReleaseProcedure<'a, A> {
                 self.logger,
             )
             .await?;
-        self.log_message(">> UeContextReleaseComplete");
+        self.log_message(">> Ngap UeContextReleaseComplete");
         self.check_ue_context_release_complete(&rsp)
     }
 

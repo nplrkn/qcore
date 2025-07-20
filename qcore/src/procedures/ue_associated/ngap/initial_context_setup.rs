@@ -39,8 +39,8 @@ impl<'a, A: HandlerApi> InitialContextSetupProcedure<'a, A> {
                         self.logger,
                         "Failed to reactivate session {} - {e}", session.id
                     );
-                    self.delete_userplane_session(&session.userplane_info, self.logger)
-                        .await;
+                    // TODO Temporarily disabled to test service request handling
+                    //self.delete_userplane_session(&session.userplane_info, self.logger).await;
                 }
             }
         }
