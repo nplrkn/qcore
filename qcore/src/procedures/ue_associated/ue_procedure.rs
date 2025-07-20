@@ -84,11 +84,9 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         let kgnb = security::derive_kgnb(&self.ue.core.kamf, self.ue.core.nas.ul_nas_count());
 
         if self.ngap_mode() {
-            let mut s = InitialContextSetupProcedure::new(self)
+            let s = InitialContextSetupProcedure::new(self)
                 .run(&kgnb, nas_pdu)
                 .await?;
-
-            s.commit_userplane_sessions().await?;
             Ok(s)
         } else {
             // TODO: this should be a procedure of its own.  This function should not contain the implementation of
@@ -113,7 +111,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         }
     }
 
-    async fn commit_userplane_sessions(&mut self) -> Result<()> {
+    pub async fn commit_userplane_sessions(&mut self) -> Result<()> {
         for session in self.ue.core.pdu_sessions.iter_mut() {
             self.base
                 .commit_userplane_session(&mut session.userplane_info, self.base.logger)
