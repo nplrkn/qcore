@@ -8,24 +8,12 @@ use super::prelude::*;
 define_ue_procedure!(InitialContextSetupProcedure);
 
 impl<'a, A: HandlerApi> InitialContextSetupProcedure<'a, A> {
-    pub async fn run(
-        mut self,
-        kgnb: &[u8; 32],
-        nas_pdu: Option<Vec<u8>>,
-    ) -> Result<UeProcedure<'a, A>> {
-        // temp code to test service request - if this is a registration request, don't program sessions
-        let reg = nas_pdu.is_none();
-        let sessions = if reg {
-            std::mem::take(&mut self.ue.core.pdu_sessions)
-        } else {
-            vec![]
-        };
-
+    pub async fn run(mut self, kgnb: &[u8; 32], nas_pdu: Vec<u8>) -> Result<UeProcedure<'a, A>> {
         let initial_context_setup_request = crate::ngap::build::initial_context_setup_request(
             self.config().guami(),
             kgnb,
             self.config().sst,
-            nas_pdu,
+            Some(nas_pdu),
             &self.ue,
             self.config().ip_addr.into(),
         )?;
@@ -39,12 +27,7 @@ impl<'a, A: HandlerApi> InitialContextSetupProcedure<'a, A> {
         self.log_message(">> Ngap InitialContextSetupResponse");
 
         // Go through each PDU session on the UE reactivating it.  Delete if the reactivation failed.
-        let sessions = if reg {
-            sessions
-        } else {
-            std::mem::take(&mut self.ue.core.pdu_sessions)
-        };
-        //let sessions = std::mem::take(&mut self.ue.core.pdu_sessions);
+        let sessions = std::mem::take(&mut self.ue.core.pdu_sessions);
         for mut session in sessions.into_iter() {
             match self.connect_matching_session(&mut session, &rsp) {
                 Ok(()) => {
@@ -58,9 +41,8 @@ impl<'a, A: HandlerApi> InitialContextSetupProcedure<'a, A> {
                         self.logger,
                         "Failed to reactivate session {} - {e}", session.id
                     );
-                    // TODO Temp code to test service request handling - keeps session around but doesn't commit it
-                    self.ue.core.pdu_sessions.push(session)
-                    //self.delete_userplane_session(&session.userplane_info, self.logger).await;
+                    self.delete_userplane_session(&session.userplane_info, self.logger)
+                        .await;
                 }
             }
         }

@@ -181,7 +181,7 @@ impl MockDu {
     }
 
     pub async fn receive_rrc_dl_dcch(&self, ue: &mut UeContext) -> Result<Box<DlDcchMessageType>> {
-        let ReceivedPdu { pdu, assoc_id } = self.receive_pdu_with_assoc_id().await.unwrap();
+        let ReceivedPdu { pdu, assoc_id } = self.receive_pdu_with_assoc_id().await?;
 
         // Check that the PDU arrived on the expected binding.
         assert_eq!(assoc_id, ue.binding.assoc_id);

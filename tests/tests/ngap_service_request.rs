@@ -22,10 +22,9 @@ async fn ngap_service_request() -> anyhow::Result<()> {
     let mut ue = MockUeNgap::new_from_base(mock_ue, 1, &gnb, qc.ip_addr(), &logger).await?;
     ue.send_nas_service_request().await?;
 
-    let nas = gnb
-        .handle_initial_context_setup_with_service_accept(ue.gnb_ue_context())
+    gnb.handle_initial_context_setup_with_session(ue.gnb_ue_context())
         .await?;
-    ue.check_nas_service_accept(nas)?;
+    ue.receive_nas_service_accept().await?;
     ue.handle_nas_configuration_update().await?;
 
     pass_through_uplink_ipv4(&ue, &dn).await?;

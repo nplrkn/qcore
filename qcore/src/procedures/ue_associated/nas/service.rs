@@ -93,9 +93,8 @@ impl<'a, A: HandlerApi> ServiceProcedure<'a, A> {
         );
 
         let accept = crate::nas::build::service_accept(session_status, reactivation_result);
-        let accept = self.ue.core.nas.encode(accept)?;
         self.log_message("<< Nas ServiceAccept");
-        self.0 = self.0.ran_context_create(Some(accept)).await?;
+        self.0 = self.0.ran_context_create(accept).await?;
 
         // Regenerate GUTI and send a configuration update to update it.
         // TODO: actually the new GUTI should only be stored after the configuration update

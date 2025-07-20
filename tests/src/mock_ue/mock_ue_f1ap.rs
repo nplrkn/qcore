@@ -37,10 +37,15 @@ impl Into<MockUe5GCData> for MockUeF1ap<'_> {
 pub struct UeF1apMode<'a> {
     du: &'a MockDu,
     pub du_ue_context: DuUeContext,
+    nas: Option<Vec<u8>>,
 }
 impl<'a> UeF1apMode<'a> {
     pub fn new(du: &'a MockDu, du_ue_context: DuUeContext) -> Self {
-        UeF1apMode { du, du_ue_context }
+        UeF1apMode {
+            du,
+            du_ue_context,
+            nas: None,
+        }
     }
 
     async fn send_initial_ul_rrc(&mut self, rrc_setup_request: UlCcchMessage) -> Result<()> {
@@ -76,6 +81,10 @@ impl<'a> Transport for UeF1apMode<'a> {
     }
 
     async fn receive_nas(&mut self, logger: &Logger) -> Result<Vec<u8>> {
+        if let Some(nas) = std::mem::take(&mut self.nas) {
+            return Ok(nas);
+        }
+
         match *self.du.receive_rrc_dl_dcch(&mut self.du_ue_context).await? {
             DlDcchMessageType::C1(C1_2::DlInformationTransfer(DlInformationTransfer {
                 critical_extensions:
@@ -120,6 +129,7 @@ impl<'a> MockUeF1ap<'a> {
         let transport = UeF1apMode {
             du,
             du_ue_context: du.new_ue_context(ue_id, cu_ip_addr).await?,
+            nas: None,
         };
         Ok(MockUeF1ap {
             base: MockUe::new(imsi, ue_id, transport, logger),
@@ -136,6 +146,7 @@ impl<'a> MockUeF1ap<'a> {
         let transport = UeF1apMode {
             du,
             du_ue_context: du.new_ue_context(ue_id, amf_ip_addr).await?,
+            nas: None,
         };
         Ok(MockUeF1ap {
             base: MockUe::new_from_base(data, ue_id, transport, logger),
@@ -159,7 +170,8 @@ impl<'a> MockUeF1ap<'a> {
         ue.handle_nas_configuration_update().await?;
         ue.send_nas_pdu_session_establishment_request().await?;
         du.handle_f1_ue_context_setup(ue.du_ue_context()).await?;
-        ue.handle_rrc_reconfiguration_with_session_accept().await?;
+        ue.handle_rrc_reconfiguration_with_added_session().await?;
+        ue.receive_nas_session_accept().await?;
         Ok(ue)
     }
 
@@ -225,26 +237,19 @@ impl<'a> MockUeF1ap<'a> {
         self.transport.send_ul_rrc(&information).await
     }
 
-    pub async fn handle_rrc_reconfiguration_with_session_accept(&mut self) -> Result<()> {
-        let nas = self.handle_rrc_reconfiguration(Some(1), None).await?;
-        self.handle_nas_session_accept(nas)
+    pub async fn handle_rrc_reconfiguration_with_added_session(&mut self) -> Result<()> {
+        self.handle_rrc_reconfiguration(Some(1), None).await
     }
 
-    pub async fn handle_rrc_reconfiguration_with_service_accept(&mut self) -> Result<()> {
-        let nas = self.handle_rrc_reconfiguration(Some(1), None).await?;
-        self.check_nas_service_accept(nas)
+    pub async fn handle_rrc_reconfiguration_with_released_session(&mut self) -> Result<()> {
+        self.handle_rrc_reconfiguration(None, Some(1)).await
     }
 
-    pub async fn handle_rrc_reconfiguration_with_session_release(&mut self) -> Result<()> {
-        let nas = self.handle_rrc_reconfiguration(None, Some(1)).await?;
-        self.handle_nas_session_release(nas).await
-    }
-
-    pub async fn handle_rrc_reconfiguration(
+    async fn handle_rrc_reconfiguration(
         &mut self,
         added_drb_id: Option<u8>,
         released_drb_id: Option<u8>,
-    ) -> Result<Vec<u8>> {
+    ) -> Result<()> {
         let rrc = self.transport.receive_rrc_dl_dcch().await?;
         let DlDcchMessageType::C1(C1_2::RrcReconfiguration(RrcReconfiguration {
             critical_extensions:
@@ -289,6 +294,8 @@ impl<'a> MockUeF1ap<'a> {
             .send_ul_rrc(&rrc_reconfiguration_complete)
             .await?;
 
-        Ok(nas)
+        self.base.transport.nas = Some(nas);
+
+        Ok(())
     }
 }

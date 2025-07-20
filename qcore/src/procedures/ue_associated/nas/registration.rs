@@ -62,25 +62,37 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
             return Ok(());
         }
 
-        match self.handle_registration(r, security_header).await {
-            Ok(()) => {
-                self.0 = self.0.ran_context_create(None).await?;
-                self.accept_registration().await?;
-                self.perform_configuration_update().await?;
-            }
-            Err(cause) => {
-                if cause != ABORT_PROCEDURE {
-                    self.reject_registration(cause).await?
-                } else {
-                    bail!("Abort registration procedure")
-                }
+        let ue_sessions: [u8; 2] = r
+            .pdu_session_status
+            .clone()
+            .map(|x| x.value[0..2].try_into().unwrap_or_default())
+            .unwrap_or_default();
+        let ue_sessions: u16 = ue_sessions[0] as u16 | ((ue_sessions[1] as u16) << 8);
+
+        if let Err(cause) = self.handle_registration(r, security_header).await {
+            if cause != ABORT_PROCEDURE {
+                self.reject_registration(cause).await?
+            } else {
+                bail!("Abort registration procedure")
             }
         }
 
-        Ok(())
-    }
+        // Clear any sessions that the UE does not know about.
+        let sessions = std::mem::take(&mut self.ue.core.pdu_sessions);
+        for session in sessions.into_iter() {
+            if ue_sessions & (1 << session.id) == 0 {
+                debug!(
+                    self.logger,
+                    "UE not aware of session {} so delete it", session.id
+                );
+                self.delete_userplane_session(&session.userplane_info, self.logger)
+                    .await;
+            } else {
+                debug!(self.logger, "UE confirms existing session {}", session.id);
+                self.ue.core.pdu_sessions.push(session);
+            }
+        }
 
-    async fn accept_registration(&mut self) -> Result<()> {
         let guti = self.allocate_tmsi().await;
         debug!(
             self.logger,
@@ -88,21 +100,21 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
             self.config().sst
         );
 
-        let r = crate::nas::build::registration_accept(
+        let accept = crate::nas::build::registration_accept(
             self.config().sst,
             guti,
             &self.config().plmn,
             &self.ue.core.tac,
         );
         self.log_message("<< Nas RegistrationAccept");
-        let _rsp = self
-            .nas_request(
-                r,
-                nas_filter!(RegistrationComplete),
-                "Registration complete",
-            )
+        self.0 = self.0.ran_context_create(accept).await?;
+
+        let _registration_complete = self
+            .receive_nas(nas_filter!(RegistrationComplete), "Registration Complete")
             .await?;
-        self.log_message(">> Nas RegistrationComplete");
+
+        self.perform_configuration_update().await?;
+
         Ok(())
     }
 

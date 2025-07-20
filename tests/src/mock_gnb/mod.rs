@@ -5,7 +5,7 @@ use crate::{
     mock::{Mock, Pdu, ReceivedPdu},
     packet::Packet,
 };
-use anyhow::{Result, bail, ensure};
+use anyhow::{Result, bail};
 use asn1_per::{Msb0, NonEmpty, SerDes, bitvec};
 use async_net::IpAddr;
 use ngap::*;
@@ -30,6 +30,7 @@ pub struct UeContext {
     amf_ue_ngap_id: Option<AmfUeNgapId>,
     pub binding: Binding,
     pub session: Option<Session>,
+    nas: Option<Vec<u8>>,
 }
 
 pub struct Session {
@@ -80,6 +81,7 @@ impl MockGnb {
                 .new_ue_binding_from_ip(&worker_ip.to_string())
                 .await?,
             session: None,
+            nas: None,
         })
     }
 
@@ -114,10 +116,7 @@ impl MockGnb {
         Ok(())
     }
 
-    pub async fn handle_pdu_session_resource_setup_with_session_accept(
-        &self,
-        ue: &mut UeContext,
-    ) -> Result<Vec<u8>> {
+    pub async fn handle_pdu_session_resource_setup(&self, ue: &mut UeContext) -> Result<()> {
         let pdu = self.receive_pdu().await?;
         let NgapPdu::InitiatingMessage(InitiatingMessage::PduSessionResourceSetupRequest(
             PduSessionResourceSetupRequest {
@@ -160,7 +159,8 @@ impl MockGnb {
 
         info!(self.logger, "Ngap PduSessionResourceSetupResponse >>");
         self.send(&pdu, None).await;
-        Ok(nas_bytes)
+        ue.nas = Some(nas_bytes);
+        Ok(())
     }
 
     fn update_session(
@@ -183,7 +183,7 @@ impl MockGnb {
         Ok(())
     }
 
-    pub async fn handle_pdu_session_resource_release(&self, ue: &mut UeContext) -> Result<Vec<u8>> {
+    pub async fn handle_pdu_session_resource_release(&self, ue: &mut UeContext) -> Result<()> {
         let pdu = self.receive_pdu().await?;
         let NgapPdu::InitiatingMessage(InitiatingMessage::PduSessionResourceReleaseCommand(
             PduSessionResourceReleaseCommand {
@@ -212,8 +212,9 @@ impl MockGnb {
         )?;
         info!(self.logger, "Ngap PduSessionResourceReleaseResponse >>");
         self.send(&pdu, None).await;
+        ue.nas = Some(nas.0);
 
-        Ok(nas.0)
+        Ok(())
     }
 
     pub async fn send_nas(
@@ -259,6 +260,10 @@ impl MockGnb {
     }
 
     pub async fn receive_nas(&self, ue: &mut UeContext, logger: &Logger) -> Result<Vec<u8>> {
+        if let Some(nas) = std::mem::take(&mut ue.nas) {
+            return Ok(nas);
+        }
+
         let pdu = self.receive_pdu().await?;
         let NgapPdu::InitiatingMessage(InitiatingMessage::DownlinkNasTransport(
             DownlinkNasTransport {
@@ -282,31 +287,22 @@ impl MockGnb {
         Ok(nas_pdu.0)
     }
 
-    pub async fn handle_initial_context_setup(&self, ue: &mut UeContext) -> Result<()> {
-        let nas = self.handle_initial_context_setup_common(ue, false).await?;
-        ensure!(
-            nas.is_none(),
-            "Expected no NAS PDU in InitialContextSetupRequest, got {:?}",
-            nas
-        );
-        Ok(())
-    }
-
-    pub async fn handle_initial_context_setup_with_service_accept(
+    pub async fn handle_initial_context_setup_with_session(
         &self,
         ue: &mut UeContext,
-    ) -> Result<Vec<u8>> {
-        let Some(nas) = self.handle_initial_context_setup_common(ue, true).await? else {
-            bail!("Expected Nas PDU in InitialContextSetupRequest, got None");
-        };
-        Ok(nas.0)
+    ) -> Result<()> {
+        self.handle_initial_context_setup_common(ue, true).await
+    }
+
+    pub async fn handle_initial_context_setup(&self, ue: &mut UeContext) -> Result<()> {
+        self.handle_initial_context_setup_common(ue, false).await
     }
 
     async fn handle_initial_context_setup_common(
         &self,
         ue: &mut UeContext,
         session: bool,
-    ) -> Result<Option<NasPdu>> {
+    ) -> Result<()> {
         let ReceivedPdu { pdu, assoc_id } = self.receive_pdu_with_assoc_id().await?;
         let nas_pdu = self.check_and_store_initial_context_setup_request(pdu, ue, session)?;
         info!(&self.logger, "Ngap InitialContextSetupRequest <<");
@@ -325,7 +321,8 @@ impl MockGnb {
         );
         info!(&self.logger, "Ngap InitialContextSetupResponse >>");
         self.send(&ue_setup_response, Some(assoc_id)).await;
-        Ok(nas_pdu)
+        ue.nas = nas_pdu.map(|x| x.0);
+        Ok(())
     }
 
     pub async fn send_ue_radio_capability_info(&self, ue: &mut UeContext) -> Result<()> {

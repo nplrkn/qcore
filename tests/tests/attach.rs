@@ -22,7 +22,8 @@ async fn attach() -> anyhow::Result<()> {
     // UE establishes PDU session
     ue.send_nas_pdu_session_establishment_request().await?;
     du.handle_f1_ue_context_setup(ue.du_ue_context()).await?;
-    ue.handle_rrc_reconfiguration_with_session_accept().await?;
+    ue.handle_rrc_reconfiguration_with_added_session().await?;
+    ue.receive_nas_session_accept().await?;
 
     // Userplane packet passthrough
     pass_through_uplink_ipv4(&ue, &dn).await?;

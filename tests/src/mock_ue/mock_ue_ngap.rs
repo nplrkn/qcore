@@ -146,10 +146,9 @@ impl<'a> MockUeNgap<'a> {
 
         // UE establishes PDU session
         ue.send_nas_pdu_session_establishment_request().await?;
-        let nas_accept = gnb
-            .handle_pdu_session_resource_setup_with_session_accept(ue.gnb_ue_context())
+        gnb.handle_pdu_session_resource_setup(ue.gnb_ue_context())
             .await?;
-        ue.handle_nas_session_accept(nas_accept)?;
+        ue.receive_nas_session_accept().await?;
         Ok(ue)
     }
 

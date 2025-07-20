@@ -201,6 +201,22 @@ impl<T: Transport> MockUe<T> {
         self.send_nas(nas_registration_complete).await
     }
 
+    pub async fn handle_nas_registration_accept2(&mut self, nas: Vec<u8>) -> Result<()> {
+        let nas = self.decode_nas(nas)?;
+        let message = ensure_nas!(RegistrationAccept, nas);
+        info!(&self.logger, "Nas RegistrationAccept <<");
+        let Some(guti_ie) = message.fg_guti else {
+            bail!("Expected GUTI in registration accept")
+        };
+        let guti = &guti_ie.value[1..11];
+        info!(&self.logger, "UE was assigned GUTI {:02x?}", guti);
+        self.use_guti(guti.try_into().unwrap());
+
+        let nas_registration_complete = build_nas::registration_complete()?;
+        info!(&self.logger, "Nas RegistrationComplete >>");
+        self.send_nas(nas_registration_complete).await
+    }
+
     pub async fn handle_nas_configuration_update(&mut self) -> Result<()> {
         let message = ensure_nas!(ConfigurationUpdateCommand, self.receive_nas().await?);
         info!(&self.logger, "Nas ConfigurationUpdateCommand <<");
@@ -268,8 +284,9 @@ impl<T: Transport> MockUe<T> {
         Ok(())
     }
 
-    pub fn handle_nas_session_accept(&mut self, nas_bytes: Vec<u8>) -> Result<()> {
-        let message = decode_security_protected_sm(nas_bytes)?;
+    pub async fn receive_nas_session_accept(&mut self) -> Result<()> {
+        let nas = self.receive_nas().await?;
+        let message = decode_security_protected_sm(nas)?;
         let Nas5gsmMessage::PduSessionEstablishmentAccept(NasPduSessionEstablishmentAccept {
             selected_pdu_session_type: NasPduSessionType { value: 1, .. },
             pdu_address:
@@ -294,8 +311,8 @@ impl<T: Transport> MockUe<T> {
         Ok(())
     }
 
-    pub fn check_nas_service_accept(&mut self, nas: Vec<u8>) -> Result<()> {
-        ensure_nas!(ServiceAccept, self.decode_nas(nas)?);
+    pub async fn receive_nas_service_accept(&mut self) -> Result<()> {
+        ensure_nas!(ServiceAccept, self.receive_nas().await?);
         info!(&self.logger, "Nas ServiceAccept <<");
         Ok(())
     }
@@ -306,8 +323,9 @@ impl<T: Transport> MockUe<T> {
         self.send_nas(nas_session_release_request).await
     }
 
-    pub async fn handle_nas_session_release(&mut self, nas_bytes: Vec<u8>) -> Result<()> {
-        let message = decode_security_protected_sm(nas_bytes)?;
+    pub async fn handle_nas_session_release(&mut self) -> Result<()> {
+        let nas = self.receive_nas().await?;
+        let message = decode_security_protected_sm(nas)?;
         let Nas5gsmMessage::PduSessionReleaseCommand(NasPduSessionReleaseCommand { .. }) = message
         else {
             bail!("Expected NasPduSessionReleaseCommand, got {message:?}");
@@ -319,19 +337,15 @@ impl<T: Transport> MockUe<T> {
     }
 }
 
-pub fn decode_security_protected_sm(nas_bytes: Vec<u8>) -> Result<Nas5gsmMessage> {
-    let nas = decode_nas_5gs_message(&nas_bytes)?;
-    let Nas5gsMessage::SecurityProtected(_header, nas_gmm) = nas else {
-        bail!("Expected security protected message, got {nas:?}")
-    };
+pub fn decode_security_protected_sm(nas: Box<Nas5gsMessage>) -> Result<Nas5gsmMessage> {
     let Nas5gsMessage::Gmm(
         _header,
         Nas5gmmMessage::DlNasTransport(NasDlNasTransport {
             payload_container, ..
         }),
-    ) = *nas_gmm
+    ) = *nas
     else {
-        bail!("Expected NasDlNasTransport, got {nas_gmm:?}")
+        bail!("Expected NasDlNasTransport, got {nas:?}")
     };
 
     let nas_gsm = decode_nas_5gs_message(&payload_container.value)?;

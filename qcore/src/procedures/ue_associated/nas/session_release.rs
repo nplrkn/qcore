@@ -30,9 +30,11 @@ impl<'a, A: HandlerApi> SessionReleaseProcedure<'a, A> {
             &released_session,
             FGSM_CAUSE_REGULAR_DEACTIVATION,
         )?;
-        let nas = self.ue.core.nas.encode(pdu_session_release_command)?;
         self.log_message("<< Nas PduSessionReleaseCommand");
-        self.0 = self.0.ran_session_release(&released_session, nas).await?;
+        self.0 = self
+            .0
+            .ran_session_release(&released_session, pdu_session_release_command)
+            .await?;
 
         let _pdu_session_release_complete = self
             .receive_nas_sm(

@@ -75,7 +75,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
     }
 
     // Enables a secure RAN channel for this UE, and reactivates any PDU sessions.
-    pub async fn ran_context_create(self, nas_pdu: Option<Vec<u8>>) -> Result<Self> {
+    pub async fn ran_context_create(self, nas: Box<Nas5gsMessage>) -> Result<Self> {
         debug!(
             self.logger,
             "UL NAS COUNT for kGNB derivation {}",
@@ -84,8 +84,9 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         let kgnb = security::derive_kgnb(&self.ue.core.kamf, self.ue.core.nas.ul_nas_count());
 
         if self.ngap_mode() {
+            let nas = self.ue.core.nas.encode(nas)?;
             let s = InitialContextSetupProcedure::new(self)
-                .run(&kgnb, nas_pdu)
+                .run(&kgnb, nas)
                 .await?;
             Ok(s)
         } else {
@@ -93,18 +94,17 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
             // 'ran ue registration'.  It should just swtich to ngap::RanUeRegistration or f1ap::.
             let s = RrcSecurityModeProcedure::new(self).run(&kgnb).await?;
 
-            let s = if s.ue.rat_capabilities.is_none() {
+            let mut s = if s.ue.rat_capabilities.is_none() {
                 RrcUeCapabilityEnquiryProcedure::new(s).run().await?
             } else {
                 s
             };
 
-            // If there are PDU sessions to reactivate, create the UE context.
-            // Currently, we infer this from the presence of a NAS PDU, which might need to be changed
-            // in future.
-            let s = if let Some(nas) = nas_pdu {
+            // If there are PDU sessions to reactivate, create the UE context, otherwise just send the PDU.
+            let s = if !s.ue.core.pdu_sessions.is_empty() {
                 s.ran_session_setup(nas).await?
             } else {
+                s.nas_indication(nas).await?;
                 s
             };
             Ok(s)
@@ -120,7 +120,8 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         Ok(())
     }
 
-    pub async fn ran_session_setup(self, nas: Vec<u8>) -> Result<Self> {
+    pub async fn ran_session_setup(self, nas: Box<Nas5gsMessage>) -> Result<Self> {
+        let nas = self.ue.core.nas.encode(nas)?;
         Ok(if self.ngap_mode() {
             let mut inner = PduSessionResourceSetupProcedure::new(self).run(nas).await?;
             inner.commit_userplane_sessions().await?;
@@ -137,8 +138,9 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
     pub async fn ran_session_release(
         self,
         released_session: &PduSession,
-        nas: Vec<u8>,
+        nas: Box<Nas5gsMessage>,
     ) -> Result<Self> {
+        let nas = self.ue.core.nas.encode(nas)?;
         if self.ngap_mode() {
             NgapRanSessionReleaseProcedure::new(self)
                 .run(released_session, nas)

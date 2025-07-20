@@ -1,25 +1,20 @@
 # Backlog
 
 ## In progress
-- Service request and session reactivation
-  - UE message handler exiting: NAS decode error - Unknown message type - NasConfigurationUpdateCommand
-
-  - SRS "Invalid UE-DL-AMBR" causing PDU session resource setup unsuccessful transfer
-    - because ue_dl_aggr_max_bit_rate==0, so missing UE AMBR
-\  - F1AP service request including testing with live phone (reboot RAN and then fail to reestablish sessions on register)
   - Registration Request with session to reactivate
+  - testing with live phone in F1ap and Ngap mode
   - self review + TODOs introduced in the pull request
 
 - Tidying + Refactoring
   - Split procedures into those acting on UeContext5GC and UeContextRan?  e.g. CoreUeProcedure, RanUeProcedure?
+  - clean up registration procedure code
+  - commonize service and registration session handling 
   - move ran_session_setup out of ue_procedure.rs
-  - Registration accept should piggyback on NGAP Initial Context Setup request
   - Sort out UeProcedures
         let session = &mut self.ue.core.pdu_sessions[0];
         debug!(self.logger, "{}", session.id);
 
 
-- thread 'async-std/runtime' panicked at /home/sens/.cargo/git/checkouts/oxirush-nas-81df6faf3b9ba684/5835253/src/messages.rs:7136:66: not yet implemented
 - Sessions / IP addresses should not persist forever.  Timeout; flush on TMSI register/service request without session reactivation; flush on IMSI registration? 
 - Rejection of Registration Request from Security Mode Command if slice asked for is eMBB / SST 1 with "no network slices available"
   -  causes OnePlus phone to reregister with MIoT SST 3 / SD 0.
