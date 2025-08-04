@@ -92,7 +92,14 @@ pub fn mobile_identity_stmsi(guti: &[u8; 10]) -> NasFGsMobileIdentity {
     NasFGsMobileIdentity::new(v)
 }
 
-pub fn registration_request(fgs_mobile_identity: NasFGsMobileIdentity) -> Result<Vec<u8>> {
+pub fn registration_request(
+    fgs_mobile_identity: NasFGsMobileIdentity,
+    include_session_1: bool,
+) -> Result<Vec<u8>> {
+    let uplink_data_status = include_session_1.then_some(uplink_data_status());
+    let pdu_session_status = include_session_1.then_some(pdu_session_status());
+
+    if include_session_1 {}
     let is_guti = fgs_mobile_identity.value[0] & 0b111 == 0b010;
     let message = Nas5gmmMessage::RegistrationRequest(NasRegistrationRequest {
         fgs_registration_type: NasFGsRegistrationType::new(
@@ -108,8 +115,8 @@ pub fn registration_request(fgs_mobile_identity: NasFGsMobileIdentity) -> Result
         requested_nssai: None,
         last_visited_registered_tai: None,
         s1_ue_network_capability: None,
-        uplink_data_status: None,
-        pdu_session_status: None,
+        uplink_data_status,
+        pdu_session_status,
         mico_indication: None,
         ue_status: None,
         additional_guti: None,
@@ -163,6 +170,23 @@ pub fn registration_request(fgs_mobile_identity: NasFGsMobileIdentity) -> Result
     Ok(encode_nas_5gs_message(&message)?)
 }
 
+// We use the same bit field for the Uplink Data Status and Pdu Session Status - to indicate
+// that session 1 is active and has data to send.
+// See TS 24.501, 9.11.3.44 and 9.11.3.57.
+
+const SESSION_AND_UPLINK_DATA_STATUS_FLAGS: [u8; 2] = [
+    0b00000010, // Sessions 7-0 - test framework always uses session 1
+    0b00000000, // Session status of sessions 15-8
+];
+
+fn uplink_data_status() -> NasUplinkDataStatus {
+    NasUplinkDataStatus::new(SESSION_AND_UPLINK_DATA_STATUS_FLAGS.to_vec())
+}
+
+fn pdu_session_status() -> NasPduSessionStatus {
+    NasPduSessionStatus::new(SESSION_AND_UPLINK_DATA_STATUS_FLAGS.to_vec())
+}
+
 pub fn service_request(fg_s_tmsi: NasFGsMobileIdentity) -> Result<Vec<u8>> {
     let ngksi = NasKeySetIdentifier::new(1); // TODO
     let inner_message = Nas5gmmMessage::ServiceRequest(NasServiceRequest {
@@ -185,27 +209,11 @@ pub fn service_request(fg_s_tmsi: NasFGsMobileIdentity) -> Result<Vec<u8>> {
     );
     let inner_message = encode_nas_5gs_message(&inner_message)?;
 
-    // We use the same bit field for the Uplink Data Status and Pdu Session Status - to indicate
-    // that session 1 is active and has data to send.
-    // See TS 24.501, 9.11.3.44 and 9.11.3.57.
-    let session_and_uplink_data_status_flags = vec![
-        0b00000010, // Sessions 7-0 - test framework always uses session 1
-        0b00000000, // Session status of sessions 15-8
-    ];
-
-    let uplink_data_status = Some(NasUplinkDataStatus::new(
-        session_and_uplink_data_status_flags.clone(),
-    ));
-
-    let pdu_session_status = Some(NasPduSessionStatus::new(
-        session_and_uplink_data_status_flags,
-    ));
-
     let outer_message = Nas5gmmMessage::ServiceRequest(NasServiceRequest {
         ngksi,
         fg_s_tmsi,
-        uplink_data_status,
-        pdu_session_status,
+        uplink_data_status: Some(uplink_data_status()),
+        pdu_session_status: Some(pdu_session_status()),
         allowed_pdu_session_status: None,
         nas_message_container: Some(NasMessageContainer::new(inner_message)),
         ue_request_type: None,

@@ -1,8 +1,7 @@
 # Backlog
 
 ## In progress
-  - Registration Request with session to reactivate
-  - testing with live phone in F1ap and Ngap mode
+  - Commonize session reactivation between registration and service request.  Log if uplink data status does not match pdu session status.
   - self review + TODOs introduced in the pull request
 
 - Tidying + Refactoring
@@ -14,6 +13,7 @@
         let session = &mut self.ue.core.pdu_sessions[0];
         debug!(self.logger, "{}", session.id);
 
+- Live testing with multiple phones, update readme documenting interop status.
 
 - Sessions / IP addresses should not persist forever.  Timeout; flush on TMSI register/service request without session reactivation; flush on IMSI registration? 
 - Rejection of Registration Request from Security Mode Command if slice asked for is eMBB / SST 1 with "no network slices available"

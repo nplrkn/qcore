@@ -1,0 +1,33 @@
+use qcore_tests::{MockUeF1ap, framework::*};
+
+#[async_std::test]
+async fn f1ap_session_reactivation() -> anyhow::Result<()> {
+    let (mut du, qc, dn, sims, logger) = init_f1ap().await?;
+
+    du.perform_f1_setup(qc.ip_addr()).await?;
+    let ue =
+        MockUeF1ap::new_with_session(nth_imsi(0, &sims), 1, &du, qc.ip_addr(), &logger).await?;
+    qc.wait_until_idle().await;
+
+    let ue_data = ue.into();
+
+    // Disconnect the TNLA, then re-establish the F1 interface.
+    du.disconnect().await;
+
+    // TODO - remove this
+    async_std::task::sleep(std::time::Duration::from_secs(1)).await;
+    du.perform_f1_setup(qc.ip_addr()).await?;
+
+    // UE sends a registration request with GUTI and reactivates its previous session.
+    let mut ue = MockUeF1ap::new_from_base(ue_data, 1, &du, qc.ip_addr(), &logger).await?;
+    ue.perform_rrc_setup().await?;
+    ue.handle_rrc_security_mode().await?;
+    ue.handle_capability_enquiry().await?;
+    du.handle_f1_ue_context_setup(ue.du_ue_context()).await?;
+    ue.handle_rrc_reconfiguration_with_added_session().await?;
+    ue.handle_nas_registration_accept().await?;
+    ue.handle_nas_configuration_update().await?;
+
+    pass_through_uplink_ipv4(&ue, &dn).await?;
+    pass_through_downlink_ipv4(&dn, &ue).await
+}

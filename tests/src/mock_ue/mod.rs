@@ -131,10 +131,17 @@ impl<T: Transport> MockUe<T> {
     }
 
     fn build_register_request(&self) -> Result<Vec<u8>> {
+        let include_session_1 = self.data.ipv4_addr != Ipv4Addr::UNSPECIFIED;
         if let Some(guti) = self.data.guti {
-            build_nas::registration_request(build_nas::mobile_identity_guti(&guti))
+            build_nas::registration_request(
+                build_nas::mobile_identity_guti(&guti),
+                include_session_1,
+            )
         } else {
-            build_nas::registration_request(build_nas::mobile_identity_supi(&self.data.imsi))
+            build_nas::registration_request(
+                build_nas::mobile_identity_supi(&self.data.imsi),
+                include_session_1,
+            )
         }
     }
 
