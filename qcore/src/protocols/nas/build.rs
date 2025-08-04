@@ -108,6 +108,8 @@ pub fn registration_accept(
     fg_guti: NasFGsMobileIdentity,
     plmn: &PlmnIdentity,
     tac: &[u8; 3],
+    reactivation_result: Option<u16>,
+    current_sessions: u16,
 ) -> Box<Nas5gsMessage> {
     // Fake up IMS support - necessary to keep certain UEs registered.
     let fgs_network_feature_support = Some(NasFGsNetworkFeatureSupport::new(vec![0b00000001]));
@@ -120,6 +122,15 @@ pub fn registration_accept(
 
     let tai_list = Some(NasFGsTrackingAreaIdentityList::new(tai_ie_value));
 
+    let pdu_session_reactivation_result = reactivation_result
+        .map(|rr| NasPduSessionReactivationResult::new(vec![(rr & 0xff) as u8, (rr >> 8) as u8]));
+
+    // We always supply PDU session status for simplicity (even in the case where the UE knows there are no sessions).
+    let pdu_session_status = Some(NasPduSessionStatus::new(vec![
+        (current_sessions & 0xff) as u8,
+        (current_sessions >> 8) as u8,
+    ]));
+
     Box::new(Nas5gsMessage::new_5gmm(
         Nas5gmmMessageType::RegistrationAccept,
         Nas5gmmMessage::RegistrationAccept(NasRegistrationAccept {
@@ -127,6 +138,8 @@ pub fn registration_accept(
             allowed_nssai: Some(nssai(allowed_sst)),
             tai_list,
             fgs_network_feature_support,
+            pdu_session_reactivation_result,
+            pdu_session_status,
             ..NasRegistrationAccept::new(NasFGsRegistrationResult::new(
                 vec![0b00_0_0_0_001], // no emergency, no slice-specific auth, no SMS, 3GPP access
             ))

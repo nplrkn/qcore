@@ -650,7 +650,6 @@ impl<'a, A: HandlerApi> NasBase for UeProcedure<'a, A> {
         // Has the UE already obtained a TMSI on its current radio channel?
         if let Some(existing_tmsi) = &self.ue.tmsi {
             if existing_tmsi == tmsi && guami_matches {
-                debug!(self.logger, "Normal case of UE using its existing GUTI");
                 return Ok(false);
             } else {
                 warn!(self.logger, "UE not using GUTI it was given");

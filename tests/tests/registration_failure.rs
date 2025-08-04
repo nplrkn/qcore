@@ -10,6 +10,7 @@ async fn registration_unknown_guti() -> anyhow::Result<()> {
     // unknown GUTI.  (In this case, bad AMF ID 5,5,5.)
     ue.use_guti([0, 241, 16, 5, 5, 5, 0, 0, 0, 0]);
     ue.perform_rrc_setup().await?;
+    ue.data.guti = None;
 
     // QCore retrieves the IMSI, challenges the UE, and the registration completes successfully.
     ue.handle_identity_procedure().await?;

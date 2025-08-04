@@ -217,6 +217,7 @@ impl<'a> MockUeF1ap<'a> {
             bail!("Expected security mode command - got {:?}", message)
         };
         info!(&self.logger, "Rrc SecurityModeCommand <<");
+
         let security_mode_complete = Box::new(build_rrc::security_mode_complete(
             security_mode_command.rrc_transaction_identifier,
         ));

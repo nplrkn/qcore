@@ -92,16 +92,73 @@ pub fn mobile_identity_stmsi(guti: &[u8; 10]) -> NasFGsMobileIdentity {
     NasFGsMobileIdentity::new(v)
 }
 
+pub fn guti_registration_request_with_inner_session_activation(
+    fgs_mobile_identity: NasFGsMobileIdentity,
+) -> Result<Vec<u8>> {
+    let inner = registration_request_inner(fgs_mobile_identity, true);
+    let mut outer = inner.clone();
+    let inner = Nas5gsMessage::Gmm(
+        Nas5gmmHeader {
+            extended_protocol_discriminator: ExtendedProtocolDiscriminator::FIVEGMM,
+            security_header_type: SecurityHeaderType::PLAIN_5GS_NAS_MESSAGE_NOT_SECURITY_PROTECTED,
+            message_type: Nas5gmmMessageType::RegistrationRequest,
+        },
+        Nas5gmmMessage::RegistrationRequest(inner),
+    );
+    let inner = encode_nas_5gs_message(&inner)?;
+
+    // Add the message container and remove the non cleartext IEs.
+    outer.nas_message_container = Some(NasMessageContainer::new(inner));
+    outer.pdu_session_status = None;
+    outer.uplink_data_status = None;
+
+    let outer = Nas5gsMessage::Gmm(
+        Nas5gmmHeader {
+            extended_protocol_discriminator: ExtendedProtocolDiscriminator::FIVEGMM,
+            security_header_type: SecurityHeaderType::PLAIN_5GS_NAS_MESSAGE_NOT_SECURITY_PROTECTED,
+            message_type: Nas5gmmMessageType::RegistrationRequest,
+        },
+        Nas5gmmMessage::RegistrationRequest(outer),
+    );
+    let outer = Nas5gsMessage::protect(outer, Nas5gsSecurityHeaderType::IntegrityProtected, 0, 5);
+
+    Ok(encode_nas_5gs_message(&outer)?)
+}
+
 pub fn registration_request(
     fgs_mobile_identity: NasFGsMobileIdentity,
     include_session_1: bool,
 ) -> Result<Vec<u8>> {
+    let is_guti = fgs_mobile_identity.value[0] & 0b111 == 0b010;
+    let message = registration_request_inner(fgs_mobile_identity, include_session_1);
+
+    let message = Nas5gsMessage::Gmm(
+        Nas5gmmHeader {
+            extended_protocol_discriminator: ExtendedProtocolDiscriminator::FIVEGMM,
+            security_header_type: SecurityHeaderType::PLAIN_5GS_NAS_MESSAGE_NOT_SECURITY_PROTECTED,
+            message_type: Nas5gmmMessageType::RegistrationRequest,
+        },
+        Nas5gmmMessage::RegistrationRequest(message),
+    );
+
+    // A GUTI registration is integrity protected.
+    // We are using fake values for MAC and sequence number.
+    let message = if is_guti {
+        Nas5gsMessage::protect(message, Nas5gsSecurityHeaderType::IntegrityProtected, 0, 5)
+    } else {
+        message
+    };
+
+    Ok(encode_nas_5gs_message(&message)?)
+}
+
+fn registration_request_inner(
+    fgs_mobile_identity: NasFGsMobileIdentity,
+    include_session_1: bool,
+) -> NasRegistrationRequest {
     let uplink_data_status = include_session_1.then_some(uplink_data_status());
     let pdu_session_status = include_session_1.then_some(pdu_session_status());
-
-    if include_session_1 {}
-    let is_guti = fgs_mobile_identity.value[0] & 0b111 == 0b010;
-    let message = Nas5gmmMessage::RegistrationRequest(NasRegistrationRequest {
+    NasRegistrationRequest {
         fgs_registration_type: NasFGsRegistrationType::new(
             (FollowOnRequest::PENDING << 3) | FivegsRegistrationType::INITIAL_REGISTRATION,
         ),
@@ -148,26 +205,7 @@ pub fn registration_request(
         ms_determined_plmn_with_disaster_condition: None,
         requested_peips_assistance_information: None,
         requested_t3512_value: None,
-    });
-
-    let message = Nas5gsMessage::Gmm(
-        Nas5gmmHeader {
-            extended_protocol_discriminator: ExtendedProtocolDiscriminator::FIVEGMM,
-            security_header_type: SecurityHeaderType::PLAIN_5GS_NAS_MESSAGE_NOT_SECURITY_PROTECTED,
-            message_type: Nas5gmmMessageType::RegistrationRequest,
-        },
-        message,
-    );
-
-    // A GUTI registration is integrity protected.
-    // We are using fake values for MAC and sequence number.
-    let message = if is_guti {
-        Nas5gsMessage::protect(message, Nas5gsSecurityHeaderType::IntegrityProtected, 0, 5)
-    } else {
-        message
-    };
-
-    Ok(encode_nas_5gs_message(&message)?)
+    }
 }
 
 // We use the same bit field for the Uplink Data Status and Pdu Session Status - to indicate
@@ -293,14 +331,17 @@ pub fn identity_response(imsi: &str) -> Result<Vec<u8>> {
     Ok(encode_nas_5gs_message(&message)?)
 }
 
-pub fn security_mode_complete() -> Result<Vec<u8>> {
+pub fn security_mode_complete(register_request: Vec<u8>) -> Result<Vec<u8>> {
     let message = Nas5gsMessage::Gmm(
         Nas5gmmHeader {
             extended_protocol_discriminator: ExtendedProtocolDiscriminator::FIVEGMM,
             security_header_type: SecurityHeaderType::PLAIN_5GS_NAS_MESSAGE_NOT_SECURITY_PROTECTED,
             message_type: Nas5gmmMessageType::SecurityModeComplete,
         },
-        Nas5gmmMessage::SecurityModeComplete(NasSecurityModeComplete::new()),
+        Nas5gmmMessage::SecurityModeComplete(NasSecurityModeComplete {
+            nas_message_container: Some(NasMessageContainer::new(register_request)),
+            ..NasSecurityModeComplete::new()
+        }),
     );
     Ok(encode_nas_5gs_message(&message)?)
 }

@@ -130,13 +130,25 @@ impl<T: Transport> MockUe<T> {
         Ok(nas)
     }
 
+    fn build_register_request_for_nas_security_mode(&self) -> Result<Vec<u8>> {
+        let include_session_1 = self.data.ipv4_addr != Ipv4Addr::UNSPECIFIED;
+        assert_eq!(self.data.guti.is_none(), true);
+        build_nas::registration_request(
+            build_nas::mobile_identity_supi(&self.data.imsi),
+            include_session_1,
+        )
+    }
+
     fn build_register_request(&self) -> Result<Vec<u8>> {
         let include_session_1 = self.data.ipv4_addr != Ipv4Addr::UNSPECIFIED;
         if let Some(guti) = self.data.guti {
-            build_nas::registration_request(
-                build_nas::mobile_identity_guti(&guti),
-                include_session_1,
-            )
+            if include_session_1 {
+                build_nas::guti_registration_request_with_inner_session_activation(
+                    build_nas::mobile_identity_guti(&guti),
+                )
+            } else {
+                build_nas::registration_request(build_nas::mobile_identity_guti(&guti), false)
+            }
         } else {
             build_nas::registration_request(
                 build_nas::mobile_identity_supi(&self.data.imsi),
@@ -174,7 +186,8 @@ impl<T: Transport> MockUe<T> {
     pub async fn handle_nas_security_mode(&mut self) -> Result<()> {
         ensure_nas!(SecurityModeCommand, self.receive_nas().await?);
         info!(&self.logger, "Nas SecurityModeCommand <<");
-        let nas_security_mode_complete = build_nas::security_mode_complete()?;
+        let register_request = self.build_register_request_for_nas_security_mode()?;
+        let nas_security_mode_complete = build_nas::security_mode_complete(register_request)?;
         info!(&self.logger, "Nas SecurityModeComplete >>");
         self.send_nas(nas_security_mode_complete).await
     }

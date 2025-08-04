@@ -91,6 +91,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         let reactivation_result = self
             .reconcile_sessions(uplink_data_status, pdu_session_status)
             .await?;
+        let current_sessions = pdu_session_status & !reactivation_result;
 
         let guti = self.allocate_tmsi().await;
         debug!(
@@ -104,6 +105,10 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
             guti,
             &self.config().plmn,
             &self.ue.core.tac,
+            registration_request
+                .uplink_data_status
+                .map(|_| reactivation_result),
+            current_sessions,
         );
         self.log_message("<< Nas RegistrationAccept");
         self.0 = self.0.ran_context_create(accept).await?;

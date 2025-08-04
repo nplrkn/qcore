@@ -1,7 +1,6 @@
 # Backlog
 
 ## In progress
-- registration request with session reactivation should use a message container (for non cleartext IEs)
 - self review + TODOs introduced in the pull request
 
 - Tidying + Refactoring
