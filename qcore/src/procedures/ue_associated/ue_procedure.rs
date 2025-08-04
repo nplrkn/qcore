@@ -19,6 +19,7 @@ use crate::{
         FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED, Tmsi,
     },
 };
+use anyhow::ensure;
 use asn1_per::SerDes;
 use async_std::channel::{Receiver, Sender};
 use f1ap::{DlRrcMessageTransferProcedure, F1apPdu, RrcContainer, SrbId, UlRrcMessageTransfer};
@@ -435,7 +436,6 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         // Has the UE already obtained a TMSI on its current radio channel?
         if let Some(existing_tmsi) = &self.ue.tmsi {
             if existing_tmsi.0 == tmsi && guami_matches {
-                debug!(self.logger, "Normal case of UE using its existing GUTI");
                 return Ok(false);
             } else {
                 warn!(self.logger, "UE not using GUTI it was given");
@@ -688,5 +688,63 @@ impl<'a, A: HandlerApi> NasBase for UeProcedure<'a, A> {
         debug!(self.logger, "GUTI/TMSI with unknown AMF IDs or TMSI");
 
         Ok(true)
+    }
+
+    // Removes any sessions that the UE doesn't know about from our UE context.
+    // Returns a bitmask of unknown sessions mentioned by the UE
+    async fn reconcile_sessions(
+        &mut self,
+        uplink_data_status: u16,
+        pdu_session_status: u16,
+    ) -> Result<u16> {
+        debug!(
+            self.logger,
+            "Reconcile sessions: uplink_data_status={:016b}, pdu_session_status={:016b}",
+            uplink_data_status,
+            pdu_session_status
+        );
+        // Warn if the uplink data status does not match the PDU session status.
+        if uplink_data_status != pdu_session_status {
+            warn!(
+                self.logger,
+                "Uplink data status ({:016b}) does not match PDU session status ({:016b}) - QCore always reactivates all known sessions",
+                uplink_data_status,
+                pdu_session_status,
+            )
+        }
+
+        let mut ue_sessions: u16 = pdu_session_status;
+
+        // Rebuild the UE session list to contain only sessions that the UE knows about.
+        let sessions = std::mem::take(&mut self.ue.core.pdu_sessions);
+        for session in sessions.into_iter() {
+            ensure!(session.id < 16, "Session ID >= 16 not supported");
+            let session_id_bit = 1 << session.id;
+            if ue_sessions & session_id_bit == 0 {
+                debug!(
+                    self.logger,
+                    "UE not aware of session {} so delete it", session.id
+                );
+                self.delete_userplane_session(&session.userplane_info, self.logger)
+                    .await;
+            } else {
+                debug!(self.logger, "UE confirms existing session {}", session.id);
+                self.ue.core.pdu_sessions.push(session);
+
+                // Clear the bit in the ue_sessions bitmask.  Any bits still left set after this process will indicate
+                // reactivation failures - cases where the UE thought there was a session but we don't know about it.
+                ue_sessions &= !session_id_bit;
+            }
+        }
+
+        if ue_sessions != 0 {
+            warn!(
+                self.logger,
+                "UE asked to reactivate one or more sessions that we don't know about: {:b}",
+                ue_sessions
+            );
+        }
+
+        Ok(ue_sessions)
     }
 }

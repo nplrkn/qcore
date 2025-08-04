@@ -25,6 +25,10 @@ pub const FGMM_CAUSE_DNN_NOT_SUPPORTED_OR_NOT_SUBSCRIBED_IN_THE_SLICE: u8 = 0b01
 // TS24.501, Table 9.11.4.2.1
 pub const FGSM_CAUSE_REGULAR_DEACTIVATION: u8 = 0b00100100;
 
+// TS24.501, 9.11.3.7.1
+pub const REGISTRATION_TYPE_MASK: u8 = 0b111;
+pub const REGISTRATION_TYPE_INITIAL: u8 = 1;
+
 #[derive(Deref, Debug)]
 pub struct Imsi(pub String);
 

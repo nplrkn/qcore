@@ -1,8 +1,8 @@
 # Backlog
 
 ## In progress
-  - Commonize session reactivation between registration and service request.  Log if uplink data status does not match pdu session status.
-  - self review + TODOs introduced in the pull request
+- registration request with session reactivation should use a message container (for non cleartext IEs)
+- self review + TODOs introduced in the pull request
 
 - Tidying + Refactoring
   - Split procedures into those acting on UeContext5GC and UeContextRan?  e.g. CoreUeProcedure, RanUeProcedure?

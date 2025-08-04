@@ -1,11 +1,11 @@
 mod mock_ue_5gc;
 pub use mock_ue_5gc::*;
 
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Result, anyhow, bail, ensure};
 use async_trait::async_trait;
 use oxirush_nas::{
-    Nas5gmmMessage, Nas5gsMessage, Nas5gsmMessage, NasPduAddress, NasPduSessionType,
-    decode_nas_5gs_message,
+    Nas5gmmMessage, Nas5gsMessage, Nas5gsmMessage, NasPduAddress, NasPduSessionReactivationResult,
+    NasPduSessionStatus, NasPduSessionType, decode_nas_5gs_message,
     messages::{
         NasAuthenticationRequest, NasDlNasTransport, NasPduSessionEstablishmentAccept,
         NasPduSessionReleaseCommand,
@@ -196,32 +196,50 @@ impl<T: Transport> MockUe<T> {
     pub async fn handle_nas_registration_accept(&mut self) -> Result<()> {
         let message = ensure_nas!(RegistrationAccept, self.receive_nas().await?);
         info!(&self.logger, "Nas RegistrationAccept <<");
+
         let Some(guti_ie) = message.fg_guti else {
             bail!("Expected GUTI in registration accept")
         };
         let guti = &guti_ie.value[1..11];
         info!(&self.logger, "UE was assigned GUTI {:02x?}", guti);
         self.use_guti(guti.try_into().unwrap());
+
+        self.check_session_reactivation(
+            &message.pdu_session_reactivation_result,
+            &message.pdu_session_status,
+        )?;
 
         let nas_registration_complete = build_nas::registration_complete()?;
         info!(&self.logger, "Nas RegistrationComplete >>");
         self.send_nas(nas_registration_complete).await
     }
 
-    pub async fn handle_nas_registration_accept2(&mut self, nas: Vec<u8>) -> Result<()> {
-        let nas = self.decode_nas(nas)?;
-        let message = ensure_nas!(RegistrationAccept, nas);
-        info!(&self.logger, "Nas RegistrationAccept <<");
-        let Some(guti_ie) = message.fg_guti else {
-            bail!("Expected GUTI in registration accept")
-        };
-        let guti = &guti_ie.value[1..11];
-        info!(&self.logger, "UE was assigned GUTI {:02x?}", guti);
-        self.use_guti(guti.try_into().unwrap());
-
-        let nas_registration_complete = build_nas::registration_complete()?;
-        info!(&self.logger, "Nas RegistrationComplete >>");
-        self.send_nas(nas_registration_complete).await
+    fn check_session_reactivation(
+        &self,
+        reactivation_result: &Option<NasPduSessionReactivationResult>,
+        session_status: &Option<NasPduSessionStatus>,
+    ) -> Result<()> {
+        if self.data.ipv4_addr != Ipv4Addr::UNSPECIFIED {
+            match reactivation_result {
+                None => bail!("Reactivation result missing"),
+                Some(x) => {
+                    ensure!(
+                        x.value == vec![0, 0],
+                        "Expecting no reactivation result failures"
+                    );
+                }
+            }
+            match session_status {
+                None => bail!("Session status missing"),
+                Some(x) => {
+                    ensure!(
+                        x.value == vec![2, 0],
+                        "Expecting session 1 to be reactivated"
+                    );
+                }
+            }
+        }
+        Ok(())
     }
 
     pub async fn handle_nas_configuration_update(&mut self) -> Result<()> {
@@ -319,9 +337,12 @@ impl<T: Transport> MockUe<T> {
     }
 
     pub async fn receive_nas_service_accept(&mut self) -> Result<()> {
-        ensure_nas!(ServiceAccept, self.receive_nas().await?);
+        let message = ensure_nas!(ServiceAccept, self.receive_nas().await?);
         info!(&self.logger, "Nas ServiceAccept <<");
-        Ok(())
+        self.check_session_reactivation(
+            &message.pdu_session_reactivation_result,
+            &message.pdu_session_status,
+        )
     }
 
     pub async fn send_nas_pdu_session_release_request(&mut self) -> Result<()> {

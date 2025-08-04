@@ -53,6 +53,12 @@ pub trait NasBase {
         tmsi: &Tmsi,
         security_header: Option<Nas5gsSecurityHeader>,
     ) -> Result<bool, u8>;
+
+    async fn reconcile_sessions(
+        &mut self,
+        uplink_data_status: u16,
+        pdu_session_status: u16,
+    ) -> Result<u16>;
 }
 
 mod prelude {

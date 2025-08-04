@@ -1,6 +1,5 @@
 use super::prelude::*;
 use crate::{nas::*, nas_filter};
-use anyhow::ensure;
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gsMessage, NasFGsMobileIdentity, decode_nas_5gs_message,
     messages::NasServiceRequest,
@@ -63,36 +62,13 @@ impl<'a, A: HandlerApi> ServiceProcedure<'a, A> {
                 )
             };
 
-        let sessions_to_reactivate =
-            if let Some(uplink_data_status) = inner_message.uplink_data_status {
-                uplink_data_status.value[0..2].to_vec()
-            } else {
-                vec![0u8; 2]
-            };
+        let uplink_data_status = parse::uplink_data_status(&inner_message.uplink_data_status);
+        let pdu_session_status = parse::pdu_session_status(&inner_message.pdu_session_status);
+        let reactivation_result = self
+            .reconcile_sessions(uplink_data_status, pdu_session_status)
+            .await?;
 
-        // Reactivate sessions
-        let mut session_status = [0u8; 2];
-        for session in self.ue.core.pdu_sessions.iter() {
-            let id = session.id;
-            ensure!(id < 16, "Session ID >= 16 not supported");
-            session_status[(id / 8) as usize] |= 1 << (id % 8);
-        }
-
-        // If the UE is asking to reactivate a session that does not exist, set the relevant bit in the result
-        let reactivation_result = [
-            sessions_to_reactivate[0] & !session_status[0],
-            sessions_to_reactivate[1] & !session_status[1],
-        ];
-        debug!(
-            self.logger,
-            "Service request session status (1s are active): {:08b} {:08b}, reactivation result (1s are failures): {:08b} {:08b}",
-            session_status[0],
-            session_status[1],
-            reactivation_result[0],
-            reactivation_result[1],
-        );
-
-        let accept = crate::nas::build::service_accept(session_status, reactivation_result);
+        let accept = crate::nas::build::service_accept(pdu_session_status, reactivation_result);
         self.log_message("<< Nas ServiceAccept");
         self.0 = self.0.ran_context_create(accept).await?;
 

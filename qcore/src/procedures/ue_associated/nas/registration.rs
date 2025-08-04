@@ -39,16 +39,17 @@ define_ue_procedure!(RegistrationProcedure);
 impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     pub async fn run(
         mut self,
-        r: Box<NasRegistrationRequest>,
+        registration_request: Box<NasRegistrationRequest>,
         security_header: Option<Nas5gsSecurityHeader>,
     ) -> Result<()> {
         self.log_message(">> Nas RegistrationRequest");
 
-        // TODO magic number
-        let is_registration_update = r.fgs_registration_type.value & 0b111 != 1;
-
         // If this is a registration update and security is not activated then we failed to retrieve the UE context
         // based on the TMSI in the outer message.  Tell the UE it needs to do an initial registration.
+        let is_registration_update = registration_request.fgs_registration_type.value
+            & REGISTRATION_TYPE_MASK
+            != REGISTRATION_TYPE_INITIAL;
+
         if is_registration_update && !self.ue.core.nas.security_activated() {
             warn!(
                 self.logger,
@@ -62,36 +63,34 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
             return Ok(());
         }
 
-        let ue_sessions: [u8; 2] = r
-            .pdu_session_status
-            .clone()
-            .map(|x| x.value[0..2].try_into().unwrap_or_default())
-            .unwrap_or_default();
-        let ue_sessions: u16 = ue_sessions[0] as u16 | ((ue_sessions[1] as u16) << 8);
-
-        if let Err(cause) = self.handle_registration(r, security_header).await {
-            if cause != ABORT_PROCEDURE {
-                self.reject_registration(cause).await?
-            } else {
-                bail!("Abort registration procedure")
+        // The UE is authenticated based on cleartext IEs in the outer message.  Any non-cleartext IEs (such as those
+        // governing session reactivation) come in a NAS message container (TS24.501, 4.4.6).
+        //   -  On a initial GUTI registration that reusing existing security context, the NAS message container IE is in the Registration Request
+        //   -  Otherwise, it comes in the Security Mode Complete.
+        //
+        let registration_request = match self
+            .handle_registration(registration_request, security_header)
+            .await
+        {
+            Ok(r) => r,
+            Err(cause) => {
+                if cause != ABORT_PROCEDURE {
+                    self.reject_registration(cause).await?;
+                    return Ok(());
+                } else {
+                    bail!("Abort registration procedure")
+                }
             }
-        }
+        };
+        // From now on, we are using the full version of the registration request complete with non-cleartext IEs, if available.
 
-        // Clear any sessions that the UE does not know about.
-        let sessions = std::mem::take(&mut self.ue.core.pdu_sessions);
-        for session in sessions.into_iter() {
-            if ue_sessions & (1 << session.id) == 0 {
-                debug!(
-                    self.logger,
-                    "UE not aware of session {} so delete it", session.id
-                );
-                self.delete_userplane_session(&session.userplane_info, self.logger)
-                    .await;
-            } else {
-                debug!(self.logger, "UE confirms existing session {}", session.id);
-                self.ue.core.pdu_sessions.push(session);
-            }
-        }
+        let uplink_data_status =
+            parse::uplink_data_status(&registration_request.uplink_data_status);
+        let pdu_session_status =
+            parse::pdu_session_status(&registration_request.pdu_session_status);
+        let reactivation_result = self
+            .reconcile_sessions(uplink_data_status, pdu_session_status)
+            .await?;
 
         let guti = self.allocate_tmsi().await;
         debug!(
@@ -124,32 +123,60 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         self.nas_indication(reject).await
     }
 
+    // Takes as input the cleartext only registration request, and returns the full registration request
     async fn handle_registration(
         &mut self,
         registration_request: Box<NasRegistrationRequest>,
         security_header: Option<Nas5gsSecurityHeader>,
-    ) -> Result<(), u8> {
-        match self.check_registration_request(registration_request)? {
-            (RegistrationType::Supi(Imsi(imsi)), ue_security_capability) => {
-                self.supi_registration(&imsi, ue_security_capability).await
-            }
-            // TODO: we have already done the retrieve UE
-            (RegistrationType::Guti(amf_ids, tmsi), ue_security_capability) => {
-                let identity_procedure_needed = self
-                    .retrieve_ue(Some(amf_ids[0]), &amf_ids[1..3], &tmsi, security_header)
-                    .await?;
-
-                if identity_procedure_needed {
-                    self.ue.reset_nas_security();
-                    let imsi = self.query_ue_identity().await?;
+    ) -> Result<Box<NasRegistrationRequest>, u8> {
+        let nas_message_container = {
+            match self.check_registration_request(&registration_request)? {
+                (RegistrationType::Supi(Imsi(imsi)), ue_security_capability) => {
                     self.supi_registration(&imsi, ue_security_capability)
-                        .await?;
+                        .await?
                 }
 
-                // TODO - refresh UE registration TTL
+                // TODO: we have already done the retrieve UE
+                (RegistrationType::Guti(amf_ids, tmsi), ue_security_capability) => {
+                    let identity_procedure_needed = self
+                        .retrieve_ue(Some(amf_ids[0]), &amf_ids[1..3], &tmsi, security_header)
+                        .await?;
 
-                Ok(())
+                    if identity_procedure_needed {
+                        self.ue.reset_nas_security();
+                        let imsi = self.query_ue_identity().await?;
+                        self.supi_registration(&imsi, ue_security_capability)
+                            .await?
+                    } else {
+                        match registration_request.nas_message_container {
+                            // No NAS message container, so return the original request.
+                            None => return Ok(registration_request),
+                            Some(x) => x,
+                        }
+                    }
+                }
             }
+        };
+
+        // Decode and decipher (but do not admit) the registration request in the NAS message container.
+        let value = nas_message_container.value;
+        let nas = Box::new(decode_nas_5gs_message(&value).map_err(|e| {
+            warn!(
+                self.logger,
+                "NAS decode error - {e} - message bytes: {:?}", value
+            );
+            ABORT_PROCEDURE
+        })?);
+        if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(registration_request)) =
+            *nas
+        {
+            Ok(Box::new(registration_request))
+        } else {
+            warn!(
+                self.logger,
+                "Nas message container contained non-registration Nas message {:?}", nas
+            );
+            Err(ABORT_PROCEDURE)
         }
     }
 
@@ -174,7 +201,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         &mut self,
         imsi: &str,
         ue_security_capability: NasUeSecurityCapability,
-    ) -> Result<(), u8> {
+    ) -> Result<NasMessageContainer, u8> {
         info!(self.logger, "SUPI registration for imsi-{imsi}");
 
         self.authenticate_ue(imsi).await?;
@@ -182,7 +209,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         self.activate_nas_security(ue_security_capability)
             .await
             .map_err(|e| {
-                warn!(self.logger, "NAS security failure - {e}");
+                warn!(self.logger, "Failure during NAS security activation - {e}");
                 ABORT_PROCEDURE
             })
     }
@@ -220,7 +247,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     async fn activate_nas_security(
         &mut self,
         ue_security_capabilities: NasUeSecurityCapability,
-    ) -> Result<()> {
+    ) -> Result<NasMessageContainer> {
         self.configure_nas_security(&ue_security_capabilities);
         let r =
             crate::nas::build::security_mode_command(ue_security_capabilities, *self.ue.core.ksi);
@@ -336,9 +363,10 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
 
     fn check_registration_request(
         &self,
-        registration_request: Box<NasRegistrationRequest>,
+        registration_request: &NasRegistrationRequest,
     ) -> Result<(RegistrationType, NasUeSecurityCapability), u8> {
-        let Some(ue_security_capability) = registration_request.ue_security_capability else {
+        let Some(ue_security_capability) = registration_request.ue_security_capability.clone()
+        else {
             warn!(
                 self.logger,
                 "UE security capability missing from Registration Request"
@@ -445,45 +473,20 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     fn check_nas_security_mode_complete(
         &mut self,
         security_mode_complete: Box<NasSecurityModeComplete>,
-    ) -> Result<()> {
+    ) -> Result<NasMessageContainer> {
         match *security_mode_complete {
             NasSecurityModeComplete {
                 imeisv: _imeisv,
-                nas_message_container: Some(NasMessageContainer { value, .. }),
+                nas_message_container: Some(nas_message_container),
                 non_imeisv_pei: _non_imeisv_pei,
-            } => {
-                // TS24.501, 4.4.6 "After activating a 5G NAS security context resulting from a security
-                // mode control procedure... the UE shall include the entire REGISTRATION REQUEST ... in the ...
-                // NAS message container IE in the SECURITY MODE COMPLETE message."
-                // We must decode this message without using the security context - hence the direct call to
-                // decode_nas_5gs_message() instead of self.nas_decode().
-                let nas =
-                    Box::new(decode_nas_5gs_message(&value).map_err(|e| {
-                        anyhow!("NAS decode error - {e} - message bytes: {:?}", value)
-                    })?);
-                if let Nas5gsMessage::Gmm(
-                    _,
-                    Nas5gmmMessage::RegistrationRequest(_registration_request),
-                ) = *nas
-                {
-                    // TODO: do something with the registration request
-                } else {
-                    bail!(
-                        "Security mode complete contained non-registration nas message {:?}",
-                        nas
-                    )
-                };
-            }
+            } => Ok(nas_message_container),
             _ => {
-                warn!(
-                    self.logger,
-                    "Registration request missing from {:?}", security_mode_complete
+                bail!(
+                    "Nas Message container missing from {:?}",
+                    security_mode_complete
                 );
             }
         }
-
-        // TODO - do something with retransmitted registration request
-        Ok(())
     }
 
     fn configure_nas_security(&mut self, ue_security_capabilities: &NasUeSecurityCapability) {

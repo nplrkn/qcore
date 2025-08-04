@@ -1,6 +1,7 @@
 use anyhow::{Result, bail, ensure};
 use oxirush_nas::{
-    NasDnn, NasFGsMobileIdentity, NasUeSecurityCapability, messages::NasIdentityResponse,
+    NasDnn, NasFGsMobileIdentity, NasPduSessionStatus, NasUeSecurityCapability,
+    NasUplinkDataStatus, messages::NasIdentityResponse,
 };
 use std::fmt::Write;
 use xxap::PlmnIdentity;
@@ -80,6 +81,20 @@ pub fn fgs_mobile_identity(fgs_mobile_identity: &NasFGsMobileIdentity) -> Result
 
         x => bail!("Mobile identity type {x} not supported - just SUPI, GUTI, S-TMSI"),
     }
+}
+
+pub fn pdu_session_status(pdu_session_status: &Option<NasPduSessionStatus>) -> u16 {
+    pdu_session_status
+        .as_ref()
+        .map(|x| x.value[0] as u16 | ((x.value[1] as u16) << 8))
+        .unwrap_or_default()
+}
+
+pub fn uplink_data_status(uplink_data_status: &Option<NasUplinkDataStatus>) -> u16 {
+    uplink_data_status
+        .as_ref()
+        .map(|x| x.value[0] as u16 | ((x.value[1] as u16) << 8))
+        .unwrap_or_default()
 }
 
 pub fn nas_ue_security_capability(

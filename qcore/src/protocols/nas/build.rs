@@ -141,11 +141,15 @@ pub fn registration_reject(cause: u8) -> Box<Nas5gsMessage> {
     ))
 }
 
-pub fn service_accept(session_status: [u8; 2], reactivation_result: [u8; 2]) -> Box<Nas5gsMessage> {
-    let pdu_session_status = Some(NasPduSessionStatus::new(session_status.into()));
-    let pdu_session_reactivation_result = Some(NasPduSessionReactivationResult::new(
-        reactivation_result.into(),
-    ));
+pub fn service_accept(session_status: u16, reactivation_result: u16) -> Box<Nas5gsMessage> {
+    let pdu_session_status = Some(NasPduSessionStatus::new(vec![
+        (session_status & 0xff) as u8,
+        (session_status >> 8) as u8,
+    ]));
+    let pdu_session_reactivation_result = Some(NasPduSessionReactivationResult::new(vec![
+        (reactivation_result & 0xff) as u8,
+        (reactivation_result >> 8) as u8,
+    ]));
     Box::new(Nas5gsMessage::new_5gmm(
         Nas5gmmMessageType::ServiceAccept,
         Nas5gmmMessage::ServiceAccept(NasServiceAccept {

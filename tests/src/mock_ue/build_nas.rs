@@ -192,8 +192,8 @@ pub fn service_request(fg_s_tmsi: NasFGsMobileIdentity) -> Result<Vec<u8>> {
     let inner_message = Nas5gmmMessage::ServiceRequest(NasServiceRequest {
         ngksi: ngksi.clone(),
         fg_s_tmsi: fg_s_tmsi.clone(),
-        uplink_data_status: None,
-        pdu_session_status: None,
+        uplink_data_status: Some(uplink_data_status()),
+        pdu_session_status: Some(pdu_session_status()),
         allowed_pdu_session_status: None,
         nas_message_container: None,
         ue_request_type: None,
@@ -212,8 +212,8 @@ pub fn service_request(fg_s_tmsi: NasFGsMobileIdentity) -> Result<Vec<u8>> {
     let outer_message = Nas5gmmMessage::ServiceRequest(NasServiceRequest {
         ngksi,
         fg_s_tmsi,
-        uplink_data_status: Some(uplink_data_status()),
-        pdu_session_status: Some(pdu_session_status()),
+        uplink_data_status: None,
+        pdu_session_status: None,
         allowed_pdu_session_status: None,
         nas_message_container: Some(NasMessageContainer::new(inner_message)),
         ue_request_type: None,
