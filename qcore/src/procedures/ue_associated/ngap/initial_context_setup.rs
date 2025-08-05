@@ -27,6 +27,8 @@ impl<'a, A: HandlerApi> InitialContextSetupProcedure<'a, A> {
         self.log_message(">> Ngap InitialContextSetupResponse");
 
         // Go through each PDU session on the UE reactivating it.  Delete if the reactivation failed.
+        // TODO: commonize setting of remote tunnel info and error handling in Ngap PduSessionResourceSetupResponse,
+        // Ngap InitialContextSetupResponse and F1ap UeContextSetupResponse
         let sessions = std::mem::take(&mut self.ue.core.pdu_sessions);
         for mut session in sessions.into_iter() {
             match self.connect_matching_session(&mut session, &rsp) {

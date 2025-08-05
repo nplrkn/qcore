@@ -4,10 +4,13 @@
 - self review + TODOs introduced in the pull request
 
 - Tidying + Refactoring
+  - Split ue_procedure.rs
   - Split procedures into those acting on UeContext5GC and UeContextRan?  e.g. CoreUeProcedure, RanUeProcedure?
   - clean up registration procedure code
   - commonize service and registration session handling 
   - move ran_session_setup out of ue_procedure.rs
+  - switch "if ngap_mode" etc to use Strategy pattern?
+  - revisit NasBase etc
   - Sort out UeProcedures
         let session = &mut self.ue.core.pdu_sessions[0];
         debug!(self.logger, "{}", session.id);

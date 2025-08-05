@@ -35,6 +35,8 @@ impl<'a, A: HandlerApi> PduSessionResourceSetupProcedure<'a, A> {
                     pdu_session.id
                 );
 
+                // TODO: commonize setting of remote tunnel info and error handling in Ngap PduSessionResourceSetupResponse,
+                // Ngap InitialContextSetupResponse and F1ap UeContextSetupResponse
                 super::connect_session_downlink(
                     &x.first().pdu_session_resource_setup_response_transfer,
                     &mut self.ue.core.pdu_sessions[session_index],

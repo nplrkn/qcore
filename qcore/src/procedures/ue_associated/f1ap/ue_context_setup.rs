@@ -21,6 +21,9 @@ impl<'a, A: HandlerApi> UeContextSetupProcedure<'a, A> {
             .xxap_request::<f1ap::UeContextSetupProcedure>(ue_context_setup_request, self.logger)
             .await?;
         self.log_message(">> F1ap UeContextSetupResponse");
+
+        // TODO: commonize setting of remote tunnel info and error handling in Ngap PduSessionResourceSetupResponse,
+        // Ngap InitialContextSetupResponse and F1ap UeContextSetupResponse
         let (cell_group_config, gtp_tunnel) = self.check_ue_context_setup_response(rsp)?;
         self.ue.core.pdu_sessions[session_idx]
             .userplane_info

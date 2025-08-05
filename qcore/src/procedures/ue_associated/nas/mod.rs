@@ -11,11 +11,10 @@ pub use session_release::*;
 mod service;
 pub use service::*;
 
-use crate::{data::DecodedNas, protocols::nas::Tmsi};
+use crate::data::DecodedNas;
 use anyhow::Result;
 use oxirush_nas::{
     Nas5gsMessage, Nas5gsmMessage, NasFGsMobileIdentity, NasPduSessionStatus, NasUplinkDataStatus,
-    messages::Nas5gsSecurityHeader,
 };
 
 pub trait NasBase {
@@ -41,19 +40,6 @@ pub trait NasBase {
     ) -> Result<T>;
 
     async fn allocate_tmsi(&mut self) -> NasFGsMobileIdentity;
-
-    // Matches the UE TMSI, retrieves the NAS layer data and attaches it to this UE context.
-    // If the UE has switched to a new RAN context, the old one will be cleaned up.
-    // Ok(true) if identity request is needed, Ok(false) if no action is needed, and
-    // Err(cause code) if we should reject the registration
-    // TODO: invert the OK values
-    async fn retrieve_ue(
-        &mut self,
-        amf_region: Option<u8>,
-        amf_set_and_pointer: &[u8],
-        tmsi: &Tmsi,
-        security_header: Option<Nas5gsSecurityHeader>,
-    ) -> Result<bool, u8>;
 
     async fn reconcile_sessions(
         &mut self,

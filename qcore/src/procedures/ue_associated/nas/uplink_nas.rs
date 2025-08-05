@@ -26,7 +26,7 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
         // If UE supplied a S-TMSI on its Rrc message, retrieve the UE context now, so the NAS context
         // is in place for the NAS decode.
         if let Some(stmsi) = stmsi {
-            match self.retrieve_ue2(None, &stmsi[0..2], &stmsi[2..6]).await {
+            match self.retrieve_ue(None, &stmsi[0..2], &stmsi[2..6]).await {
                 Ok(false) => debug!(self.logger, "Using TMSI from outer message for NAS admit"),
                 Ok(true) => debug!(self.logger, "Unknown TMSI in outer message"),
                 Err(e) => warn!(self.logger, "Error retrieving UE {e}"),
@@ -52,7 +52,7 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
                     peek_mobile_identity(&nas)
                 {
                     match self
-                        .retrieve_ue2(Some(amf_ids[0]), &amf_ids[1..3], &tmsi.0)
+                        .retrieve_ue(Some(amf_ids[0]), &amf_ids[1..3], &tmsi.0)
                         .await
                     {
                         Ok(false) => {

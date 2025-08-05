@@ -14,10 +14,7 @@ use crate::{
             UplinkNasTransportProcedure,
         },
     },
-    protocols::nas::{
-        ABORT_PROCEDURE, FGMM_CAUSE_SEMANTICALLY_INCORRECT_MESSAGE,
-        FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED, Tmsi, parse,
-    },
+    protocols::nas::{ABORT_PROCEDURE, FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED, Tmsi, parse},
 };
 use anyhow::ensure;
 use asn1_per::SerDes;
@@ -25,9 +22,8 @@ use async_std::channel::{Receiver, Sender};
 use f1ap::{DlRrcMessageTransferProcedure, F1apPdu, RrcContainer, SrbId, UlRrcMessageTransfer};
 use ngap::{AmfUeNgapId, NgapPdu};
 use oxirush_nas::{
-    Nas5gmmMessage, Nas5gsMessage, Nas5gsSecurityHeaderType, Nas5gsmMessage, NasFGsMobileIdentity,
-    NasPduSessionStatus, NasUplinkDataStatus, decode_nas_5gs_message,
-    messages::Nas5gsSecurityHeader,
+    Nas5gmmMessage, Nas5gsMessage, Nas5gsmMessage, NasFGsMobileIdentity, NasPduSessionStatus,
+    NasUplinkDataStatus, decode_nas_5gs_message, messages::Nas5gsSecurityHeader,
 };
 use rrc::{
     C1_6, CriticalExtensions37, DedicatedNasMessage, UlDcchMessage, UlDcchMessageType,
@@ -413,8 +409,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         Ok(Box::new(UlDcchMessage::from_bytes(rrc_message_bytes)?))
     }
 
-    // TODO
-    pub async fn retrieve_ue2(
+    pub async fn retrieve_ue(
         &mut self,
         amf_region: Option<u8>,
         amf_set_and_pointer: &[u8],
@@ -623,71 +618,6 @@ impl<'a, A: HandlerApi> NasBase for UeProcedure<'a, A> {
         );
         self.ue.tmsi = Some(tmsi);
         guti
-    }
-
-    // Ok(true) if identity request is needed, Ok(false) if no action is needed, and
-    // Err(cause code) if we should reject the registration
-    async fn retrieve_ue(
-        &mut self,
-        amf_region: Option<u8>,
-        amf_set_and_pointer: &[u8],
-        tmsi: &Tmsi,
-        security_header: Option<Nas5gsSecurityHeader>,
-    ) -> Result<bool, u8> {
-        let guami_matches = amf_set_and_pointer == &self.config().amf_ids[1..3]
-            && amf_region
-                .map(|x| x == self.config().amf_ids[0])
-                .unwrap_or(true);
-        if !guami_matches {
-            warn!(
-                self.logger,
-                "Wrong AMF IDs in GUTI/STMSI - theirs {:?}, {:?} ours {}",
-                amf_region,
-                amf_set_and_pointer,
-                self.config().amf_ids
-            );
-        }
-
-        // Has the UE already obtained a TMSI on its current radio channel?
-        if let Some(existing_tmsi) = &self.ue.tmsi {
-            if existing_tmsi == tmsi && guami_matches {
-                return Ok(false);
-            } else {
-                warn!(self.logger, "UE not using GUTI it was given");
-                return Err(FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED);
-            }
-        }
-
-        // A GUTI/TMSI is being used on a new RRC channel.  In this case, the UE is meant to integrity protect its message.
-        let security_type = security_header
-            .map(|hdr| hdr.security_header_type)
-            .unwrap_or(Nas5gsSecurityHeaderType::PlainNasMessage);
-        if security_type != Nas5gsSecurityHeaderType::IntegrityProtected {
-            warn!(
-                self.logger,
-                "GUTI/TMSI request missing integrity protection {:?}", security_type
-            );
-            return Err(FGMM_CAUSE_SEMANTICALLY_INCORRECT_MESSAGE);
-        }
-
-        // If we know about this GUTI, retrieve the core context and attach it to this UE.
-        if guami_matches {
-            match self.take_core_context(&tmsi.0).await {
-                Some(c) => {
-                    self.ue.core = c;
-                    self.ue.tmsi = Some(tmsi.clone());
-                    return Ok(false);
-                }
-                None => {
-                    debug!(self.logger, "Unknown TMSI");
-                }
-            }
-        }
-
-        // Identity procedure needed
-        debug!(self.logger, "GUTI/TMSI with unknown AMF IDs or TMSI");
-
-        Ok(true)
     }
 
     // Removes any sessions that the UE doesn't know about from our UE context.

@@ -14,7 +14,7 @@ use security::{Challenge, resync_sqn};
 
 enum RegistrationType {
     Supi(Imsi),
-    Guti(AmfIds, Tmsi),
+    Guti,
 }
 
 #[derive(Debug)]
@@ -40,7 +40,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     pub async fn run(
         mut self,
         registration_request: Box<NasRegistrationRequest>,
-        security_header: Option<Nas5gsSecurityHeader>,
+        _security_header: Option<Nas5gsSecurityHeader>,
     ) -> Result<()> {
         self.log_message(">> Nas RegistrationRequest");
 
@@ -68,10 +68,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         //   -  On a initial GUTI registration that reusing existing security context, the NAS message container IE is in the Registration Request
         //   -  Otherwise, it comes in the Security Mode Complete.
         //
-        let registration_request = match self
-            .handle_registration(registration_request, security_header)
-            .await
-        {
+        let registration_request = match self.handle_registration(registration_request).await {
             Ok(r) => r,
             Err(cause) => {
                 if cause != ABORT_PROCEDURE {
@@ -130,7 +127,6 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     async fn handle_registration(
         &mut self,
         registration_request: Box<NasRegistrationRequest>,
-        security_header: Option<Nas5gsSecurityHeader>,
     ) -> Result<Box<NasRegistrationRequest>, u8> {
         let nas_message_container = {
             match self.check_registration_request(&registration_request)? {
@@ -139,29 +135,29 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                         .await?
                 }
 
-                // TODO: we have already done the retrieve UE
-                (RegistrationType::Guti(amf_ids, tmsi), ue_security_capability) => {
-                    let identity_procedure_needed = self
-                        .retrieve_ue(Some(amf_ids[0]), &amf_ids[1..3], &tmsi, security_header)
-                        .await?;
-
-                    if identity_procedure_needed {
+                (RegistrationType::Guti, ue_security_capability) => {
+                    // If we successfully retrieved the UE earlier, we can continue.
+                    // Otherwise this was an unknown GUTI, so we need to perform an identity procedure.
+                    // We can tell based on whether there is a NAS security context in place.
+                    if self.ue.core.nas.security_activated() {
+                        // If there are any non-cleartext IEs to process, there will be an inner registration request
+                        // in the NAS message container.  Switch to that, if it is present, otherwise return the original
+                        // request.
+                        match registration_request.nas_message_container {
+                            None => return Ok(registration_request),
+                            Some(x) => x,
+                        }
+                    } else {
                         self.ue.reset_nas_security();
                         let imsi = self.query_ue_identity().await?;
                         self.supi_registration(&imsi, ue_security_capability)
                             .await?
-                    } else {
-                        match registration_request.nas_message_container {
-                            // No NAS message container, so return the original request.
-                            None => return Ok(registration_request),
-                            Some(x) => x,
-                        }
                     }
                 }
             }
         };
 
-        // Decode and decipher (but do not admit) the registration request in the NAS message container.
+        // Decode (but do not admit) the registration request in the NAS message container.
         let value = nas_message_container.value;
         let nas = Box::new(decode_nas_5gs_message(&value).map_err(|e| {
             warn!(
@@ -383,13 +379,9 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                     warn!(self.logger, "{e}");
                     FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED
                 })? {
-                MobileIdentity::Guti(Guti(plmn, amf_ids, tmsi)) => (
-                    plmn,
-                    (
-                        RegistrationType::Guti(amf_ids, tmsi),
-                        ue_security_capability,
-                    ),
-                ),
+                MobileIdentity::Guti(Guti(plmn, _amf_ids, _tmsi)) => {
+                    (plmn, (RegistrationType::Guti, ue_security_capability))
+                }
                 MobileIdentity::Supi(plmn, imsi) => {
                     (plmn, (RegistrationType::Supi(imsi), ue_security_capability))
                 }
