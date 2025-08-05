@@ -14,7 +14,7 @@ async fn ngap_service_request() -> anyhow::Result<()> {
     // Disconnect the TNLA, then re-establish the NG interface.
     gnb.disconnect().await;
 
-    // TODO - remove this
+    // TODO - remove this - probably by replacing the above with an NgReset procedure
     async_std::task::sleep(std::time::Duration::from_secs(1)).await;
     gnb.perform_ng_setup(qc.ip_addr()).await?;
 

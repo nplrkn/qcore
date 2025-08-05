@@ -11,11 +11,8 @@ async fn f1ap_session_reactivation() -> anyhow::Result<()> {
 
     let ue_data = ue.into();
 
-    // Disconnect the TNLA, then re-establish the F1 interface.
-    du.disconnect().await;
-
-    // TODO - remove this
-    async_std::task::sleep(std::time::Duration::from_secs(1)).await;
+    // Re-establish the F1 interface.
+    du.perform_f1_removal().await?;
     du.perform_f1_setup(qc.ip_addr()).await?;
 
     // UE sends a registration request with GUTI and reactivates its previous session.
