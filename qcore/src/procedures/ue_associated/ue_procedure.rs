@@ -112,7 +112,7 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
     pub async fn commit_userplane_sessions(&mut self) -> Result<()> {
         for session in self.ue.core.pdu_sessions.iter_mut() {
             self.base
-                .commit_userplane_session(&mut session.userplane_info, self.base.logger)
+                .commit_userplane_session(&session.userplane_info, self.base.logger)
                 .await?;
         }
         Ok(())
@@ -627,8 +627,8 @@ impl<'a, A: HandlerApi> NasBase for UeProcedure<'a, A> {
         uplink_data_status: &Option<NasUplinkDataStatus>,
         pdu_session_status: &Option<NasPduSessionStatus>,
     ) -> Result<(u16, u16)> {
-        let uplink_data_status = parse::uplink_data_status(&uplink_data_status);
-        let pdu_session_status = parse::pdu_session_status(&pdu_session_status);
+        let uplink_data_status = parse::uplink_data_status(uplink_data_status);
+        let pdu_session_status = parse::pdu_session_status(pdu_session_status);
 
         debug!(
             self.logger,

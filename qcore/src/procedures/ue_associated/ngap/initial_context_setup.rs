@@ -14,7 +14,7 @@ impl<'a, A: HandlerApi> InitialContextSetupProcedure<'a, A> {
             kgnb,
             self.config().sst,
             Some(nas_pdu),
-            &self.ue,
+            self.ue,
             self.config().ip_addr.into(),
         )?;
         self.log_message("<< Ngap InitialContextSetupRequest");
@@ -33,7 +33,7 @@ impl<'a, A: HandlerApi> InitialContextSetupProcedure<'a, A> {
         for mut session in sessions.into_iter() {
             match self.connect_matching_session(&mut session, &rsp) {
                 Ok(()) => {
-                    self.commit_userplane_session(&mut session.userplane_info, self.logger)
+                    self.commit_userplane_session(&session.userplane_info, self.logger)
                         .await?;
                     self.ue.core.pdu_sessions.push(session);
                 }

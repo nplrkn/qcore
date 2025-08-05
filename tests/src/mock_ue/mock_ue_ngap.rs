@@ -28,9 +28,9 @@ impl DerefMut for MockUeNgap<'_> {
     }
 }
 
-impl Into<MockUe5GCData> for MockUeNgap<'_> {
-    fn into(self) -> MockUe5GCData {
-        self.base.data
+impl From<MockUeNgap<'_>> for MockUe5GCData {
+    fn from(val: MockUeNgap<'_>) -> Self {
+        val.base.data
     }
 }
 
@@ -122,7 +122,7 @@ impl<'a> MockUeNgap<'a> {
         cu_ip_addr: &IpAddr,
         logger: &Logger,
     ) -> Result<Self> {
-        let mut ue = MockUeNgap::new(imsi, ue_id, &gnb, cu_ip_addr, &logger).await?;
+        let mut ue = MockUeNgap::new(imsi, ue_id, gnb, cu_ip_addr, logger).await?;
         ue.send_nas_register_request().await?;
         ue.handle_nas_authentication().await?;
         ue.handle_nas_security_mode().await?;
@@ -142,7 +142,7 @@ impl<'a> MockUeNgap<'a> {
         cu_ip_addr: &IpAddr,
         logger: &Logger,
     ) -> Result<Self> {
-        let mut ue = MockUeNgap::new_registered(imsi, ue_id, &gnb, cu_ip_addr, &logger).await?;
+        let mut ue = MockUeNgap::new_registered(imsi, ue_id, gnb, cu_ip_addr, logger).await?;
 
         // UE establishes PDU session
         ue.send_nas_pdu_session_establishment_request().await?;

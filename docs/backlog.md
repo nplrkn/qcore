@@ -14,6 +14,7 @@
   - Sort out UeProcedures
         let session = &mut self.ue.core.pdu_sessions[0];
         debug!(self.logger, "{}", session.id);
+  - test scripts - move to builder pattern (new_with_base() etc)?
 
 - Live testing with multiple phones, update readme documenting interop status.
 

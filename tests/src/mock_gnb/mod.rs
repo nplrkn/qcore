@@ -364,7 +364,7 @@ impl MockGnb {
         {
             // We can only cope with a single session right now.
             assert_eq!(pdu_session_resource_setup_list_cxt_req.0.len(), 1);
-            assert_eq!(session_reactivation, true);
+            assert!(session_reactivation);
             let item = pdu_session_resource_setup_list_cxt_req.0.first();
             self.update_session(
                 item.pdu_session_id,
@@ -372,7 +372,7 @@ impl MockGnb {
                 &item.pdu_session_resource_setup_request_transfer,
             )?;
         } else {
-            assert_eq!(session_reactivation, false);
+            assert!(!session_reactivation);
         }
 
         Ok(nas_pdu)

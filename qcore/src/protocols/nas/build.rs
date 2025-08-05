@@ -115,7 +115,7 @@ pub fn registration_accept(
     let fgs_network_feature_support = Some(NasFGsNetworkFeatureSupport::new(vec![0b00000001]));
 
     let mut tai_ie_value = vec![
-        0_00_00000, // type of list 00, number of elements - 1 = 0 (...so 1 element)
+        0b0_00_00000, // type of list 00, number of elements - 1 = 0 (...so 1 element)
     ];
     tai_ie_value.extend_from_slice(&plmn.0);
     tai_ie_value.extend_from_slice(tac);

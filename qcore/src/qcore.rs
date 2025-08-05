@@ -195,7 +195,7 @@ impl QCore {
         ue_id: u32,
         logger: &Logger,
     ) {
-        let old = self.tmsis.lock().await.insert(tmsi.0.clone(), v);
+        let old = self.tmsis.lock().await.insert(tmsi.0, v);
 
         match old {
             Some(CoreContextLocator::Stored(_)) => {

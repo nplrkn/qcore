@@ -49,7 +49,7 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
         if let (nas, Some(security_header)) = &nas {
             if !self.ue.core.nas.security_activated() {
                 if let Ok(MobileIdentity::Guti(Guti(_plmn, amf_ids, tmsi))) =
-                    peek_mobile_identity(&nas)
+                    peek_mobile_identity(nas)
                 {
                     match self
                         .retrieve_ue(Some(amf_ids[0]), &amf_ids[1..3], &tmsi.0)
@@ -63,7 +63,7 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
                             self.ue
                                 .core
                                 .nas
-                                .admit_message(Some(&security_header), &nas_bytes)?;
+                                .admit_message(Some(security_header), &nas_bytes)?;
                         }
                         Ok(true) => debug!(self.logger, "Unknown TMSI in registration"),
                         Err(e) => warn!(self.logger, "Error retrieving UE {e}"),

@@ -28,9 +28,9 @@ impl DerefMut for MockUeF1ap<'_> {
     }
 }
 
-impl Into<MockUe5GCData> for MockUeF1ap<'_> {
-    fn into(self) -> MockUe5GCData {
-        self.base.data
+impl From<MockUeF1ap<'_>> for MockUe5GCData {
+    fn from(val: MockUeF1ap<'_>) -> Self {
+        val.base.data
     }
 }
 
