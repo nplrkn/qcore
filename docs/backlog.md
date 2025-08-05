@@ -1,8 +1,6 @@
 # Backlog
 
 ## In progress
-- self review + TODOs introduced in the pull request
-
 - Tidying + Refactoring
   - Split ue_procedure.rs
   - Split procedures into those acting on UeContext5GC and UeContextRan?  e.g. CoreUeProcedure, RanUeProcedure?
@@ -15,6 +13,8 @@
         let session = &mut self.ue.core.pdu_sessions[0];
         debug!(self.logger, "{}", session.id);
   - test scripts - move to builder pattern (new_with_base() etc)?
+
+- OAI test broken - simulated UE doesn't send Configuration Update Complete
 
 - Live testing with multiple phones, update readme documenting interop status.
 
