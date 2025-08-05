@@ -62,13 +62,14 @@ impl<'a, A: HandlerApi> ServiceProcedure<'a, A> {
                 )
             };
 
-        let uplink_data_status = parse::uplink_data_status(&inner_message.uplink_data_status);
-        let pdu_session_status = parse::pdu_session_status(&inner_message.pdu_session_status);
-        let reactivation_result = self
-            .reconcile_sessions(uplink_data_status, pdu_session_status)
+        let (active_sessions, reactivation_result) = self
+            .reconcile_sessions(
+                &inner_message.uplink_data_status,
+                &inner_message.pdu_session_status,
+            )
             .await?;
 
-        let accept = crate::nas::build::service_accept(pdu_session_status, reactivation_result);
+        let accept = crate::nas::build::service_accept(active_sessions, reactivation_result);
         self.log_message("<< Nas ServiceAccept");
         self.0 = self.0.ran_context_create(accept).await?;
 

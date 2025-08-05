@@ -16,7 +16,7 @@ use crate::{
     },
     protocols::nas::{
         ABORT_PROCEDURE, FGMM_CAUSE_SEMANTICALLY_INCORRECT_MESSAGE,
-        FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED, Tmsi,
+        FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED, Tmsi, parse,
     },
 };
 use anyhow::ensure;
@@ -26,7 +26,8 @@ use f1ap::{DlRrcMessageTransferProcedure, F1apPdu, RrcContainer, SrbId, UlRrcMes
 use ngap::{AmfUeNgapId, NgapPdu};
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gsMessage, Nas5gsSecurityHeaderType, Nas5gsmMessage, NasFGsMobileIdentity,
-    decode_nas_5gs_message, messages::Nas5gsSecurityHeader,
+    NasPduSessionStatus, NasUplinkDataStatus, decode_nas_5gs_message,
+    messages::Nas5gsSecurityHeader,
 };
 use rrc::{
     C1_6, CriticalExtensions37, DedicatedNasMessage, UlDcchMessage, UlDcchMessageType,
@@ -690,12 +691,15 @@ impl<'a, A: HandlerApi> NasBase for UeProcedure<'a, A> {
     }
 
     // Removes any sessions that the UE doesn't know about from our UE context.
-    // Returns a bitmask of unknown sessions mentioned by the UE
+    // Returns (current sessions, reactivation result).
     async fn reconcile_sessions(
         &mut self,
-        uplink_data_status: u16,
-        pdu_session_status: u16,
-    ) -> Result<u16> {
+        uplink_data_status: &Option<NasUplinkDataStatus>,
+        pdu_session_status: &Option<NasPduSessionStatus>,
+    ) -> Result<(u16, u16)> {
+        let uplink_data_status = parse::uplink_data_status(&uplink_data_status);
+        let pdu_session_status = parse::pdu_session_status(&pdu_session_status);
+
         debug!(
             self.logger,
             "Reconcile sessions: uplink_data_status={:016b}, pdu_session_status={:016b}",
@@ -712,14 +716,14 @@ impl<'a, A: HandlerApi> NasBase for UeProcedure<'a, A> {
             )
         }
 
-        let mut ue_sessions: u16 = pdu_session_status;
+        let mut sessions_to_reactivate: u16 = pdu_session_status;
 
         // Rebuild the UE session list to contain only sessions that the UE knows about.
         let sessions = std::mem::take(&mut self.ue.core.pdu_sessions);
         for session in sessions.into_iter() {
             ensure!(session.id < 16, "Session ID >= 16 not supported");
             let session_id_bit = 1 << session.id;
-            if ue_sessions & session_id_bit == 0 {
+            if sessions_to_reactivate & session_id_bit == 0 {
                 debug!(
                     self.logger,
                     "UE not aware of session {} so delete it", session.id
@@ -730,20 +734,22 @@ impl<'a, A: HandlerApi> NasBase for UeProcedure<'a, A> {
                 debug!(self.logger, "UE confirms existing session {}", session.id);
                 self.ue.core.pdu_sessions.push(session);
 
-                // Clear the bit in the ue_sessions bitmask.  Any bits still left set after this process will indicate
+                // Clear the bit in the sessions_to_reactivate bitmask.  Any bits still left set after this process will indicate
                 // reactivation failures - cases where the UE thought there was a session but we don't know about it.
-                ue_sessions &= !session_id_bit;
+                sessions_to_reactivate &= !session_id_bit;
             }
         }
 
-        if ue_sessions != 0 {
+        if sessions_to_reactivate != 0 {
             warn!(
                 self.logger,
                 "UE asked to reactivate one or more sessions that we don't know about: {:b}",
-                ue_sessions
+                sessions_to_reactivate
             );
         }
 
-        Ok(ue_sessions)
+        let active_sessions = pdu_session_status & !sessions_to_reactivate;
+
+        Ok((active_sessions, sessions_to_reactivate))
     }
 }

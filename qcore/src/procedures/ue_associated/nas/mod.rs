@@ -14,7 +14,8 @@ pub use service::*;
 use crate::{data::DecodedNas, protocols::nas::Tmsi};
 use anyhow::Result;
 use oxirush_nas::{
-    Nas5gsMessage, Nas5gsmMessage, NasFGsMobileIdentity, messages::Nas5gsSecurityHeader,
+    Nas5gsMessage, Nas5gsmMessage, NasFGsMobileIdentity, NasPduSessionStatus, NasUplinkDataStatus,
+    messages::Nas5gsSecurityHeader,
 };
 
 pub trait NasBase {
@@ -56,9 +57,9 @@ pub trait NasBase {
 
     async fn reconcile_sessions(
         &mut self,
-        uplink_data_status: u16,
-        pdu_session_status: u16,
-    ) -> Result<u16>;
+        uplink_data_status: &Option<NasUplinkDataStatus>,
+        pdu_session_status: &Option<NasPduSessionStatus>,
+    ) -> Result<(u16, u16)>;
 }
 
 mod prelude {

@@ -84,14 +84,12 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         };
         // From now on, we are using the full version of the registration request complete with non-cleartext IEs, if available.
 
-        let uplink_data_status =
-            parse::uplink_data_status(&registration_request.uplink_data_status);
-        let pdu_session_status =
-            parse::pdu_session_status(&registration_request.pdu_session_status);
-        let reactivation_result = self
-            .reconcile_sessions(uplink_data_status, pdu_session_status)
+        let (current_sessions, reactivation_result) = self
+            .reconcile_sessions(
+                &registration_request.uplink_data_status,
+                &registration_request.pdu_session_status,
+            )
             .await?;
-        let current_sessions = pdu_session_status & !reactivation_result;
 
         let guti = self.allocate_tmsi().await;
         debug!(
