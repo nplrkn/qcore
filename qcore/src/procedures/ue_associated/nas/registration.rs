@@ -34,11 +34,9 @@ pub fn peek_mobile_identity(r: &Nas5gsMessage) -> Result<MobileIdentity> {
     }
 }
 
-define_ue_procedure!(RegistrationProcedure);
-
-impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
-    pub async fn run(
-        mut self,
+impl<'a, B: NasBase> NasProcedure<'a, B> {
+    pub async fn registration(
+        &mut self,
         registration_request: Box<NasRegistrationRequest>,
         _security_header: Option<Nas5gsSecurityHeader>,
     ) -> Result<()> {
@@ -50,7 +48,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
             & REGISTRATION_TYPE_MASK
             != REGISTRATION_TYPE_INITIAL;
 
-        if is_registration_update && !self.ue.core.nas.security_activated() {
+        if is_registration_update && !self.ue.nas.security_activated() {
             warn!(
                 self.logger,
                 "Reject security protected registration update with unknown or missing TMSI in outer message"
@@ -92,27 +90,27 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         debug!(
             self.logger,
             "Allowed NSSAIs: SST {} with and without SD 0",
-            self.config().sst
+            self.api.config().sst
         );
 
         let accept = crate::nas::build::registration_accept(
-            self.config().sst,
+            self.api.config().sst,
             guti,
-            &self.config().plmn,
-            &self.ue.core.tac,
+            &self.api.config().plmn,
+            &self.ue.tac,
             registration_request
                 .uplink_data_status
                 .map(|_| reactivation_result),
             current_sessions,
         );
         self.log_message("<< Nas RegistrationAccept");
-        self.0 = self.0.ran_context_create(accept).await?;
+        self.ran_context_create(accept).await?;
 
         let _registration_complete = self
             .receive_nas(nas_filter!(RegistrationComplete), "Registration Complete")
             .await?;
 
-        self.perform_configuration_update().await?;
+        self.perform_configuration_update2().await?;
 
         Ok(())
     }
@@ -139,7 +137,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                     // If we successfully retrieved the UE earlier, we can continue.
                     // Otherwise this was an unknown GUTI, so we need to perform an identity procedure.
                     // We can tell based on whether there is a NAS security context in place.
-                    if self.ue.core.nas.security_activated() {
+                    if self.ue.nas.security_activated() {
                         // If there are any non-cleartext IEs to process, there will be an inner registration request
                         // in the NAS message container.  Switch to that, if it is present, otherwise return the original
                         // request.
@@ -219,7 +217,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         loop {
             match self.perform_nas_authentication(imsi).await? {
                 NasAuthOutcome::Kseaf(kseaf) => {
-                    self.ue.core.kamf = security::derive_kamf(&kseaf, imsi.as_bytes());
+                    self.ue.kamf = security::derive_kamf(&kseaf, imsi.as_bytes());
                     return Ok(());
                 }
                 NasAuthOutcome::RetryWithNewKSI if !ksi_retry_done => {
@@ -227,10 +225,13 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                     continue;
                 }
                 NasAuthOutcome::ResyncSqn(sqn) if !resync_retry_done => {
-                    self.resync_subscriber_sqn(imsi, sqn).await.map_err(|e| {
-                        warn!(self.logger, "Resync signature failure - {e}");
-                        ABORT_PROCEDURE
-                    })?;
+                    self.api
+                        .resync_subscriber_sqn(imsi, sqn)
+                        .await
+                        .map_err(|e| {
+                            warn!(self.logger, "Resync signature failure - {e}");
+                            ABORT_PROCEDURE
+                        })?;
                     resync_retry_done = true;
                     debug!(self.logger, "Resynchronized SQN to UE {:02x?}", sqn);
                     continue;
@@ -248,8 +249,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         ue_security_capabilities: NasUeSecurityCapability,
     ) -> Result<NasMessageContainer> {
         self.configure_nas_security(&ue_security_capabilities);
-        let r =
-            crate::nas::build::security_mode_command(ue_security_capabilities, *self.ue.core.ksi);
+        let r = crate::nas::build::security_mode_command(ue_security_capabilities, *self.ue.ksi);
         self.log_message("<< NasSecurityModeCommand");
         let Ok(security_mode_complete) = self
             .nas_request(
@@ -273,7 +273,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         let req = crate::nas::build::authentication_request(
             &challenge.rand,
             &challenge.autn,
-            *self.ue.core.ksi,
+            *self.ue.ksi,
         );
 
         self.log_message("<< NasAuthenticationRequest");
@@ -317,7 +317,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                 match self.try_sqn_resynchronization(auth_failure, &auth_params.sim_creds, rand) {
                     Ok(sqn) => Ok(NasAuthOutcome::ResyncSqn(sqn)),
                     Err(e) => {
-                        if self.config().skip_ue_authentication_check {
+                        if self.api.config().skip_ue_authentication_check {
                             warn!(
                                 &self.logger,
                                 "Skipping authentication failure for testability - {e}"
@@ -394,14 +394,14 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
                 }
             };
 
-        if plmn != self.config().plmn {
+        if plmn != self.api.config().plmn {
             // This will cause authentication to fail, because the UE will form its
             // serving network name using its MCC/MNC, and we form ours using our MCC/MNC.
             warn!(
                 self.logger,
                 "UE PLMN {:?} doesn't match ours {:?}",
                 &plmn,
-                self.config().plmn
+                self.api.config().plmn
             );
             return Err(FGMM_CAUSE_PLMN_NOT_ALLOWED);
         }
@@ -414,6 +414,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         imsi: &str,
     ) -> Result<(Challenge, SubscriberAuthParams)> {
         let auth_params = self
+            .api
             .lookup_subscriber_creds_and_inc_sqn(imsi)
             .await
             .ok_or_else(|| anyhow!("Unknown IMSI"))?;
@@ -421,12 +422,12 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
         debug!(self.logger, "SQN for challenge: {:02x?}", auth_params.sqn);
 
         // Generate a new KSI for each challenge.
-        self.ue.core.ksi.inc();
+        self.ue.ksi.inc();
 
         let challenge = security::generate_challenge(
             &auth_params.sim_creds.ki,
             &auth_params.sim_creds.opc,
-            self.config().serving_network_name.as_bytes(),
+            self.api.config().serving_network_name.as_bytes(),
             &auth_params.sqn,
         );
 
@@ -453,7 +454,7 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
             bail!("Missing authentication response parameter on NasAuthenticationResponse")
         };
 
-        if self.config().skip_ue_authentication_check {
+        if self.api.config().skip_ue_authentication_check {
             warn!(
                 self.logger,
                 "Skipping authentication checks for testability reasons"
@@ -485,18 +486,18 @@ impl<'a, A: HandlerApi> RegistrationProcedure<'a, A> {
     }
 
     fn configure_nas_security(&mut self, ue_security_capabilities: &NasUeSecurityCapability) {
-        self.ue.core.security_capabilities =
+        self.ue.security_capabilities =
             crate::nas::parse::nas_ue_security_capability(ue_security_capabilities);
 
         // TS33.501, 6.7.2: AMF starts integrity protection before transmitting SecurityModeCommand.
-        let knasint = security::derive_knasint(&self.ue.core.kamf);
-        self.ue.core.nas.enable_security(knasint);
+        let knasint = security::derive_knasint(&self.ue.kamf);
+        self.ue.nas.enable_security(knasint);
     }
 
     // TODO: commonize with service.rs
-    async fn perform_configuration_update(&mut self) -> Result<()> {
+    async fn perform_configuration_update2(&mut self) -> Result<()> {
         let command = crate::nas::build::configuration_update_command(
-            Some(&self.config().network_display_name),
+            Some(&self.api.config().network_display_name),
             None,
         );
         self.log_message("<< Nas ConfigurationUpdateCommand");

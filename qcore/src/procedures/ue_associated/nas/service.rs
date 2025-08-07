@@ -5,14 +5,12 @@ use oxirush_nas::{
     messages::NasServiceRequest,
 };
 
-define_ue_procedure!(ServiceProcedure);
-
-impl<'a, A: HandlerApi> ServiceProcedure<'a, A> {
-    pub async fn run(mut self, r: Box<NasServiceRequest>) -> Result<()> {
+impl<'a, B: NasBase> NasProcedure<'a, B> {
+    pub async fn service(&mut self, r: Box<NasServiceRequest>) -> Result<()> {
         self.log_message(">> Nas ServiceRequest");
 
         // Ensure that the UE security context has been retrieved based on the TMSI in the outer message.
-        if !self.ue.core.nas.security_activated() {
+        if !self.ue.nas.security_activated() {
             warn!(
                 self.logger,
                 "Rejecting Service Request with unknown or missing TMSI in outer message"
@@ -26,7 +24,7 @@ impl<'a, A: HandlerApi> ServiceProcedure<'a, A> {
         let mut tmsi_matches = false;
         if let Ok(MobileIdentity::STmsi(x)) = crate::nas::parse::fgs_mobile_identity(&r.fg_s_tmsi) {
             if let Some(tmsi) = &self.ue.tmsi {
-                if tmsi.0 == *x.1 && self.config().amf_ids[1..3] == x.0.0 {
+                if tmsi.0 == *x.1 && self.api.config().amf_ids[1..3] == x.0.0 {
                     tmsi_matches = true;
                 }
             } else {
@@ -71,7 +69,7 @@ impl<'a, A: HandlerApi> ServiceProcedure<'a, A> {
 
         let accept = crate::nas::build::service_accept(active_sessions, reactivation_result);
         self.log_message("<< Nas ServiceAccept");
-        self.0 = self.0.ran_context_create(accept).await?;
+        self.ran_context_create(accept).await?;
 
         // Regenerate GUTI and send a configuration update to update it.
         // TODO: actually the new GUTI should only be stored after the configuration update

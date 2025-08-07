@@ -9,16 +9,11 @@ use rrc::{
 use std::collections::HashSet;
 use xxap::NrCgi;
 
-define_ue_procedure!(RrcUeCapabilityEnquiryProcedure);
-
-impl<'a, A: HandlerApi> RrcUeCapabilityEnquiryProcedure<'a, A> {
-    pub async fn run(mut self) -> Result<UeProcedure<'a, A>> {
+impl<'a, B: RrcBase> RrcProcedure<'a, B> {
+    // Return RAT capabilities
+    pub async fn ue_capability_enquiry(&mut self) -> Result<()> {
         // The capability information response can be exceptionally long (multiple SCTP chunks) unless we filter it.
-        let Some(nr_cgi) = &self.ue.nr_cgi else {
-            bail!("Logic error - NR CGI missing")
-        };
-
-        let bands = self.get_bands_for_served_cell(nr_cgi).await?;
+        let bands = self.get_bands_for_served_cell().await?;
         debug!(self.logger, "Asking UE about bands: {:?}", bands);
 
         let r = crate::rrc::build::ue_capability_enquiry(1, &bands)?;
@@ -45,14 +40,19 @@ impl<'a, A: HandlerApi> RrcUeCapabilityEnquiryProcedure<'a, A> {
         {
             self.ue.rat_capabilities = Some(capabilities.as_bytes()?);
         }
-        Ok(self.0)
+        Ok(())
     }
 
-    async fn get_bands_for_served_cell(&self, nr_cgi: &NrCgi) -> Result<HashSet<u16>> {
+    async fn get_bands_for_served_cell(&self) -> Result<HashSet<u16>> {
         let mut bands: HashSet<u16> = HashSet::new();
+        let nr_cgi = self
+            .api
+            .nr_cgi()
+            .as_ref()
+            .ok_or_else(|| anyhow!("NR CGI missing"))?;
 
         // TODO: surely this calls for a HashMap by NrCgi?
-        for du in self.served_cells().lock().await.iter() {
+        for du in self.api.served_cells().lock().await.iter() {
             for item in du.1.iter() {
                 if item.served_cell_information.nr_cgi == *nr_cgi {
                     match &item.served_cell_information.nr_mode_info {

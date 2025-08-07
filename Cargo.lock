@@ -763,6 +763,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "delegate"
+version = "0.13.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6178a82cf56c836a3ba61a7935cdb1c49bfaa6fa4327cd5bf554a503087de26b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.100",
+]
+
+[[package]]
 name = "deranged"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1727,6 +1738,7 @@ dependencies = [
  "aya-log-common",
  "bytes",
  "clap",
+ "delegate",
  "derive_deref",
  "ebpf-common",
  "f1ap",

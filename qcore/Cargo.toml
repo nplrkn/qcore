@@ -43,6 +43,7 @@ ebpf-common = { path = "../ebpf/ebpf-common", features = ["user"]}
 num_cpus = "1.16.0"
 strum = "0.27.1"
 ucs2 = "0.3.3"
+delegate = "0.13.4"
 
 [build-dependencies]
 anyhow = "1.0.97"

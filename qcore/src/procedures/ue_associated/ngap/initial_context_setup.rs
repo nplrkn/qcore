@@ -5,20 +5,24 @@ use crate::data::PduSession;
 
 use super::prelude::*;
 
-define_ue_procedure!(InitialContextSetupProcedure);
-
-impl<'a, A: HandlerApi> InitialContextSetupProcedure<'a, A> {
-    pub async fn run(mut self, kgnb: &[u8; 32], nas_pdu: Vec<u8>) -> Result<UeProcedure<'a, A>> {
+impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
+    pub async fn initial_context_setup(
+        &self,
+        kgnb: &[u8; 32],
+        nas_pdu: Vec<u8>,
+        ue_session_list: &mut Vec<PduSession>,
+    ) -> Result<()> {
         let initial_context_setup_request = crate::ngap::build::initial_context_setup_request(
-            self.config().guami(),
+            self.api.config().guami(),
             kgnb,
-            self.config().sst,
+            self.api.config().sst,
             Some(nas_pdu),
             self.ue,
-            self.config().ip_addr.into(),
+            self.api.config().ip_addr.into(),
         )?;
         self.log_message("<< Ngap InitialContextSetupRequest");
         let rsp = self
+            .api
             .xxap_request::<ngap::InitialContextSetupProcedure>(
                 initial_context_setup_request,
                 self.logger,
@@ -29,13 +33,14 @@ impl<'a, A: HandlerApi> InitialContextSetupProcedure<'a, A> {
         // Go through each PDU session on the UE reactivating it.  Delete if the reactivation failed.
         // TODO: commonize setting of remote tunnel info and error handling in Ngap PduSessionResourceSetupResponse,
         // Ngap InitialContextSetupResponse and F1ap UeContextSetupResponse
-        let sessions = std::mem::take(&mut self.ue.core.pdu_sessions);
+        let sessions = std::mem::take(ue_session_list);
         for mut session in sessions.into_iter() {
             match self.connect_matching_session(&mut session, &rsp) {
                 Ok(()) => {
-                    self.commit_userplane_session(&session.userplane_info, self.logger)
+                    self.api
+                        .commit_userplane_session(&session.userplane_info, self.logger)
                         .await?;
-                    self.ue.core.pdu_sessions.push(session);
+                    ue_session_list.push(session);
                 }
 
                 Err(e) => {
@@ -43,7 +48,8 @@ impl<'a, A: HandlerApi> InitialContextSetupProcedure<'a, A> {
                         self.logger,
                         "Failed to reactivate session {} - {e}", session.id
                     );
-                    self.delete_userplane_session(&session.userplane_info, self.logger)
+                    self.api
+                        .delete_userplane_session(&session.userplane_info, self.logger)
                         .await;
                 }
             }
@@ -65,7 +71,7 @@ impl<'a, A: HandlerApi> InitialContextSetupProcedure<'a, A> {
             );
         }
 
-        Ok(self.0)
+        Ok(())
     }
 
     fn connect_matching_session(

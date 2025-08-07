@@ -1,11 +1,13 @@
 use super::prelude::*;
-use crate::procedures::ue_associated::UplinkNasProcedure;
+use crate::{data::UeContext5GC, procedures::ue_associated::NasProcedure};
 use ngap::{InitialUeMessage, UserLocationInformation, UserLocationInformationNr};
 
-define_ue_procedure!(InitialUeMessageProcedure);
-
-impl<'a, A: HandlerApi> InitialUeMessageProcedure<'a, A> {
-    pub async fn run(mut self, r: Box<InitialUeMessage>) -> Result<()> {
+impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
+    pub async fn initial_ue_message(
+        &mut self,
+        r: Box<InitialUeMessage>,
+        core_context: &mut UeContext5GC,
+    ) -> Result<()> {
         self.log_message(">> Ngap InitialUeMessage");
 
         let UserLocationInformation::UserLocationInformationNr(UserLocationInformationNr {
@@ -18,7 +20,7 @@ impl<'a, A: HandlerApi> InitialUeMessageProcedure<'a, A> {
         };
         self.ue.remote_ran_ue_id = r.ran_ue_ngap_id.0;
         self.ue.nr_cgi = Some(nr_cgi);
-        self.ue.core.tac = tai.tac.0;
+        self.ue.tac = tai.tac.0;
 
         let stmsi: Option<Vec<u8>> = r.five_g_s_tmsi.map(|x| {
             let mut stmsi = x.amf_set_id.0.clone();
@@ -28,8 +30,14 @@ impl<'a, A: HandlerApi> InitialUeMessageProcedure<'a, A> {
             stmsi
         });
 
-        UplinkNasProcedure::new(self.0)
-            .run_initial(r.nas_pdu.0, stmsi.as_deref())
-            .await
+        // TODO - pass in the TAC so it can be populated in the core context
+        let result = NasProcedure {
+            ue: core_context,
+            logger: &self.logger.clone(),
+            api: self,
+        }
+        .initial_nas(r.nas_pdu.0, stmsi.as_deref())
+        .await;
+        result
     }
 }

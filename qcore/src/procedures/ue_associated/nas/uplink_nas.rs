@@ -1,10 +1,7 @@
 //! uplink_nas - transfer of a Nas message from UE to AMF
 use super::prelude::*;
-use super::{DeregistrationProcedure, RegistrationProcedure, SessionEstablishmentProcedure};
 use crate::data::DecodedNas;
-use crate::procedures::ue_associated::{
-    ServiceProcedure, SessionReleaseProcedure, peek_mobile_identity,
-};
+use crate::procedures::ue_associated::peek_mobile_identity;
 use crate::protocols::nas::{
     FGMM_CAUSE_DNN_NOT_SUPPORTED_OR_NOT_SUBSCRIBED_IN_THE_SLICE, Guti, MobileIdentity,
 };
@@ -13,16 +10,16 @@ use oxirush_nas::{
     messages::NasUlNasTransport,
 };
 
-define_ue_procedure!(UplinkNasProcedure);
+// TOOD: should this be NasProcedure::dispatch()?
 
-impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
-    pub async fn run(mut self, nas: Vec<u8>) -> Result<()> {
+impl<'a, B: NasBase> NasProcedure<'a, B> {
+    pub async fn uplink_nas(&mut self, nas: Vec<u8>) -> Result<()> {
         let nas = self.nas_decode(&nas)?;
-        self.run_decoded(nas).await
+        self.dispatch(nas).await
     }
 
     // Called for the first NAS message from the UE on a new RAN context.
-    pub async fn run_initial(mut self, nas_bytes: Vec<u8>, stmsi: Option<&[u8]>) -> Result<()> {
+    pub async fn initial_nas(&mut self, nas_bytes: Vec<u8>, stmsi: Option<&[u8]>) -> Result<()> {
         // If UE supplied a S-TMSI on its Rrc message, retrieve the UE context now, so the NAS context
         // is in place for the NAS decode.
         if let Some(stmsi) = stmsi {
@@ -47,7 +44,7 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
         // because this is the last point at which we have the raw message bytes to perform integrity checking.
         // We peek inside the message to get out the GUTI, retrieve the security context, and then admit the message.
         if let (nas, Some(security_header)) = &nas {
-            if !self.ue.core.nas.security_activated() {
+            if !self.ue.nas.security_activated() {
                 if let Ok(MobileIdentity::Guti(Guti(_plmn, amf_ids, tmsi))) =
                     peek_mobile_identity(nas)
                 {
@@ -61,7 +58,6 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
                                 "Using TMSI from registration message peek for NAS admit"
                             );
                             self.ue
-                                .core
                                 .nas
                                 .admit_message(Some(security_header), &nas_bytes)?;
                         }
@@ -71,10 +67,10 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
                 }
             }
         }
-        self.run_decoded(nas).await
+        self.dispatch(nas).await
     }
 
-    pub async fn run_decoded(mut self, nas: DecodedNas) -> Result<()> {
+    pub async fn dispatch(&mut self, nas: DecodedNas) -> Result<()> {
         let (message, security_header) = nas;
         let Nas5gsMessage::Gmm(_, mm_message) = *message else {
             warn!(self.logger, "Expected MM message, got {:?}", message);
@@ -83,15 +79,13 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
 
         match mm_message {
             Nas5gmmMessage::RegistrationRequest(r) => {
-                RegistrationProcedure::new(self.0)
-                    .run(Box::new(r), security_header)
-                    .await?;
+                self.registration(Box::new(r), security_header).await?;
             }
             Nas5gmmMessage::ServiceRequest(r) => {
-                ServiceProcedure::new(self.0).run(Box::new(r)).await?;
+                self.service(Box::new(r)).await?;
             }
             Nas5gmmMessage::DeregistrationRequestFromUe(r) => {
-                DeregistrationProcedure::new(self.0).run(r).await?;
+                self.deregistration_from_ue(r).await?;
             }
             Nas5gmmMessage::UlNasTransport(NasUlNasTransport {
                 payload_container,
@@ -115,15 +109,11 @@ impl<'a, A: HandlerApi> UplinkNasProcedure<'a, A> {
                         header,
                         Nas5gsmMessage::PduSessionEstablishmentRequest(ref r),
                     ) => {
-                        SessionEstablishmentProcedure::new(self.0)
-                            .run(header, r, dnn)
-                            .await?;
+                        self.session_establishment(header, r, dnn).await?;
                     }
                     // TODO: PduSessionModificationRequest(NasPduSessionModificationRequest)
                     Nas5gsMessage::Gsm(header, Nas5gsmMessage::PduSessionReleaseRequest(ref r)) => {
-                        SessionReleaseProcedure::new(self.0)
-                            .ue_requested(header, r)
-                            .await?;
+                        self.ue_requested_session_release(header, r).await?;
                     }
                     m => {
                         warn!(

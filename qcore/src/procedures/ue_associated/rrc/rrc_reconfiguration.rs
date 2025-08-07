@@ -4,17 +4,13 @@ use asn1_per::nonempty;
 use f1ap::SrbId;
 use rrc::{C1_6, DlDcchMessage, UlDcchMessage, UlDcchMessageType};
 
-define_ue_procedure!(RrcReconfigurationProcedure);
-
-impl<'a, A: HandlerApi> RrcReconfigurationProcedure<'a, A> {
-    pub async fn add_session(
-        self,
+impl<'a, B: RrcBase> RrcProcedure<'a, B> {
+    pub async fn reconfiguration_add_session(
+        &mut self,
+        session: &PduSession,
         nas: Vec<u8>,
         cell_group_config: Vec<u8>,
-    ) -> Result<UeProcedure<'a, A>> {
-        // TODO - support >1 session
-        let session_index = 0usize;
-        let session = &self.ue.core.pdu_sessions[session_index];
+    ) -> Result<()> {
         let rrc_reconfiguration = crate::rrc::build::reconfiguration(
             0,
             Some(nonempty![nas]),
@@ -22,15 +18,15 @@ impl<'a, A: HandlerApi> RrcReconfigurationProcedure<'a, A> {
             None,
             Some(cell_group_config),
         );
-        self.run(rrc_reconfiguration).await
+        self.reconfiguration(rrc_reconfiguration).await
     }
 
-    pub async fn delete_session(
-        self,
+    pub async fn reconfiguration_delete_session(
+        &mut self,
         nas: Vec<u8>,
         session: &PduSession,
         cell_group_config: Option<Vec<u8>>,
-    ) -> Result<UeProcedure<'a, A>> {
+    ) -> Result<()> {
         let rrc_reconfiguration = crate::rrc::build::reconfiguration(
             0,
             Some(nonempty![nas]),
@@ -38,10 +34,10 @@ impl<'a, A: HandlerApi> RrcReconfigurationProcedure<'a, A> {
             Some(session),
             cell_group_config,
         );
-        self.run(rrc_reconfiguration).await
+        self.reconfiguration(rrc_reconfiguration).await
     }
 
-    async fn run(mut self, rrc_reconfiguration: Box<DlDcchMessage>) -> Result<UeProcedure<'a, A>> {
+    async fn reconfiguration(&mut self, rrc_reconfiguration: Box<DlDcchMessage>) -> Result<()> {
         self.log_message("<< Rrc Reconfiguration");
         let _response = self
             .rrc_request(
@@ -52,6 +48,6 @@ impl<'a, A: HandlerApi> RrcReconfigurationProcedure<'a, A> {
             )
             .await?;
         self.log_message(">> Rrc ReconfigurationComplete");
-        Ok(self.0)
+        Ok(())
     }
 }

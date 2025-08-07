@@ -1,14 +1,21 @@
-use super::UeProcedure;
-use crate::{HandlerApi, UeContext, data::UeContext5GC, procedures::UeMessage};
-use anyhow::Result;
+use crate::{
+    HandlerApi, UeContext,
+    data::{UeContext5GC, UserplaneSession},
+    procedures::{
+        UeMessage,
+        ue_associated::{NgapUeProcedure, RanUeBase},
+    },
+};
+use anyhow::{Result, anyhow};
 use async_std::channel::{self, Receiver, Sender};
-use slog::{Logger, debug, warn};
+use slog::{Logger, debug, info, warn};
 use std::collections::VecDeque;
 
 pub struct UeMessageHandler<A: HandlerApi> {
     receiver: Receiver<UeMessage>,
     api: A,
     logger: Logger,
+    queue: VecDeque<UeMessage>,
 }
 
 impl<A: HandlerApi> UeMessageHandler<A> {
@@ -18,6 +25,7 @@ impl<A: HandlerApi> UeMessageHandler<A> {
             receiver,
             api,
             logger,
+            queue: VecDeque::new(),
         });
         async_std::task::spawn(async move {
             if let Err(e) = handler.run(ue_id).await {
@@ -67,6 +75,73 @@ impl<A: HandlerApi> UeMessageHandler<A> {
         }
     }
 
+    // TODO move these into a different trait and/or file "Dispatcher"?
+    // Return Err if the UE handler should exit.
+    pub async fn dispatch(
+        self,
+        ue: &mut UeContext,
+        give_context: &mut Option<Sender<UeContext5GC>>,
+        disconnected: &mut bool,
+    ) -> Result<()> {
+        // Process any queued messages before going to the inbox.
+        let next_message = if let Some(message) = self.queue.pop_front() {
+            message
+        } else {
+            self.receiver.recv().await?
+        };
+
+        match next_message {
+            UeMessage::Ngap(pdu) => {
+                NgapUeProcedure {
+                    ue: &mut ue.ran,
+                    logger: &self.logger.clone(),
+                    api: self,
+                    release_cause: ngap::Cause::Nas(ngap::CauseNas::NormalRelease),
+                }
+                .dispatch(pdu, &mut ue.core)
+                .await
+            }
+            UeMessage::F1ap(pdu) => self.f1ap_dispatch(pdu).await,
+            UeMessage::Rrc(pdu) => self.rrc_dispatch(pdu).await,
+            UeMessage::Nas(pdu) => {
+                if self.api.ngap_mode() {
+                    NgapUeProcedure {
+                        ue: &mut ue.ran,
+                        logger: &self.logger.clone(),
+                        api: self,
+                        release_cause: ngap::Cause::Nas(ngap::CauseNas::NormalRelease),
+                    }
+                    .dispatch_nas(pdu, &mut ue.core)
+                    .await
+                } else {
+                    todo!()
+                }
+            }
+
+            UeMessage::TakeContext(sender) => {
+                info!(
+                    &self.logger,
+                    "UE changed channel - transfer context and clean up"
+                );
+                *give_context = Some(sender);
+                Err(anyhow!("Take context"))
+            }
+            UeMessage::Disconnect => {
+                info!(
+                    &self.logger,
+                    "UE disconnected - exit message handler and store context"
+                );
+                *disconnected = true;
+                Err(anyhow!("Disconnected"))
+            }
+            UeMessage::Ping(sender) => {
+                debug!(self.logger, "Respond to ping");
+                sender.send(()).await?;
+                Ok(())
+            }
+        }
+    }
+
     async fn cleanup(
         &self,
         give_context: Option<Sender<UeContext5GC>>,
@@ -75,7 +150,9 @@ impl<A: HandlerApi> UeMessageHandler<A> {
         debug!(self.logger, "Clean up UE context");
 
         // Remove the channel to this UE and drop all messages in it.
-        self.api.delete_ue_channel(ue_context.local_ran_ue_id).await;
+        self.api
+            .delete_ue_channel(ue_context.ran.local_ran_ue_id)
+            .await;
         debug!(self.logger, "Deleted UE channel");
         self.receiver.close();
 
@@ -98,12 +175,12 @@ impl<A: HandlerApi> UeMessageHandler<A> {
             }
         } else {
             // If the UE has a TMSI, save off its core context, so that we can recover it based on GUTI later.
-            if let Some(tmsi) = ue_context.tmsi.take() {
+            if let Some(tmsi) = ue_context.core.tmsi.take() {
                 debug!(self.logger, "Store core context for TMSI {tmsi}");
                 self.api
                     .put_core_context(
                         tmsi,
-                        ue_context.local_ran_ue_id,
+                        ue_context.ran.local_ran_ue_id,
                         ue_context.core,
                         0,
                         &self.logger,
@@ -111,5 +188,70 @@ impl<A: HandlerApi> UeMessageHandler<A> {
                     .await;
             }
         }
+    }
+}
+
+use delegate::delegate;
+
+impl<A: HandlerApi> RanUeBase for UeMessageHandler<A> {
+    delegate! {
+        to self.api {
+            fn config(&self) -> &crate::Config;
+            async fn reserve_userplane_session(&self, logger: &Logger) -> Result<UserplaneSession>;
+    async fn xxap_request<P: xxap::Procedure>(
+        &self,
+        r: Box<P::Request>,
+        logger: &Logger,
+    ) -> Result<P::Success, xxap::RequestError<P::Failure>>;
+    async fn xxap_indication<P: xxap::Indication>(&self, r: Box<P::Request>, logger: &Logger);
+        async fn commit_userplane_session(
+        &self,
+        session: &crate::data::UserplaneSession,
+        logger: &Logger,
+    ) -> Result<()>;
+
+    async fn deactivate_userplane_session(
+        &self,
+        session: &crate::data::UserplaneSession,
+        logger: &Logger,
+    );
+
+    async fn delete_userplane_session(
+        &self,
+        session: &crate::data::UserplaneSession,
+        logger: &Logger,
+    );
+
+    async fn lookup_subscriber_creds_and_inc_sqn(
+        &self,
+        imsi: &str,
+    ) -> Option<crate::data::SubscriberAuthParams>;
+
+    async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
+
+    async fn register_new_tmsi(
+        &self,
+        tmsi: crate::protocols::nas::Tmsi,
+        ue_id: u32,
+        logger: &Logger,
+    );
+
+    async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
+        }
+    }
+
+    async fn receive_xxap_pdu<T, BoxP>(
+        &mut self,
+        filter: fn(BoxP) -> Result<T, BoxP>,
+        expected: &str,
+    ) -> Result<T>
+    where
+        BoxP: TryFrom<UeMessage, Error = UeMessage> + Into<UeMessage>,
+    {
+        todo!()
+    }
+
+    fn unexpected_nas_pdu(&mut self, pdu: crate::data::DecodedNas, expected: &str) -> Result<()> {
+        todo!()
     }
 }

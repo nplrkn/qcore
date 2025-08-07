@@ -1,17 +1,15 @@
 use super::prelude::*;
 use crate::{
-    UeContext,
+    Config, UeContext,
     data::{DecodedNas, PduSession, UeContext5GC},
     procedures::{
         UeMessage,
         ue_associated::{
             F1apRanSessionReleaseProcedure, F1apUeContextReleaseProcedure,
-            InitialContextSetupProcedure, InitialUeMessageProcedure,
-            InitialUlRrcMessageTransferProcedure, NasBase, NgapRanSessionReleaseProcedure,
-            NgapUeContextReleaseProcedure, PduSessionResourceSetupProcedure, RrcBase,
-            RrcReconfigurationProcedure, RrcSecurityModeProcedure, RrcUeCapabilityEnquiryProcedure,
-            UeContextSetupProcedure, UlInformationTransferProcedure, UplinkNasProcedure,
-            UplinkNasTransportProcedure,
+            InitialUlRrcMessageTransferProcedure, NasBase, NasProcedure,
+            NgapUeContextReleaseProcedure, NgapUeProcedure, RrcBase, RrcReconfigurationProcedure,
+            RrcSecurityModeProcedure, RrcUeCapabilityEnquiryProcedure, UeContextSetupProcedure,
+            UlInformationTransferProcedure,
         },
     },
     protocols::nas::{ABORT_PROCEDURE, FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED, Tmsi, parse},
@@ -32,7 +30,7 @@ use rrc::{
 use std::collections::VecDeque;
 
 pub struct UeProcedure<'a, A: HandlerApi> {
-    base: Procedure<'a, A>,
+    pub base: Procedure<'a, A>,
     pub ue: &'a mut UeContext,
     receiver: &'a Receiver<UeMessage>,
     give_context: &'a mut Option<Sender<UeContext5GC>>,
@@ -72,152 +70,125 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         }
     }
 
-    // Enables a secure RAN channel for this UE, and reactivates any PDU sessions.
-    pub async fn ran_context_create(self, nas: Box<Nas5gsMessage>) -> Result<Self> {
-        debug!(
-            self.logger,
-            "UL NAS COUNT for kGNB derivation {}",
-            self.ue.core.nas.ul_nas_count()
-        );
-        let kgnb = security::derive_kgnb(&self.ue.core.kamf, self.ue.core.nas.ul_nas_count());
+    // // Enables a secure RAN channel for this UE, and reactivates any PDU sessions.
+    // pub async fn ran_context_create(self, nas: Box<Nas5gsMessage>) -> Result<Self> {
+    //     debug!(
+    //         self.logger,
+    //         "UL NAS COUNT for kGNB derivation {}",
+    //         self.ue.core.nas.ul_nas_count()
+    //     );
+    //     let kgnb = security::derive_kgnb(&self.ue.core.kamf, self.ue.core.nas.ul_nas_count());
 
-        if self.ngap_mode() {
-            let nas = self.ue.core.nas.encode(nas)?;
-            let s = InitialContextSetupProcedure::new(self)
-                .run(&kgnb, nas)
-                .await?;
-            Ok(s)
-        } else {
-            // TODO: this should be a procedure of its own.  This function should not contain the implementation of
-            // 'ran ue registration'.  It should just swtich to ngap::RanUeRegistration or f1ap::.
-            let s = RrcSecurityModeProcedure::new(self).run(&kgnb).await?;
+    //     if self.ngap_mode() {
+    //         let nas = self.ue.core.nas.encode(nas)?;
+    //         let s = InitialContextSetupProcedure::new(self)
+    //             .run(&kgnb, nas)
+    //             .await?;
+    //         Ok(s)
+    //     } else {
+    //         // TODO: this should be a procedure of its own.  This function should not contain the implementation of
+    //         // 'ran ue registration'.  It should just swtich to ngap::RanUeRegistration or f1ap::.
+    //         let s = RrcSecurityModeProcedure::new(self).run(&kgnb).await?;
 
-            let mut s = if s.ue.rat_capabilities.is_none() {
-                RrcUeCapabilityEnquiryProcedure::new(s).run().await?
-            } else {
-                s
-            };
+    //         let mut s = if s.ue.rat_capabilities.is_none() {
+    //             RrcUeCapabilityEnquiryProcedure::new(s).run().await?
+    //         } else {
+    //             s
+    //         };
 
-            // If there are PDU sessions to reactivate, create the UE context, otherwise just send the PDU.
-            let s = if !s.ue.core.pdu_sessions.is_empty() {
-                s.ran_session_setup(nas).await?
-            } else {
-                s.nas_indication(nas).await?;
-                s
-            };
-            Ok(s)
-        }
-    }
+    //         // If there are PDU sessions to reactivate, create the UE context, otherwise just send the PDU.
+    //         let s = if !s.ue.core.pdu_sessions.is_empty() {
+    //             // CARE NEEDED - this needs to work for all sessions, not one
+    //             s.ran_session_setup(nas).await?
+    //         } else {
+    //             s.nas_indication(nas).await?;
+    //             s
+    //         };
+    //         Ok(s)
+    //     }
+    // }
 
-    pub async fn commit_userplane_sessions(&mut self) -> Result<()> {
-        for session in self.ue.core.pdu_sessions.iter_mut() {
-            self.base
-                .commit_userplane_session(&session.userplane_info, self.base.logger)
-                .await?;
-        }
-        Ok(())
-    }
+    // pub async fn commit_userplane_sessions(&mut self) -> Result<()> {
+    //     for session in self.ue.core.pdu_sessions.iter_mut() {
+    //         self.base
+    //             .commit_userplane_session(&session.userplane_info, self.base.logger)
+    //             .await?;
+    //     }
+    //     Ok(())
+    // }
 
-    pub async fn ran_session_setup(self, nas: Box<Nas5gsMessage>) -> Result<Self> {
-        let nas = self.ue.core.nas.encode(nas)?;
-        Ok(if self.ngap_mode() {
-            let mut inner = PduSessionResourceSetupProcedure::new(self).run(nas).await?;
-            inner.commit_userplane_sessions().await?;
-            inner
-        } else {
-            let (mut inner, cell_group_config) = UeContextSetupProcedure::new(self).run().await?;
-            inner.commit_userplane_sessions().await?;
-            RrcReconfigurationProcedure::new(inner)
-                .add_session(nas, cell_group_config.0)
-                .await?
-        })
-    }
+    // pub async fn ran_session_setup(self, nas: Box<Nas5gsMessage>) -> Result<Self> {
+    //     let nas = self.ue.core.nas.encode(nas)?;
+    //     Ok(if self.ngap_mode() {
+    //         let mut inner = PduSessionResourceSetupProcedure::new(self).run(nas).await?;
+    //         inner.commit_userplane_sessions().await?;
+    //         inner
+    //     } else {
+    //         let (mut inner, cell_group_config) = UeContextSetupProcedure::new(self).run().await?;
+    //         inner.commit_userplane_sessions().await?;
+    //         RrcReconfigurationProcedure::new(inner)
+    //             .add_session(nas, cell_group_config.0)
+    //             .await?
+    //     })
+    // }
 
-    pub async fn ran_session_release(
-        self,
-        released_session: &PduSession,
-        nas: Box<Nas5gsMessage>,
-    ) -> Result<Self> {
-        let nas = self.ue.core.nas.encode(nas)?;
-        if self.ngap_mode() {
-            NgapRanSessionReleaseProcedure::new(self)
-                .run(released_session, nas)
-                .await
-        } else {
-            F1apRanSessionReleaseProcedure::new(self)
-                .run(released_session, nas)
-                .await
-        }
-    }
+    // pub async fn ran_session_release(
+    //     self,
+    //     released_session: &PduSession,
+    //     nas: Box<Nas5gsMessage>,
+    // ) -> Result<Self> {
+    //     let nas = self.ue.core.nas.encode(nas)?;
+    //     if self.ngap_mode() {
+    //         NgapRanSessionReleaseProcedure::new(self)
+    //             .run(released_session, nas)
+    //             .await
+    //     } else {
+    //         F1apRanSessionReleaseProcedure::new(self)
+    //             .run(released_session, nas)
+    //             .await
+    //     }
+    // }
 
-    pub async fn ran_context_release(self) -> Result<()> {
-        if !*self.disconnected {
-            if self.ngap_mode() {
-                NgapUeContextReleaseProcedure::new(self).run().await
-            } else {
-                F1apUeContextReleaseProcedure::new(self).run().await
-            }
-        } else {
-            debug!(self.logger, "UE was disconnected - skip RAN release");
-            Ok(())
-        }
-    }
+    // pub async fn ran_context_release(self) -> Result<()> {
+    //     if !*self.disconnected {
+    //         if self.ngap_mode() {
+    //             NgapUeContextReleaseProcedure::new(self).run().await
+    //         } else {
+    //             F1apUeContextReleaseProcedure::new(self).run().await
+    //         }
+    //     } else {
+    //         debug!(self.logger, "UE was disconnected - skip RAN release");
+    //         Ok(())
+    //     }
+    // }
 
-    // TODO move these into a different trait and/or file "Dispatcher"?
-    // Return Err if the UE handler should exit.
-    pub async fn dispatch(self) -> Result<()> {
-        // Process any queued messages before going to the inbox.
-        let next_message = if let Some(message) = self.queued_messages.pop_front() {
-            message
-        } else {
-            self.receiver.recv().await?
-        };
+    // async fn nas_dispatch(self, pdu: DecodedNas) -> Result<()> {
+    //     // TODO - we need to create an Rrc or Ngap Procedure to act as the NasBase for the NasProcedure.
 
-        match next_message {
-            UeMessage::Ngap(pdu) => self.ngap_dispatch(pdu).await,
-            UeMessage::F1ap(pdu) => self.f1ap_dispatch(pdu).await,
-            UeMessage::Rrc(pdu) => self.rrc_dispatch(pdu).await,
-            UeMessage::Nas(pdu) => self.nas_dispatch(pdu).await,
-            UeMessage::TakeContext(sender) => {
-                info!(
-                    &self.logger,
-                    "UE changed channel - transfer context and clean up"
-                );
-                *self.give_context = Some(sender);
-                Err(anyhow!("Take context"))
-            }
-            UeMessage::Disconnect => {
-                info!(
-                    &self.logger,
-                    "UE disconnected - exit message handler and store context"
-                );
-                *self.disconnected = true;
-                Err(anyhow!("Disconnected"))
-            }
-            UeMessage::Ping(sender) => {
-                debug!(self.logger, "Respond to ping");
-                sender.send(()).await?;
-                Ok(())
-            }
-        }
-    }
+    //     NasProcedure {
+    //         ue: &mut self.ue.core,
+    //         logger: self.base.logger,
+    //         api: self.api,
+    //     }
+    //     .run_decoded(pdu)
+    //     .await
+    // }
 
-    async fn nas_dispatch(self, pdu: DecodedNas) -> Result<()> {
-        UplinkNasProcedure::new(self).run_decoded(pdu).await
-    }
-
+    // TODO: move this into ngap ue procedure
     // Return Err if the UE handler should exit.
     async fn ngap_dispatch(mut self, pdu: Box<NgapPdu>) -> Result<()> {
+        let ngap_procedure = NgapUeProcedure {
+            ue: &mut self.ue.ran,
+            logger: self.logger,
+            api: self.base,
+        };
+
         match *pdu {
             NgapPdu::InitiatingMessage(ngap::InitiatingMessage::InitialUeMessage(r)) => {
-                InitialUeMessageProcedure::new(self)
-                    .run(Box::new(r))
-                    .await?
+                ngap_procedure.initial_ue_message(Box::new(r)).await?
             }
             NgapPdu::InitiatingMessage(ngap::InitiatingMessage::UplinkNasTransport(r)) => {
-                UplinkNasTransportProcedure::new(self)
-                    .run(Box::new(r))
-                    .await?
+                ngap_procedure.uplink_nas_transport(Box::new(r)).await?
             }
             NgapPdu::InitiatingMessage(
                 ngap::InitiatingMessage::UeRadioCapabilityInfoIndication(_r),
@@ -409,54 +380,76 @@ impl<'a, A: HandlerApi> UeProcedure<'a, A> {
         Ok(Box::new(UlDcchMessage::from_bytes(rrc_message_bytes)?))
     }
 
-    pub async fn retrieve_ue(
+    async fn receive_nas<T>(
         &mut self,
-        amf_region: Option<u8>,
-        amf_set_and_pointer: &[u8],
-        tmsi: &[u8],
-    ) -> Result<bool, u8> {
-        let guami_matches = amf_set_and_pointer == &self.config().amf_ids[1..3]
-            && amf_region
-                .map(|x| x == self.config().amf_ids[0])
-                .unwrap_or(true);
-        if !guami_matches {
-            warn!(
-                self.logger,
-                "Wrong AMF IDs in GUTI/STMSI - theirs {:?}, {:?} ours {}",
-                amf_region,
-                amf_set_and_pointer,
-                self.config().amf_ids
+        filter: fn(DecodedNas) -> Result<T, DecodedNas>,
+        expected: &str,
+    ) -> Result<T> {
+        loop {
+            let nas = self.receive_nas_inner().await?;
+            match filter(nas) {
+                Ok(extracted) => return Ok(extracted),
+                Err(nas) => self.unexpected_nas_pdu(nas, expected)?,
+            }
+        }
+    }
+
+    async fn receive_nas_sm<T>(
+        &mut self,
+        filter: fn(Nas5gsmMessage) -> Option<T>,
+        expected: &str,
+    ) -> Result<T> {
+        loop {
+            let nas = self.receive_nas_inner().await?;
+            if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::UlNasTransport(ref ul_nas_transport)) =
+                *nas.0
+            {
+                let inner = Box::new(decode_nas_5gs_message(
+                    &ul_nas_transport.payload_container.value,
+                )?);
+                if let Nas5gsMessage::Gsm(_, nas_sm) = *inner {
+                    if let Some(extracted) = filter(nas_sm) {
+                        return Ok(extracted);
+                    }
+                }
+            }
+            // This is not the message we are looking for.  Park the top level NAS PDU.  This is rather inefficient
+            // since it means we will decode the inner message again later.
+            self.unexpected_nas_pdu(nas, expected)?;
+        }
+    }
+
+    async fn nas_request<T>(
+        &mut self,
+        nas: Box<Nas5gsMessage>,
+        filter: fn(DecodedNas) -> Result<T, DecodedNas>,
+        expected: &str,
+    ) -> Result<T> {
+        self.nas_indication(nas).await?;
+        self.receive_nas(filter, expected).await
+    }
+
+    async fn nas_indication(&mut self, nas: Box<Nas5gsMessage>) -> Result<()> {
+        let nas_bytes = self.ue.core.nas.encode(nas)?;
+        if self.ngap_mode() {
+            let ngap = crate::ngap::build::downlink_nas_transport(
+                AmfUeNgapId(self.ue.local_ran_ue_id as u64),
+                self.ue.ran_ue_ngap_id(),
+                nas_bytes,
             );
+
+            self.api
+                .xxap_indication::<ngap::DownlinkNasTransportProcedure>(ngap, self.logger)
+                .await;
+            Ok(())
+        } else {
+            let rrc = crate::rrc::build::dl_information_transfer(
+                1, // TODO transaction ID
+                DedicatedNasMessage(nas_bytes),
+            );
+
+            self.rrc_indication(SrbId(1), &rrc).await
         }
-
-        // Has the UE already obtained a TMSI on its current radio channel?
-        if let Some(existing_tmsi) = &self.ue.tmsi {
-            if existing_tmsi.0 == tmsi && guami_matches {
-                return Ok(false);
-            } else {
-                warn!(self.logger, "UE not using GUTI it was given");
-                return Err(FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED);
-            }
-        }
-
-        // If we know about this GUTI, retrieve the core context and attach it to this UE.
-        if guami_matches {
-            match self.take_core_context(tmsi).await {
-                Some(c) => {
-                    self.ue.core = c;
-                    self.ue.tmsi = Some(Tmsi(tmsi.try_into().map_err(|_| ABORT_PROCEDURE)?));
-                    return Ok(false);
-                }
-                None => {
-                    debug!(self.logger, "Unknown TMSI");
-                }
-            }
-        }
-
-        // Identity procedure needed
-        debug!(self.logger, "GUTI/TMSI with unknown AMF IDs or TMSI");
-
-        Ok(true)
     }
 }
 
@@ -529,157 +522,5 @@ impl<'a, A: HandlerApi> super::RrcBase for UeProcedure<'a, A> {
             .xxap_indication::<DlRrcMessageTransferProcedure>(dl_message, self.logger)
             .await;
         Ok(())
-    }
-}
-
-impl<'a, A: HandlerApi> NasBase for UeProcedure<'a, A> {
-    async fn receive_nas<T>(
-        &mut self,
-        filter: fn(DecodedNas) -> Result<T, DecodedNas>,
-        expected: &str,
-    ) -> Result<T> {
-        loop {
-            let nas = self.receive_nas_inner().await?;
-            match filter(nas) {
-                Ok(extracted) => return Ok(extracted),
-                Err(nas) => self.unexpected_nas_pdu(nas, expected)?,
-            }
-        }
-    }
-
-    async fn receive_nas_sm<T>(
-        &mut self,
-        filter: fn(Nas5gsmMessage) -> Option<T>,
-        expected: &str,
-    ) -> Result<T> {
-        loop {
-            let nas = self.receive_nas_inner().await?;
-            if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::UlNasTransport(ref ul_nas_transport)) =
-                *nas.0
-            {
-                let inner = Box::new(decode_nas_5gs_message(
-                    &ul_nas_transport.payload_container.value,
-                )?);
-                if let Nas5gsMessage::Gsm(_, nas_sm) = *inner {
-                    if let Some(extracted) = filter(nas_sm) {
-                        return Ok(extracted);
-                    }
-                }
-            }
-            // This is not the message we are looking for.  Park the top level NAS PDU.  This is rather inefficient
-            // since it means we will decode the inner message again later.
-            self.unexpected_nas_pdu(nas, expected)?;
-        }
-    }
-
-    async fn nas_request<T>(
-        &mut self,
-        nas: Box<Nas5gsMessage>,
-        filter: fn(DecodedNas) -> Result<T, DecodedNas>,
-        expected: &str,
-    ) -> Result<T> {
-        self.nas_indication(nas).await?;
-        self.receive_nas(filter, expected).await
-    }
-
-    async fn nas_indication(&mut self, nas: Box<Nas5gsMessage>) -> Result<()> {
-        let nas_bytes = self.ue.core.nas.encode(nas)?;
-        if self.ngap_mode() {
-            let ngap = crate::ngap::build::downlink_nas_transport(
-                AmfUeNgapId(self.ue.local_ran_ue_id as u64),
-                self.ue.ran_ue_ngap_id(),
-                nas_bytes,
-            );
-
-            self.api
-                .xxap_indication::<ngap::DownlinkNasTransportProcedure>(ngap, self.logger)
-                .await;
-            Ok(())
-        } else {
-            let rrc = crate::rrc::build::dl_information_transfer(
-                1, // TODO transaction ID
-                DedicatedNasMessage(nas_bytes),
-            );
-
-            self.rrc_indication(SrbId(1), &rrc).await
-        }
-    }
-
-    async fn allocate_tmsi(&mut self) -> NasFGsMobileIdentity {
-        let tmsi = Tmsi(rand::random()); // TODO: 0xffffffff is not a valid TMSI (TS23.003, 2.4))
-        debug!(self.logger, "Assigned {}", tmsi);
-        self.api
-            .register_new_tmsi(tmsi.clone(), self.ue.local_ran_ue_id, self.logger)
-            .await;
-        let guti = crate::protocols::nas::build::nas_mobile_identity_guti(
-            &self.config().plmn,
-            &self.config().amf_ids,
-            &tmsi.0,
-        );
-        self.ue.tmsi = Some(tmsi);
-        guti
-    }
-
-    // Removes any sessions that the UE doesn't know about from our UE context.
-    // Returns (current sessions, reactivation result).
-    async fn reconcile_sessions(
-        &mut self,
-        uplink_data_status: &Option<NasUplinkDataStatus>,
-        pdu_session_status: &Option<NasPduSessionStatus>,
-    ) -> Result<(u16, u16)> {
-        let uplink_data_status = parse::uplink_data_status(uplink_data_status);
-        let pdu_session_status = parse::pdu_session_status(pdu_session_status);
-
-        debug!(
-            self.logger,
-            "Reconcile sessions: uplink_data_status={:016b}, pdu_session_status={:016b}",
-            uplink_data_status,
-            pdu_session_status
-        );
-        // Warn if the uplink data status does not match the PDU session status.
-        if uplink_data_status != pdu_session_status {
-            warn!(
-                self.logger,
-                "Uplink data status ({:016b}) does not match PDU session status ({:016b}) - QCore always reactivates all known sessions",
-                uplink_data_status,
-                pdu_session_status,
-            )
-        }
-
-        let mut sessions_to_reactivate: u16 = pdu_session_status;
-
-        // Rebuild the UE session list to contain only sessions that the UE knows about.
-        let sessions = std::mem::take(&mut self.ue.core.pdu_sessions);
-        for session in sessions.into_iter() {
-            ensure!(session.id < 16, "Session ID >= 16 not supported");
-            let session_id_bit = 1 << session.id;
-            if sessions_to_reactivate & session_id_bit == 0 {
-                debug!(
-                    self.logger,
-                    "UE not aware of session {} so delete it", session.id
-                );
-                self.delete_userplane_session(&session.userplane_info, self.logger)
-                    .await;
-            } else {
-                debug!(self.logger, "UE confirms existing session {}", session.id);
-                self.ue.core.pdu_sessions.push(session);
-
-                // Clear the bit in the sessions_to_reactivate bitmask.  Any bits still left set after this process will indicate
-                // reactivation failures - cases where the UE thought there was a session but we don't know about it.
-                sessions_to_reactivate &= !session_id_bit;
-            }
-        }
-
-        if sessions_to_reactivate != 0 {
-            warn!(
-                self.logger,
-                "UE asked to reactivate one or more sessions that we don't know about: {:b}",
-                sessions_to_reactivate
-            );
-        }
-
-        let active_sessions = pdu_session_status & !sessions_to_reactivate;
-
-        Ok((active_sessions, sessions_to_reactivate))
     }
 }

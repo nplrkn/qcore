@@ -3,11 +3,9 @@ use crate::PduSession;
 use oxirush_nas::messages::{Nas5gsmHeader, NasPduSessionEstablishmentRequest};
 use xxap::Snssai;
 
-define_ue_procedure!(SessionEstablishmentProcedure);
-
-impl<'a, A: HandlerApi> SessionEstablishmentProcedure<'a, A> {
-    pub async fn run(
-        mut self,
+impl<'a, B: NasBase> NasProcedure<'a, B> {
+    pub async fn session_establishment(
+        &mut self,
         hdr: Nas5gsmHeader,
         _r: &NasPduSessionEstablishmentRequest,
         dnn: Option<Vec<u8>>,
@@ -17,7 +15,7 @@ impl<'a, A: HandlerApi> SessionEstablishmentProcedure<'a, A> {
         let session_id = hdr.pdu_session_identity;
         let session = PduSession {
             id: session_id,
-            snssai: Snssai(self.config().sst, Some([0, 0, 0])),
+            snssai: Snssai(self.api.config().sst, Some([0, 0, 0])),
             userplane_info: self.api.reserve_userplane_session(self.logger).await?,
             dnn: dnn.unwrap_or(b"internet".to_vec()),
         };
@@ -25,11 +23,18 @@ impl<'a, A: HandlerApi> SessionEstablishmentProcedure<'a, A> {
         let accept = crate::nas::build::pdu_session_establishment_accept(
             &session,
             hdr.procedure_transaction_identity,
-            self.config().sst,
+            self.api.config().sst,
         )?;
-        self.ue.core.pdu_sessions.push(session);
+
+        // TODO: once all tests are working, try moving this after the .ran_session_setup
+        // so as to get rid of the last_mut().unwrap().
+        self.ue.pdu_sessions.push(session);
         self.log_message("<< Nas PduSessionEstablishmentAccept");
-        let _ = self.0.ran_session_setup(accept).await?;
+        let accept = self.ue.nas.encode(accept)?;
+        let _ = self
+            .api
+            .ran_session_setup(self.ue.pdu_sessions.last_mut().unwrap(), accept)
+            .await?;
         Ok(())
     }
 }

@@ -1,24 +1,30 @@
 use anyhow::ensure;
 use ngap::PduSessionResourceSetupListSuRes;
 
+use crate::data::PduSession;
+
 use super::prelude::*;
 
-define_ue_procedure!(PduSessionResourceSetupProcedure);
-impl<'a, A: HandlerApi> PduSessionResourceSetupProcedure<'a, A> {
-    pub async fn run(mut self, nas: Vec<u8>) -> Result<UeProcedure<'a, A>> {
+impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
+    pub async fn pdu_session_resource_setup(
+        &mut self,
+        nas: Vec<u8>,
+        pdu_session: &mut PduSession,
+    ) -> Result<()> {
         // TODO - support > 1 session
-        let session_index = 0usize;
-        let pdu_session = &self.ue.core.pdu_sessions[session_index];
+        // let session_index = 0usize;
+        // let pdu_session = &self.ue.core.pdu_sessions[session_index];
 
         let req = crate::ngap::build::pdu_session_resource_setup_request(
             self.ue.amf_ue_ngap_id(),
             self.ue.ran_ue_ngap_id(),
             pdu_session,
-            self.config().ip_addr.into(),
+            self.api.config().ip_addr.into(),
             nas,
         )?;
         self.log_message("<< Ngap PduSessionResourceSetupRequest");
         let rsp = self
+            .api
             .xxap_request::<ngap::PduSessionResourceSetupProcedure>(req, self.logger)
             .await?;
         self.log_message(">> Ngap PduSessionResourceSetupResponse");
@@ -39,11 +45,11 @@ impl<'a, A: HandlerApi> PduSessionResourceSetupProcedure<'a, A> {
                 // Ngap InitialContextSetupResponse and F1ap UeContextSetupResponse
                 super::connect_session_downlink(
                     &x.first().pdu_session_resource_setup_response_transfer,
-                    &mut self.ue.core.pdu_sessions[session_index],
+                    pdu_session,
                 )?;
             }
             None => bail!("GNB failed session set up"),
         }
-        Ok(self.0)
+        Ok(())
     }
 }

@@ -1,15 +1,21 @@
+use crate::{data::UeContext5GC, procedures::ue_associated::NasProcedure};
+
+use super::prelude::*;
 use ngap::UplinkNasTransport;
 
-use super::super::UplinkNasProcedure;
-use super::prelude::*;
-
-define_ue_procedure!(UplinkNasTransportProcedure);
-
-impl<'a, A: HandlerApi> UplinkNasTransportProcedure<'a, A> {
-    pub async fn run(self, uplink_nas_transport: Box<UplinkNasTransport>) -> Result<()> {
+impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
+    pub async fn uplink_nas_transport(
+        &mut self,
+        uplink_nas_transport: Box<UplinkNasTransport>,
+        core_context: &mut UeContext5GC,
+    ) -> Result<()> {
         self.log_message(">> Ngap UplinkNasTransport");
-        UplinkNasProcedure::new(self.0)
-            .run(uplink_nas_transport.nas_pdu.0)
-            .await
+        NasProcedure {
+            ue: core_context,
+            logger: &self.logger.clone(),
+            api: self,
+        }
+        .uplink_nas(uplink_nas_transport.nas_pdu.0)
+        .await
     }
 }

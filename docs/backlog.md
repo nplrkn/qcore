@@ -15,6 +15,7 @@
   - test scripts - move to builder pattern (new_with_base() etc)?
 
 - OAI test broken - simulated UE doesn't send Configuration Update Complete
+- No RrcReconfiguration sent after session reactivation in F1ap mode - wrong surely?
 
 - Live testing with multiple phones, update readme documenting interop status.
 

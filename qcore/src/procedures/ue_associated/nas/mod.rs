@@ -1,56 +1,290 @@
 mod deregistration;
-pub use deregistration::*;
 mod registration;
 pub use registration::*;
 mod session_establishment;
-pub use session_establishment::*;
-mod uplink_nas;
-pub use uplink_nas::*;
-mod session_release;
-pub use session_release::*;
+pub mod uplink_nas;
+use slog::{Logger, debug, warn};
 mod service;
-pub use service::*;
+mod session_release;
 
-use crate::data::DecodedNas;
-use anyhow::Result;
+use crate::{
+    Config,
+    data::{DecodedNas, PduSession, SubscriberAuthParams, UeContext5GC, UserplaneSession},
+    protocols::nas::{ABORT_PROCEDURE, FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED, Tmsi, parse},
+};
+use anyhow::{Result, ensure};
 use oxirush_nas::{
-    Nas5gsMessage, Nas5gsmMessage, NasFGsMobileIdentity, NasPduSessionStatus, NasUplinkDataStatus,
+    Nas5gmmMessage, Nas5gsMessage, Nas5gsmMessage, NasFGsMobileIdentity, NasPduSessionStatus,
+    NasUplinkDataStatus, decode_nas_5gs_message, messages::Nas5gsSecurityHeader,
 };
 
+pub struct NasProcedure<'a, B: NasBase> {
+    pub ue: &'a mut UeContext5GC,
+    pub logger: &'a Logger,
+    pub api: B,
+}
+
 pub trait NasBase {
-    async fn nas_request<T>(
+    fn config(&self) -> &Config;
+    async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
+
+    async fn reserve_userplane_session(&self, logger: &Logger) -> Result<UserplaneSession>;
+    async fn delete_userplane_session(&self, session: &UserplaneSession, logger: &Logger);
+
+    // These must take the sessions as a mut &.  Because the NasProcedure has a borrow on them.
+    // So if the NasProcedure continues to exist, it must lend them.
+
+    // The underlying layer cannot simultaneously know about them implicitly.
+    // This models an exchange over a network API.
+
+    // What the underlying layer _can_ know about its own UE context.
+    // Conclusion - sessions get passed as parameter?
+
+    // Solve that problem, implement this trait and them come back to the take() of the Ue5GCContext.
+
+    async fn ran_session_setup(&mut self, pdu_session: &mut PduSession, nas: Vec<u8>)
+    -> Result<()>;
+
+    async fn ran_context_create(
         &mut self,
-        nas: Box<Nas5gsMessage>,
-        filter: fn(DecodedNas) -> Result<T, DecodedNas>, // use nas_request_filter! macro
-        expected: &str,
-    ) -> Result<T>;
+        kgnb: &[u8; 32],
+        nas: Vec<u8>,
+        ue_session_list: &mut Vec<PduSession>,
+    ) -> Result<()>;
 
-    async fn nas_indication(&mut self, nas: Box<Nas5gsMessage>) -> Result<()>;
+    async fn ran_session_release(
+        &mut self,
+        released_session: &PduSession,
+        nas: Vec<u8>,
+    ) -> Result<()>;
 
+    async fn lookup_subscriber_creds_and_inc_sqn(&self, imsi: &str)
+    -> Option<SubscriberAuthParams>;
+
+    async fn nas_indication(&mut self, nas: Vec<u8>) -> Result<()>;
+
+    async fn receive_nas_inner(&mut self) -> Result<Vec<u8>>;
+    fn unexpected_nas_pdu(&mut self, pdu: DecodedNas, expected: &str) -> Result<()>;
+    async fn register_new_tmsi(&self, tmsi: Tmsi, ue_id: u32, logger: &Logger);
+
+    async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
+}
+
+impl<'a, B: NasBase> NasProcedure<'a, B> {
+    // rename to send_nas?
+    async fn nas_indication(&mut self, nas: Box<Nas5gsMessage>) -> Result<()> {
+        let nas_bytes = self.ue.nas.encode(nas)?;
+        self.api.nas_indication(nas_bytes).await
+    }
+
+    async fn allocate_tmsi(&mut self) -> NasFGsMobileIdentity {
+        let tmsi = Tmsi(rand::random()); // TODO: 0xffffffff is not a valid TMSI (TS23.003, 2.4))
+        debug!(self.logger, "Assigned {}", tmsi);
+        self.api
+            .register_new_tmsi(tmsi.clone(), self.ue.local_ran_ue_id, self.logger)
+            .await;
+        let guti = crate::protocols::nas::build::nas_mobile_identity_guti(
+            &self.api.config().plmn,
+            &self.api.config().amf_ids,
+            &tmsi.0,
+        );
+        self.ue.tmsi = Some(tmsi);
+        guti
+    }
+    // Rename to expect_nas? and get rid of the  _inner in recieve_nas_inner
     async fn receive_nas<T>(
         &mut self,
-        filter: fn(DecodedNas) -> Result<T, DecodedNas>, // use nas_request_filter! macro
+        filter: fn(DecodedNas) -> Result<T, DecodedNas>,
         expected: &str,
-    ) -> Result<T>;
+    ) -> Result<T> {
+        loop {
+            let nas = self.api.receive_nas_inner().await?;
+            let nas = self.ue.nas.decode(&nas)?;
+            match filter(nas) {
+                Ok(extracted) => return Ok(extracted),
+                Err(nas) => self.api.unexpected_nas_pdu(nas, expected)?,
+            }
+        }
+    }
 
     async fn receive_nas_sm<T>(
         &mut self,
         filter: fn(Nas5gsmMessage) -> Option<T>,
         expected: &str,
-    ) -> Result<T>;
+    ) -> Result<T> {
+        loop {
+            let nas = self.api.receive_nas_inner().await?;
+            let nas = self.ue.nas.decode(&nas)?;
+            if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::UlNasTransport(ref ul_nas_transport)) =
+                *nas.0
+            {
+                let inner = Box::new(decode_nas_5gs_message(
+                    &ul_nas_transport.payload_container.value,
+                )?);
+                if let Nas5gsMessage::Gsm(_, nas_sm) = *inner {
+                    if let Some(extracted) = filter(nas_sm) {
+                        return Ok(extracted);
+                    }
+                }
+            }
+            // This is not the message we are looking for.  Park the top level NAS PDU.  This is rather inefficient
+            // since it means we will decode the inner message again later.
+            self.api.unexpected_nas_pdu(nas, expected)?;
+        }
+    }
 
-    async fn allocate_tmsi(&mut self) -> NasFGsMobileIdentity;
+    async fn nas_request<T>(
+        &mut self,
+        nas: Box<Nas5gsMessage>,
+        filter: fn(DecodedNas) -> Result<T, DecodedNas>,
+        expected: &str,
+    ) -> Result<T> {
+        self.nas_indication(nas).await?;
+        self.receive_nas(filter, expected).await
+    }
 
+    async fn ran_context_create(&mut self, nas: Box<Nas5gsMessage>) -> Result<()> {
+        let nas = self.ue.nas.encode(nas)?;
+        debug!(
+            self.logger,
+            "UL NAS COUNT for kGNB derivation {}",
+            self.ue.nas.ul_nas_count()
+        );
+        let kgnb = security::derive_kgnb(&self.ue.kamf, self.ue.nas.ul_nas_count());
+        self.api
+            .ran_context_create(&kgnb, nas, &mut self.ue.pdu_sessions)
+            .await
+    }
+
+    pub async fn retrieve_ue(
+        &mut self,
+        amf_region: Option<u8>,
+        amf_set_and_pointer: &[u8],
+        tmsi: &[u8],
+    ) -> Result<bool, u8> {
+        let guami_matches = amf_set_and_pointer == &self.api.config().amf_ids[1..3]
+            && amf_region
+                .map(|x| x == self.api.config().amf_ids[0])
+                .unwrap_or(true);
+        if !guami_matches {
+            warn!(
+                self.logger,
+                "Wrong AMF IDs in GUTI/STMSI - theirs {:?}, {:?} ours {}",
+                amf_region,
+                amf_set_and_pointer,
+                self.api.config().amf_ids
+            );
+        }
+
+        // Has the UE already obtained a TMSI on its current radio channel?
+        if let Some(existing_tmsi) = &self.ue.tmsi {
+            if existing_tmsi.0 == tmsi && guami_matches {
+                return Ok(false);
+            } else {
+                warn!(self.logger, "UE not using GUTI it was given");
+                return Err(FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED);
+            }
+        }
+
+        // If we know about this GUTI, retrieve the core context and attach it to this UE.
+        if guami_matches {
+            match self.api.take_core_context(tmsi).await {
+                Some(c) => {
+                    *self.ue = c;
+                    self.ue.tmsi = Some(Tmsi(tmsi.try_into().map_err(|_| ABORT_PROCEDURE)?));
+                    return Ok(false);
+                }
+                None => {
+                    debug!(self.logger, "Unknown TMSI");
+                }
+            }
+        }
+
+        // Identity procedure needed
+        debug!(self.logger, "GUTI/TMSI with unknown AMF IDs or TMSI");
+
+        Ok(true)
+    }
+
+    pub fn log_message(&self, s: &str) {
+        debug!(self.logger, "{}", s)
+    }
+
+    pub fn nas_decode(
+        &mut self,
+        bytes: &[u8],
+    ) -> Result<(Box<Nas5gsMessage>, Option<Nas5gsSecurityHeader>)> {
+        self.ue.nas.decode(bytes)
+    }
+
+    // Removes any sessions that the UE doesn't know about from our UE context.
+    // Returns (current sessions, reactivation result).
     async fn reconcile_sessions(
         &mut self,
         uplink_data_status: &Option<NasUplinkDataStatus>,
         pdu_session_status: &Option<NasPduSessionStatus>,
-    ) -> Result<(u16, u16)>;
+    ) -> Result<(u16, u16)> {
+        let uplink_data_status = parse::uplink_data_status(uplink_data_status);
+        let pdu_session_status = parse::pdu_session_status(pdu_session_status);
+
+        debug!(
+            self.logger,
+            "Reconcile sessions: uplink_data_status={:016b}, pdu_session_status={:016b}",
+            uplink_data_status,
+            pdu_session_status
+        );
+        // Warn if the uplink data status does not match the PDU session status.
+        if uplink_data_status != pdu_session_status {
+            warn!(
+                self.logger,
+                "Uplink data status ({:016b}) does not match PDU session status ({:016b}) - QCore always reactivates all known sessions",
+                uplink_data_status,
+                pdu_session_status,
+            )
+        }
+
+        let mut sessions_to_reactivate: u16 = pdu_session_status;
+
+        // Rebuild the UE session list to contain only sessions that the UE knows about.
+        let sessions = std::mem::take(&mut self.ue.pdu_sessions);
+        for session in sessions.into_iter() {
+            ensure!(session.id < 16, "Session ID >= 16 not supported");
+            let session_id_bit = 1 << session.id;
+            if sessions_to_reactivate & session_id_bit == 0 {
+                debug!(
+                    self.logger,
+                    "UE not aware of session {} so delete it", session.id
+                );
+                self.api
+                    .delete_userplane_session(&session.userplane_info, self.logger)
+                    .await;
+            } else {
+                debug!(self.logger, "UE confirms existing session {}", session.id);
+                self.ue.pdu_sessions.push(session);
+
+                // Clear the bit in the sessions_to_reactivate bitmask.  Any bits still left set after this process will indicate
+                // reactivation failures - cases where the UE thought there was a session but we don't know about it.
+                sessions_to_reactivate &= !session_id_bit;
+            }
+        }
+
+        if sessions_to_reactivate != 0 {
+            warn!(
+                self.logger,
+                "UE asked to reactivate one or more sessions that we don't know about: {:b}",
+                sessions_to_reactivate
+            );
+        }
+
+        let active_sessions = pdu_session_status & !sessions_to_reactivate;
+
+        Ok((active_sessions, sessions_to_reactivate))
+    }
 }
 
 mod prelude {
     pub use super::super::prelude::*;
-    pub use super::NasBase;
+    pub use super::{NasBase, NasProcedure};
 }
 
 #[macro_export]
