@@ -173,13 +173,12 @@ impl<'a, B: RanUeBase> RrcBase for &mut F1apUeProcedure<'a, B> {
         self.ue_context_setup(session).await
     }
 
+    // TODO: likewise
     async fn ran_session_release(
         &mut self,
         released_session: &PduSession,
     ) -> Result<Option<Vec<u8>>> {
-        self.ue_context_modification(released_session);
-
-        Ok(None)
+        self.ue_context_modification(released_session).await
     }
 }
 
