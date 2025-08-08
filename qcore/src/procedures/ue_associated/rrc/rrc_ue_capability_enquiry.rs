@@ -7,7 +7,6 @@ use rrc::{
     UlDcchMessageType,
 };
 use std::collections::HashSet;
-use xxap::NrCgi;
 
 impl<'a, B: RrcBase> RrcProcedure<'a, B> {
     // Return RAT capabilities

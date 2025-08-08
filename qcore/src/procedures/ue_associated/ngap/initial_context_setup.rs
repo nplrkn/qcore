@@ -14,12 +14,10 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
         ue_security_capabilities: &[u8; 2],
     ) -> Result<()> {
         let initial_context_setup_request = crate::ngap::build::initial_context_setup_request(
-            self.api.config().guami(),
+            self.api.config(),
             kgnb,
-            self.api.config().sst,
             Some(nas_pdu),
             self.ue,
-            self.api.config().ip_addr.into(),
             session_list,
             ue_security_capabilities,
         )?;

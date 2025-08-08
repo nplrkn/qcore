@@ -1,5 +1,8 @@
 //! build_f1ap - construction of F1AP messages
-use crate::data::{PduSession, UeRanContext};
+use crate::{
+    Config,
+    data::{PduSession, UeRanContext},
+};
 use anyhow::Result;
 use asn1_per::*;
 use ngap::*;
@@ -40,15 +43,17 @@ pub fn ng_setup_response(
 }
 
 pub fn initial_context_setup_request(
-    guami: Guami,
+    config: &Config,
     kgnb: &[u8; 32],
-    sst: u8,
     nas_pdu: Option<Vec<u8>>,
     ue: &UeRanContext,
-    transport_layer_address: TransportLayerAddress,
     session_list: &Vec<PduSession>,
     ue_security_capabilities: &[u8; 2],
 ) -> Result<Box<InitialContextSetupRequest>> {
+    let guami = config.guami();
+    let transport_layer_address = config.ip_addr.into();
+    let sst = config.sst;
+
     let allowed_nssai = AllowedNssai(nonempty![
         AllowedNssaiItem {
             snssai: Snssai(sst, None).into()

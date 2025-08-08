@@ -11,17 +11,12 @@ mod pdu_session_resource_release;
 mod pdu_session_resource_setup;
 mod ue_context_release;
 use super::prelude::*;
-use xxap::{Indication, Procedure, RequestError};
-
 use crate::{
     Config,
     data::{
         DecodedNas, PduSession, SubscriberAuthParams, UeContext5GC, UeRanContext, UserplaneSession,
     },
-    procedures::{
-        UeMessage,
-        ue_associated::{NasBase, NasProcedure},
-    },
+    procedures::ue_associated::{NasBase, NasProcedure},
     protocols::nas::Tmsi,
 };
 
@@ -108,7 +103,7 @@ impl<'a, B: RanUeBase> NasBase for &mut NgapUeProcedure<'a, B> {
 
     async fn register_new_tmsi(&self, tmsi: Tmsi) {
         self.api
-            .register_new_tmsi(tmsi, self.ue.local_ran_ue_id, &self.logger)
+            .register_new_tmsi(tmsi, self.ue.local_ran_ue_id, self.logger)
             .await
     }
 

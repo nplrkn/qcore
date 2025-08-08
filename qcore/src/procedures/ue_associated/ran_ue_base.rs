@@ -1,14 +1,12 @@
 use crate::{
     Config,
-    data::{
-        DecodedNas, PduSession, SubscriberAuthParams, UeContext5GC, UeRanContext, UserplaneSession,
-    },
+    data::{DecodedNas, SubscriberAuthParams, UeContext5GC, UserplaneSession},
     procedures::UeMessage,
     protocols::nas::Tmsi,
     qcore::ServedCellsStore,
 };
 use anyhow::Result;
-use slog::{Logger, debug, info};
+use slog::Logger;
 use xxap::{Indication, Procedure, RequestError};
 
 pub trait RanUeBase {

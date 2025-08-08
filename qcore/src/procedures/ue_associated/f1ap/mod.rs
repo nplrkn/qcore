@@ -121,7 +121,7 @@ impl<'a, B: RanUeBase> RrcBase for &mut F1apUeProcedure<'a, B> {
 
     async fn register_new_tmsi(&self, tmsi: Tmsi) {
         self.api
-            .register_new_tmsi(tmsi, self.ue.local_ran_ue_id, &self.logger)
+            .register_new_tmsi(tmsi, self.ue.local_ran_ue_id, self.logger)
             .await
     }
 

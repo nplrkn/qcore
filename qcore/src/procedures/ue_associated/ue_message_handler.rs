@@ -55,33 +55,31 @@ impl<A: HandlerApi> UeMessageHandler<A> {
             // procedure before passing up the error.
             if result.is_ok() {
                 result = self.dispatch(ue, &mut disconnected).await;
+            } else if !disconnected {
+                debug!(self.logger, "UE was disconnected - skip RAN release");
             } else {
-                if !disconnected {
-                    debug!(self.logger, "UE was disconnected - skip RAN release");
-                } else {
-                    if self.api.ngap_mode() {
-                        NgapUeProcedure {
-                            ue: &mut ue.ran,
-                            logger: &self.logger.clone(),
-                            api: self,
-                            release_cause: ngap::Cause::Nas(ngap::CauseNas::NormalRelease),
-                        }
-                        .ue_context_release()
-                        .await
-                    } else {
-                        F1apUeProcedure {
-                            ue: &mut ue.ran,
-                            logger: &self.logger.clone(),
-                            api: self,
-                            release_cause: f1ap::Cause::RadioNetwork(
-                                f1ap::CauseRadioNetwork::NormalRelease,
-                            ),
-                        }
-                        .ue_context_release()
-                        .await
+                if self.api.ngap_mode() {
+                    NgapUeProcedure {
+                        ue: &mut ue.ran,
+                        logger: &self.logger.clone(),
+                        api: self,
+                        release_cause: ngap::Cause::Nas(ngap::CauseNas::NormalRelease),
                     }
-                    return result;
+                    .ue_context_release()
+                    .await
+                } else {
+                    F1apUeProcedure {
+                        ue: &mut ue.ran,
+                        logger: &self.logger.clone(),
+                        api: self,
+                        release_cause: f1ap::Cause::RadioNetwork(
+                            f1ap::CauseRadioNetwork::NormalRelease,
+                        ),
+                    }
+                    .ue_context_release()
+                    .await
                 }
+                return result;
             }
         }
     }

@@ -31,10 +31,8 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         self.ue.pdu_sessions.push(session);
         self.log_message("<< Nas PduSessionEstablishmentAccept");
         let accept = self.ue.nas.encode(accept)?;
-        let _ = self
-            .api
+        self.api
             .ran_session_setup(self.ue.pdu_sessions.last_mut().unwrap(), accept)
-            .await?;
-        Ok(())
+            .await
     }
 }

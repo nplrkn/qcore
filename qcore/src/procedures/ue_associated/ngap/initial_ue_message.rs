@@ -31,13 +31,12 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
         });
 
         // TODO - pass in the TAC so it can be populated in the core context
-        let result = NasProcedure {
+        NasProcedure {
             ue: core_context,
             logger: &self.logger.clone(),
             api: self,
         }
         .initial_nas(r.nas_pdu.0, stmsi.as_deref())
-        .await;
-        result
+        .await
     }
 }

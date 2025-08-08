@@ -1,5 +1,5 @@
 //! build_f1ap - construction of F1AP messages
-use crate::{PdcpSequenceNumberLength, PduSession, UeContext, data::UeRanContext};
+use crate::{PdcpSequenceNumberLength, PduSession, data::UeRanContext};
 use anyhow::Result;
 use asn1_per::*;
 use f1ap::*;

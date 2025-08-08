@@ -138,7 +138,7 @@ impl<'a, B: RrcBase> RrcProcedure<'a, B> {
 
     // Does this need a separate function?
     fn extract_ul_dcch_message(&self, pdcp_bytes: &[u8]) -> Result<Box<UlDcchMessage>> {
-        let rrc_message_bytes = pdcp::view_inner(&pdcp_bytes)?;
+        let rrc_message_bytes = pdcp::view_inner(pdcp_bytes)?;
         Ok(Box::new(UlDcchMessage::from_bytes(rrc_message_bytes)?))
     }
 
@@ -198,7 +198,7 @@ impl<'a, B: RrcBase> NasBase for &mut RrcProcedure<'a, B> {
         session_list: &mut Vec<PduSession>,
         _ue_security_capabilities: &[u8; 2],
     ) -> Result<()> {
-        self.security_mode(&kgnb).await?;
+        self.security_mode(kgnb).await?;
         if self.api.rat_capabilities().is_none() {
             self.ue_capability_enquiry().await?;
         };
