@@ -50,6 +50,7 @@ pub trait NasBase {
         kgnb: &[u8; 32],
         nas: Vec<u8>,
         ue_session_list: &mut Vec<PduSession>,
+        ue_security_capabilities: &[u8; 2],
     ) -> Result<()>;
 
     async fn ran_session_release(
@@ -65,7 +66,7 @@ pub trait NasBase {
 
     async fn receive_nas_inner(&mut self) -> Result<Vec<u8>>;
     fn unexpected_nas_pdu(&mut self, pdu: DecodedNas, expected: &str) -> Result<()>;
-    async fn register_new_tmsi(&self, tmsi: Tmsi, ue_id: u32, logger: &Logger);
+    async fn register_new_tmsi(&self, tmsi: Tmsi);
 
     async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
 }
@@ -80,9 +81,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
     async fn allocate_tmsi(&mut self) -> NasFGsMobileIdentity {
         let tmsi = Tmsi(rand::random()); // TODO: 0xffffffff is not a valid TMSI (TS23.003, 2.4))
         debug!(self.logger, "Assigned {}", tmsi);
-        self.api
-            .register_new_tmsi(tmsi.clone(), self.ue.local_ran_ue_id, self.logger)
-            .await;
+        self.api.register_new_tmsi(tmsi.clone()).await;
         let guti = crate::protocols::nas::build::nas_mobile_identity_guti(
             &self.api.config().plmn,
             &self.api.config().amf_ids,
@@ -152,7 +151,12 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         );
         let kgnb = security::derive_kgnb(&self.ue.kamf, self.ue.nas.ul_nas_count());
         self.api
-            .ran_context_create(&kgnb, nas, &mut self.ue.pdu_sessions)
+            .ran_context_create(
+                &kgnb,
+                nas,
+                &mut self.ue.pdu_sessions,
+                &self.ue.security_capabilities,
+            )
             .await
     }
 

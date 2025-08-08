@@ -3,13 +3,6 @@ mod rrc_security_mode;
 mod rrc_setup;
 mod rrc_ue_capability_enquiry;
 mod ul_information_transfer;
-pub use rrc_reconfiguration::*;
-pub use rrc_security_mode::*;
-pub use rrc_setup::*;
-pub use rrc_ue_capability_enquiry::*;
-use slog::{Logger, debug};
-pub use ul_information_transfer::*;
-
 use anyhow::{Result, bail};
 use asn1_per::SerDes;
 use f1ap::SrbId;
@@ -17,6 +10,7 @@ use rrc::{
     C1_6, CriticalExtensions37, DedicatedNasMessage, UlDcchMessage, UlDcchMessageType,
     UlInformationTransfer, UlInformationTransferIEs,
 };
+use slog::{Logger, debug};
 use xxap::NrCgi;
 
 use crate::{
@@ -25,6 +19,7 @@ use crate::{
         DecodedNas, PduSession, SubscriberAuthParams, UeContext5GC, UeRrcContext, UserplaneSession,
     },
     procedures::ue_associated::{NasBase, NasProcedure},
+    protocols::nas::Tmsi,
     qcore::ServedCellsStore,
 };
 
@@ -45,6 +40,8 @@ pub trait RrcBase {
     fn config(&self) -> &Config;
     fn served_cells(&self) -> &ServedCellsStore;
     fn nr_cgi(&self) -> &Option<NrCgi>;
+    fn set_rat_capabilities(&mut self, rat_capabilities: Vec<u8>);
+    fn rat_capabilities(&self) -> &Option<Vec<u8>>;
 
     async fn reserve_userplane_session(&self, logger: &Logger) -> Result<UserplaneSession>;
     async fn lookup_subscriber_creds_and_inc_sqn(&self, imsi: &str)
@@ -52,12 +49,7 @@ pub trait RrcBase {
     async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
     async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
     async fn delete_userplane_session(&self, session: &UserplaneSession, logger: &Logger);
-    async fn register_new_tmsi(
-        &self,
-        tmsi: crate::protocols::nas::Tmsi,
-        ue_id: u32,
-        logger: &Logger,
-    );
+    async fn register_new_tmsi(&self, tmsi: Tmsi);
     async fn ran_session_setup(&mut self, session: &mut PduSession) -> Result<Vec<u8>>; // Returns cell group config
     async fn ran_session_release(
         &mut self,
@@ -66,6 +58,32 @@ pub trait RrcBase {
 }
 
 impl<'a, B: RrcBase> RrcProcedure<'a, B> {
+    pub async fn dispatch_ul_dcch(
+        &mut self,
+        rrc: Box<UlDcchMessage>,
+        core_context: &mut UeContext5GC,
+    ) -> Result<()> {
+        match rrc.message {
+            UlDcchMessageType::C1(C1_6::UlInformationTransfer(ul_information_transfer)) => {
+                self.ul_information_transfer(ul_information_transfer, core_context)
+                    .await?
+            }
+            _ => {
+                bail!("Unsupported UlDcchMessage {rrc:?}");
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn dispatch_pdcp(
+        &mut self,
+        pdcp_bytes: &[u8],
+        core_context: &mut UeContext5GC,
+    ) -> Result<()> {
+        let rrc = self.extract_ul_dcch_message(pdcp_bytes)?;
+        self.dispatch_ul_dcch(rrc, core_context).await
+    }
+
     pub async fn dispatch_nas(
         &mut self,
         pdu: DecodedNas,
@@ -157,9 +175,7 @@ impl<'a, B: RrcBase> NasBase for &mut RrcProcedure<'a, B> {
         fn unexpected_nas_pdu(&mut self, pdu: DecodedNas, expected: &str) -> Result<()>;
         async fn register_new_tmsi(
             &self,
-            tmsi: crate::protocols::nas::Tmsi,
-            ue_id: u32,
-            logger: &Logger,
+            tmsi: Tmsi,
         );
     }}
 
@@ -180,9 +196,10 @@ impl<'a, B: RrcBase> NasBase for &mut RrcProcedure<'a, B> {
         kgnb: &[u8; 32],
         nas: Vec<u8>,
         session_list: &mut Vec<PduSession>,
+        _ue_security_capabilities: &[u8; 2],
     ) -> Result<()> {
         self.security_mode(&kgnb).await?;
-        if self.ue.rat_capabilities.is_none() {
+        if self.api.rat_capabilities().is_none() {
             self.ue_capability_enquiry().await?;
         };
 

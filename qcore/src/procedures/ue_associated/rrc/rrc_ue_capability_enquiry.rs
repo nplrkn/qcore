@@ -38,7 +38,7 @@ impl<'a, B: RrcBase> RrcProcedure<'a, B> {
             ..
         } = ue_capability_information
         {
-            self.ue.rat_capabilities = Some(capabilities.as_bytes()?);
+            self.api.set_rat_capabilities(capabilities.as_bytes()?);
         }
         Ok(())
     }

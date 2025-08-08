@@ -10,7 +10,8 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
         &self,
         kgnb: &[u8; 32],
         nas_pdu: Vec<u8>,
-        ue_session_list: &mut Vec<PduSession>,
+        session_list: &mut Vec<PduSession>,
+        ue_security_capabilities: &[u8; 2],
     ) -> Result<()> {
         let initial_context_setup_request = crate::ngap::build::initial_context_setup_request(
             self.api.config().guami(),
@@ -19,6 +20,8 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
             Some(nas_pdu),
             self.ue,
             self.api.config().ip_addr.into(),
+            session_list,
+            ue_security_capabilities,
         )?;
         self.log_message("<< Ngap InitialContextSetupRequest");
         let rsp = self
@@ -33,14 +36,14 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
         // Go through each PDU session on the UE reactivating it.  Delete if the reactivation failed.
         // TODO: commonize setting of remote tunnel info and error handling in Ngap PduSessionResourceSetupResponse,
         // Ngap InitialContextSetupResponse and F1ap UeContextSetupResponse
-        let sessions = std::mem::take(ue_session_list);
+        let sessions = std::mem::take(session_list);
         for mut session in sessions.into_iter() {
             match self.connect_matching_session(&mut session, &rsp) {
                 Ok(()) => {
                     self.api
                         .commit_userplane_session(&session.userplane_info, self.logger)
                         .await?;
-                    ue_session_list.push(session);
+                    session_list.push(session);
                 }
 
                 Err(e) => {

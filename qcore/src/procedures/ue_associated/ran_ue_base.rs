@@ -35,7 +35,7 @@ pub trait RanUeBase {
         session: &UserplaneSession,
         logger: &Logger,
     ) -> Result<()>;
-    async fn deactivate_userplane_session(&self, session: &UserplaneSession, logger: &Logger);
+    //async fn deactivate_userplane_session(&self, session: &UserplaneSession, logger: &Logger);
     async fn delete_userplane_session(&self, session: &UserplaneSession, logger: &Logger);
     async fn lookup_subscriber_creds_and_inc_sqn(&self, imsi: &str)
     -> Option<SubscriberAuthParams>;

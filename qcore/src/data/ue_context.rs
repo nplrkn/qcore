@@ -24,7 +24,6 @@ impl Ksi {
 
 #[derive(Debug, Default)]
 pub struct UeContext5GC {
-    pub local_ran_ue_id: u32,
     pub tmsi: Option<Tmsi>,
 
     // 5G Core UE context data, indexed by TMSI
@@ -59,18 +58,26 @@ pub struct UeRanContext {
     pub remote_ran_ue_id: u32,
     pub nr_cgi: Option<NrCgi>,
     pub tac: [u8; 3],
+    //pub security_capabilities: UeSecurityCapabilities,
+
     // // CU only RAN data
-    // pub pdcp_tx: PdcpTx,
-    // pub rat_capabilities: Option<Vec<u8>>, // ASN.1 encoded Rrc UE-CapabilityRAT-ContainerList
+    pub rat_capabilities: Option<Vec<u8>>, // ASN.1 encoded Rrc UE-CapabilityRAT-ContainerList
+                                           // pub pdcp_tx: PdcpTx,
+                                           // pub rat_capabilities: Option<Vec<u8>>, // ASN.1 encoded Rrc UE-CapabilityRAT-ContainerList
 }
 
 #[derive(Debug, Default)]
 pub struct UeRrcContext {
     pub pdcp_tx: PdcpTx,
-    pub rat_capabilities: Option<Vec<u8>>, // ASN.1 encoded Rrc UE-CapabilityRAT-ContainerList
 }
 
 impl UeRanContext {
+    pub fn new(ue_id: u32) -> Self {
+        UeRanContext {
+            local_ran_ue_id: ue_id,
+            ..UeRanContext::default()
+        }
+    }
     pub fn amf_ue_ngap_id(&self) -> AmfUeNgapId {
         AmfUeNgapId(self.local_ran_ue_id as u64)
     }
@@ -100,8 +107,9 @@ pub struct UeContext {
 impl UeContext {
     pub fn new(ue_id: u32) -> Self {
         UeContext {
-            local_ran_ue_id: ue_id,
-            ..UeContext::default()
+            core: UeContext5GC::default(),
+            rrc: UeRrcContext::default(),
+            ran: UeRanContext::new(ue_id),
         }
     }
 }

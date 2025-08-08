@@ -104,13 +104,13 @@ impl<'a, B: RanUeBase> NasBase for &mut NgapUeProcedure<'a, B> {
             logger: &Logger,
         );
         fn unexpected_nas_pdu(&mut self, pdu: DecodedNas, expected: &str) -> Result<()>;
-        async fn register_new_tmsi(
-            &self,
-            tmsi: crate::protocols::nas::Tmsi,
-            ue_id: u32,
-            logger: &Logger,
-        );
     }}
+
+    async fn register_new_tmsi(&self, tmsi: Tmsi) {
+        self.api
+            .register_new_tmsi(tmsi, self.ue.local_ran_ue_id, &self.logger)
+            .await
+    }
 
     async fn ran_session_setup(
         &mut self,
@@ -127,9 +127,11 @@ impl<'a, B: RanUeBase> NasBase for &mut NgapUeProcedure<'a, B> {
         &mut self,
         kgnb: &[u8; 32],
         nas: Vec<u8>,
-        ue_session_list: &mut Vec<PduSession>,
+        session_list: &mut Vec<PduSession>,
+        ue_security_capabilities: &[u8; 2],
     ) -> Result<()> {
-        self.initial_context_setup(kgnb, nas, ue_session_list).await
+        self.initial_context_setup(kgnb, nas, session_list, ue_security_capabilities)
+            .await
     }
 
     async fn ran_session_release(

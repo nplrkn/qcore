@@ -2,7 +2,13 @@ use super::prelude::*;
 use ngap::UeContextReleaseComplete;
 
 impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
-    pub async fn ue_context_release(&self) -> Result<()> {
+    pub async fn ue_context_release(&mut self) {
+        if let Err(e) = self.ue_context_release_inner().await {
+            warn!(self.logger, "Failed to release RAN context: {e}");
+        }
+    }
+
+    async fn ue_context_release_inner(&mut self) -> Result<()> {
         // TODO: are we also meant to RRC Release the UE?
 
         let ue_context_release_command = crate::ngap::build::ue_context_release_command(

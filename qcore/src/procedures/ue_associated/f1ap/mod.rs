@@ -4,11 +4,8 @@ mod ue_context_release;
 mod ue_context_setup;
 use super::prelude::*;
 use f1ap::{Cause, DlRrcMessageTransferProcedure, F1apPdu, RrcContainer};
-pub use initial_ul_rrc_message_transfer::*;
 use rrc::UlDcchMessage;
 use slog::debug;
-
-pub use ue_context_setup::*;
 use xxap::NrCgi;
 
 use crate::{
@@ -16,7 +13,8 @@ use crate::{
     data::{
         DecodedNas, PduSession, SubscriberAuthParams, UeContext5GC, UeRrcContext, UserplaneSession,
     },
-    procedures::ue_associated::{NasProcedure, RrcBase, RrcProcedure},
+    procedures::ue_associated::{RrcBase, RrcProcedure},
+    protocols::nas::Tmsi,
     qcore::ServedCellsStore,
 };
 
@@ -31,9 +29,54 @@ impl<'a, B: RanUeBase> F1apUeProcedure<'a, B> {
     pub async fn dispatch(
         &mut self,
         pdu: Box<F1apPdu>,
+        rrc_context: &mut UeRrcContext,
         core_context: &mut UeContext5GC,
     ) -> Result<()> {
-        todo!()
+        match *pdu {
+            F1apPdu::InitiatingMessage(f1ap::InitiatingMessage::InitialUlRrcMessageTransfer(r)) => {
+                self.initial_ul_rrc_message_transfer(Box::new(r), rrc_context, core_context)
+                    .await?;
+            }
+            F1apPdu::InitiatingMessage(f1ap::InitiatingMessage::UlRrcMessageTransfer(r)) => {
+                self.log_message(">> F1ap UlRrcMessageTransfer");
+                RrcProcedure {
+                    ue: rrc_context,
+                    logger: &self.logger.clone(),
+                    api: self,
+                }
+                .dispatch_pdcp(&r.rrc_container.0, core_context)
+                .await?;
+            }
+            F1apPdu::InitiatingMessage(f1ap::InitiatingMessage::UeContextReleaseRequest(r)) => {
+                self.log_message(">> F1ap UeContextReleaseRequest");
+                info!(
+                    self.logger,
+                    "DU initiated context release, cause {:?}", r.cause
+                );
+                self.release_cause = r.cause.clone();
+                bail!("Context release");
+            }
+            pdu => {
+                debug!(self.logger, "Unsupported F1apPdu");
+                bail!("Unsupported F1apPdu {pdu:?}");
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn dispatch_rrc(
+        &mut self,
+        pdu: Box<UlDcchMessage>,
+        rrc_context: &mut UeRrcContext,
+        core_context: &mut UeContext5GC,
+    ) -> Result<()> {
+        RrcProcedure {
+            ue: rrc_context,
+            logger: &self.logger.clone(),
+            api: self,
+        }
+        .dispatch_ul_dcch(pdu, core_context)
+        .await
     }
 
     pub async fn dispatch_nas(
@@ -73,14 +116,22 @@ impl<'a, B: RanUeBase> RrcBase for &mut F1apUeProcedure<'a, B> {
         );
         fn unexpected_nas_pdu(&mut self, pdu: DecodedNas, expected: &str) -> Result<()>;
         fn unexpected_rrc_pdu(&mut self, pdu: Box<UlDcchMessage>) -> Result<()>;
-        async fn register_new_tmsi(
-            &self,
-            tmsi: crate::protocols::nas::Tmsi,
-            ue_id: u32,
-            logger: &Logger,
-        );
         fn served_cells(&self) -> &ServedCellsStore;
     }}
+
+    async fn register_new_tmsi(&self, tmsi: Tmsi) {
+        self.api
+            .register_new_tmsi(tmsi, self.ue.local_ran_ue_id, &self.logger)
+            .await
+    }
+
+    fn set_rat_capabilities(&mut self, rat_capabilities: Vec<u8>) {
+        self.ue.rat_capabilities = Some(rat_capabilities);
+    }
+
+    fn rat_capabilities(&self) -> &Option<Vec<u8>> {
+        &self.ue.rat_capabilities
+    }
 
     async fn receive_rrc(&mut self) -> Result<Vec<u8>> {
         let ul_rrc_message_transfer = self
@@ -125,12 +176,12 @@ impl<'a, B: RanUeBase> RrcBase for &mut F1apUeProcedure<'a, B> {
     async fn ran_session_release(
         &mut self,
         _released_session: &PduSession,
-    ) -> Result<(Option<Vec<u8>>)> {
+    ) -> Result<Option<Vec<u8>>> {
         // TODO - this is suspect.  Even though it is the last session given our single session limitation,
         // we shouldn't release the context.
         // Because the context includes SRB 1, which should live on.  (Does SRB2 also live on?)
         // Only if the UE goes idle should we actually release the context.
-        self.ue_context_release().await?;
+        self.ue_context_release().await;
         Ok(None)
     }
 }
