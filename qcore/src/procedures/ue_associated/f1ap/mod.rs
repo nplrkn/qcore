@@ -1,5 +1,5 @@
 mod initial_ul_rrc_message_transfer;
-mod ran_session_release;
+mod ue_context_modification;
 mod ue_context_release;
 mod ue_context_setup;
 use super::prelude::*;
@@ -175,13 +175,10 @@ impl<'a, B: RanUeBase> RrcBase for &mut F1apUeProcedure<'a, B> {
 
     async fn ran_session_release(
         &mut self,
-        _released_session: &PduSession,
+        released_session: &PduSession,
     ) -> Result<Option<Vec<u8>>> {
-        // TODO - this is suspect.  Even though it is the last session given our single session limitation,
-        // we shouldn't release the context.
-        // Because the context includes SRB 1, which should live on.  (Does SRB2 also live on?)
-        // Only if the UE goes idle should we actually release the context.
-        self.ue_context_release().await;
+        self.ue_context_modification(released_session);
+
         Ok(None)
     }
 }
