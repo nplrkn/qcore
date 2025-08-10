@@ -5,8 +5,14 @@
   - asymmetry that NasBase has reserve but not commit userplane session - can it be moved down?
     -  reserve is used to get the session info prior to sending accept
     -  delete is used in reconcile_sessions()
-  - split out NAS Base etc into different files
   - less verbose creation of higher layer procedure
+  - split out all data structures (e.g. KSI)
+  - "nas_context.rs" is not just data -> put in protocols or 5g libs? (but see below)
+    - key point - will it be used by integration test framework?
+      - if yes, 5g libs
+      - why both security_context and nas_context?
+  - "protocols" -> "procedures/parse_build" ?
+  - "entrypoints" under "procedures"
   - clean up registration procedure code
   - commonize service and registration session handling 
   - switch "if ngap_mode" etc to use Strategy pattern?

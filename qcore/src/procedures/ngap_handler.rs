@@ -1,5 +1,5 @@
 use super::prelude::*;
-use crate::procedures::UeMessage;
+use crate::procedures::{UeMessage, interface_management::Procedure};
 use async_trait::async_trait;
 use ngap::{
     InitialUeMessage, InitiatingMessage, NgSetupFailure, NgSetupRequest, NgSetupResponse, NgapAmf,

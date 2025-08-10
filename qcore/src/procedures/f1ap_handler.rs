@@ -1,6 +1,6 @@
 //! f1ap - F1AP entry points
 use super::prelude::*;
-use crate::procedures::UeMessage;
+use crate::procedures::{UeMessage, interface_management::Procedure};
 use async_trait::async_trait;
 use f1ap::{
     self, F1RemovalFailure, F1RemovalRequest, F1RemovalResponse, F1SetupFailure, F1SetupRequest,
