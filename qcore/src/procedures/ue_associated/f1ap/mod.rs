@@ -105,25 +105,20 @@ impl<'a, B: RanUeBase> RrcBase for &mut F1apUeProcedure<'a, B> {
     delegate! {
     to self.api {
         fn config(&self) -> &Config;
-        async fn reserve_userplane_session(&self, logger: &Logger) -> Result<UserplaneSession>;
-        async fn lookup_subscriber_creds_and_inc_sqn(&self, imsi: &str) -> Option<SubscriberAuthParams>;
-        async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
-        async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
+        async fn reserve_userplane_session(&self, [self.logger]) -> Result<UserplaneSession>;
         async fn delete_userplane_session(
             &self,
             session: &UserplaneSession,
-            logger: &Logger,
+            [self.logger],
         );
+        async fn lookup_subscriber_creds_and_inc_sqn(&self, imsi: &str) -> Option<SubscriberAuthParams>;
+        async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
+        async fn register_new_tmsi(&self, tmsi: Tmsi, [self.ue.local_ran_ue_id], [self.logger]);
+        async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
         fn unexpected_nas_pdu(&mut self, pdu: DecodedNas, expected: &str) -> Result<()>;
         fn unexpected_rrc_pdu(&mut self, pdu: Box<UlDcchMessage>) -> Result<()>;
         fn served_cells(&self) -> &ServedCellsStore;
     }}
-
-    async fn register_new_tmsi(&self, tmsi: Tmsi) {
-        self.api
-            .register_new_tmsi(tmsi, self.ue.local_ran_ue_id, self.logger)
-            .await
-    }
 
     fn set_rat_capabilities(&mut self, rat_capabilities: Vec<u8>) {
         self.ue.rat_capabilities = Some(rat_capabilities);
@@ -150,7 +145,7 @@ impl<'a, B: RanUeBase> RrcBase for &mut F1apUeProcedure<'a, B> {
         Ok(ul_rrc_message_transfer.rrc_container.0)
     }
 
-    async fn rrc_indication(&mut self, srb: f1ap::SrbId, rrc: Vec<u8>) -> Result<()> {
+    async fn send_rrc(&mut self, srb: f1ap::SrbId, rrc: Vec<u8>) -> Result<()> {
         let dl_message = crate::f1ap::build::dl_rrc_message_transfer(
             self.ue.local_ran_ue_id,
             self.ue.gnb_du_ue_f1ap_id(),

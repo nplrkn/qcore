@@ -109,25 +109,20 @@ use delegate::delegate;
 
 impl<'a, B: RanUeBase> NasBase for &mut NgapUeProcedure<'a, B> {
     delegate! {
-    to self.api {
-        fn config(&self) -> &Config;
-        async fn reserve_userplane_session(&self, logger: &Logger) -> Result<UserplaneSession>;
-        async fn lookup_subscriber_creds_and_inc_sqn(&self, imsi: &str) -> Option<SubscriberAuthParams>;
-        async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
-        async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
-        async fn delete_userplane_session(
-            &self,
-            session: &UserplaneSession,
-            logger: &Logger,
-        );
-        fn unexpected_nas_pdu(&mut self, pdu: DecodedNas, expected: &str) -> Result<()>;
+        to self.api {
+            fn config(&self) -> &Config;
+            async fn lookup_subscriber_creds_and_inc_sqn(&self, imsi: &str) -> Option<SubscriberAuthParams>;
+            async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
+            async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
+            fn unexpected_nas_pdu(&mut self, pdu: DecodedNas, expected: &str) -> Result<()>;
+            async fn reserve_userplane_session(&self, [self.logger]) -> Result<UserplaneSession>;
+            async fn delete_userplane_session(
+                &self,
+                session: &UserplaneSession,
+                [self.logger],
+            );
+            async fn register_new_tmsi(&self, tmsi: Tmsi, [self.ue.local_ran_ue_id], [self.logger]);
     }}
-
-    async fn register_new_tmsi(&self, tmsi: Tmsi) {
-        self.api
-            .register_new_tmsi(tmsi, self.ue.local_ran_ue_id, self.logger)
-            .await
-    }
 
     async fn ran_session_setup(
         &mut self,
@@ -157,7 +152,7 @@ impl<'a, B: RanUeBase> NasBase for &mut NgapUeProcedure<'a, B> {
             .await
     }
 
-    async fn nas_indication(&mut self, nas_bytes: Vec<u8>) -> Result<()> {
+    async fn send_nas(&mut self, nas_bytes: Vec<u8>) -> Result<()> {
         let ngap = crate::ngap::build::downlink_nas_transport(
             AmfUeNgapId(self.ue.local_ran_ue_id as u64),
             self.ue.ran_ue_ngap_id(),
@@ -170,7 +165,7 @@ impl<'a, B: RanUeBase> NasBase for &mut NgapUeProcedure<'a, B> {
         Ok(())
     }
 
-    async fn receive_nas_inner(&mut self) -> Result<Vec<u8>> {
+    async fn receive_nas(&mut self) -> Result<Vec<u8>> {
         let uplink_nas_transport = self
             .api
             .receive_xxap_pdu(

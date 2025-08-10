@@ -31,8 +31,7 @@ pub struct RrcProcedure<'a, B: RrcBase> {
 
 pub trait RrcBase {
     async fn receive_rrc(&mut self) -> Result<Vec<u8>>;
-    // TODO - rename to send_rrc
-    async fn rrc_indication(&mut self, srb: SrbId, rrc: Vec<u8>) -> Result<()>;
+    async fn send_rrc(&mut self, srb: SrbId, rrc: Vec<u8>) -> Result<()>;
 
     fn unexpected_rrc_pdu(&mut self, pdu: Box<UlDcchMessage>) -> Result<()>;
     fn unexpected_nas_pdu(&mut self, pdu: DecodedNas, expected: &str) -> Result<()>;
@@ -43,12 +42,12 @@ pub trait RrcBase {
     fn set_rat_capabilities(&mut self, rat_capabilities: Vec<u8>);
     fn rat_capabilities(&self) -> &Option<Vec<u8>>;
 
-    async fn reserve_userplane_session(&self, logger: &Logger) -> Result<UserplaneSession>;
+    async fn reserve_userplane_session(&self) -> Result<UserplaneSession>;
     async fn lookup_subscriber_creds_and_inc_sqn(&self, imsi: &str)
     -> Option<SubscriberAuthParams>;
     async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
     async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
-    async fn delete_userplane_session(&self, session: &UserplaneSession, logger: &Logger);
+    async fn delete_userplane_session(&self, session: &UserplaneSession);
     async fn register_new_tmsi(&self, tmsi: Tmsi);
     async fn ran_session_setup(&mut self, session: &mut PduSession) -> Result<Vec<u8>>; // Returns cell group config
     async fn ran_session_release(
@@ -110,8 +109,7 @@ impl<'a, B: RrcBase> RrcProcedure<'a, B> {
         filter: fn(Box<UlDcchMessage>) -> Result<F, Box<UlDcchMessage>>,
         expected: &str,
     ) -> Result<F> {
-        // Send the request using the common code in rrc_indication().
-        self.rrc_indication(srb_id, rrc).await?;
+        self.send_rrc(srb_id, rrc).await?;
         self.receive_rrc(filter, expected).await
     }
 
@@ -143,7 +141,7 @@ impl<'a, B: RrcBase> RrcProcedure<'a, B> {
     }
 
     /// Sends an RRC message.
-    async fn rrc_indication<T: Send + SerDes>(&mut self, srb: SrbId, rrc: &T) -> Result<()> {
+    async fn send_rrc<T: Send + SerDes>(&mut self, srb: SrbId, rrc: &T) -> Result<()> {
         let rrc_bytes = rrc.as_bytes()?;
 
         // This needs to be PDCP encapsulated if not going over SRB 0.
@@ -154,7 +152,7 @@ impl<'a, B: RrcBase> RrcProcedure<'a, B> {
             self.ue.pdcp_tx.encode(srb_id, rrc_bytes).into()
         };
 
-        self.api.rrc_indication(srb, rrc_bytes).await
+        self.api.send_rrc(srb, rrc_bytes).await
     }
 }
 
@@ -163,14 +161,13 @@ impl<'a, B: RrcBase> NasBase for &mut RrcProcedure<'a, B> {
     delegate! {
     to self.api {
         fn config(&self) -> &Config;
-        async fn reserve_userplane_session(&self, logger: &Logger) -> Result<UserplaneSession>;
+        async fn reserve_userplane_session(&self) -> Result<UserplaneSession>;
         async fn lookup_subscriber_creds_and_inc_sqn(&self, imsi: &str) -> Option<SubscriberAuthParams>;
         async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
         async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
         async fn delete_userplane_session(
             &self,
-            session: &UserplaneSession,
-            logger: &Logger,
+            session: &UserplaneSession
         );
         fn unexpected_nas_pdu(&mut self, pdu: DecodedNas, expected: &str) -> Result<()>;
         async fn register_new_tmsi(
@@ -209,7 +206,7 @@ impl<'a, B: RrcBase> NasBase for &mut RrcProcedure<'a, B> {
             let session = &mut session_list[0];
             self.ran_session_setup(session, nas).await
         } else {
-            self.nas_indication(nas).await
+            self.send_nas(nas).await
         }
     }
 
@@ -224,16 +221,16 @@ impl<'a, B: RrcBase> NasBase for &mut RrcProcedure<'a, B> {
             .await
     }
 
-    async fn nas_indication(&mut self, nas_bytes: Vec<u8>) -> Result<()> {
+    async fn send_nas(&mut self, nas_bytes: Vec<u8>) -> Result<()> {
         let rrc = crate::rrc::build::dl_information_transfer(
             1, // TODO transaction ID
             DedicatedNasMessage(nas_bytes),
         );
 
-        self.rrc_indication(SrbId(1), &rrc).await
+        self.send_rrc(SrbId(1), &rrc).await
     }
 
-    async fn receive_nas_inner(&mut self) -> Result<Vec<u8>> {
+    async fn receive_nas(&mut self) -> Result<Vec<u8>> {
         let ul_information_transfer = self
             .receive_rrc(
                 |m| match m.message {

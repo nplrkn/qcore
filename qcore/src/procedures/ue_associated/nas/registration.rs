@@ -107,7 +107,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         self.ran_context_create(accept).await?;
 
         let _registration_complete = self
-            .receive_nas(nas_filter!(RegistrationComplete), "Registration Complete")
+            .receive_nas_response(nas_filter!(RegistrationComplete), "Registration Complete")
             .await?;
 
         self.perform_configuration_update2().await?;
@@ -118,7 +118,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
     async fn reject_registration(&mut self, cause: u8) -> Result<()> {
         let reject = crate::nas::build::registration_reject(cause);
         self.log_message("<< Nas RegistrationReject");
-        self.nas_indication(reject).await
+        self.send_nas(reject).await
     }
 
     // Takes as input the cleartext only registration request, and returns the full registration request

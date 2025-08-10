@@ -85,7 +85,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
     async fn reject(&mut self, cause: u8) -> Result<()> {
         let reject = crate::nas::build::service_reject(cause);
         self.log_message("<< Nas ServiceReject");
-        self.nas_indication(reject).await
+        self.send_nas(reject).await
     }
 
     // TODO: commonize with registration.rs

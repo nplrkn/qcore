@@ -28,8 +28,8 @@ pub trait NasBase {
     fn config(&self) -> &Config;
     async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
 
-    async fn reserve_userplane_session(&self, logger: &Logger) -> Result<UserplaneSession>;
-    async fn delete_userplane_session(&self, session: &UserplaneSession, logger: &Logger);
+    async fn reserve_userplane_session(&self) -> Result<UserplaneSession>;
+    async fn delete_userplane_session(&self, session: &UserplaneSession);
 
     // These must take the sessions as a mut &.  Because the NasProcedure has a borrow on them.
     // So if the NasProcedure continues to exist, it must lend them.
@@ -62,9 +62,8 @@ pub trait NasBase {
     async fn lookup_subscriber_creds_and_inc_sqn(&self, imsi: &str)
     -> Option<SubscriberAuthParams>;
 
-    async fn nas_indication(&mut self, nas: Vec<u8>) -> Result<()>;
-
-    async fn receive_nas_inner(&mut self) -> Result<Vec<u8>>;
+    async fn send_nas(&mut self, nas: Vec<u8>) -> Result<()>;
+    async fn receive_nas(&mut self) -> Result<Vec<u8>>;
     fn unexpected_nas_pdu(&mut self, pdu: DecodedNas, expected: &str) -> Result<()>;
     async fn register_new_tmsi(&self, tmsi: Tmsi);
 
@@ -72,10 +71,9 @@ pub trait NasBase {
 }
 
 impl<'a, B: NasBase> NasProcedure<'a, B> {
-    // rename to send_nas?
-    async fn nas_indication(&mut self, nas: Box<Nas5gsMessage>) -> Result<()> {
+    async fn send_nas(&mut self, nas: Box<Nas5gsMessage>) -> Result<()> {
         let nas_bytes = self.ue.nas.encode(nas)?;
-        self.api.nas_indication(nas_bytes).await
+        self.api.send_nas(nas_bytes).await
     }
 
     async fn allocate_tmsi(&mut self) -> NasFGsMobileIdentity {
@@ -91,13 +89,13 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         guti
     }
     // Rename to expect_nas? and get rid of the  _inner in recieve_nas_inner
-    async fn receive_nas<T>(
+    async fn receive_nas_response<T>(
         &mut self,
         filter: fn(DecodedNas) -> Result<T, DecodedNas>,
         expected: &str,
     ) -> Result<T> {
         loop {
-            let nas = self.api.receive_nas_inner().await?;
+            let nas = self.api.receive_nas().await?;
             let nas = self.ue.nas.decode(&nas)?;
             match filter(nas) {
                 Ok(extracted) => return Ok(extracted),
@@ -112,7 +110,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         expected: &str,
     ) -> Result<T> {
         loop {
-            let nas = self.api.receive_nas_inner().await?;
+            let nas = self.api.receive_nas().await?;
             let nas = self.ue.nas.decode(&nas)?;
             if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::UlNasTransport(ref ul_nas_transport)) =
                 *nas.0
@@ -138,8 +136,8 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         filter: fn(DecodedNas) -> Result<T, DecodedNas>,
         expected: &str,
     ) -> Result<T> {
-        self.nas_indication(nas).await?;
-        self.receive_nas(filter, expected).await
+        self.send_nas(nas).await?;
+        self.receive_nas_response(filter, expected).await
     }
 
     async fn ran_context_create(&mut self, nas: Box<Nas5gsMessage>) -> Result<()> {
@@ -260,7 +258,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
                     "UE not aware of session {} so delete it", session.id
                 );
                 self.api
-                    .delete_userplane_session(&session.userplane_info, self.logger)
+                    .delete_userplane_session(&session.userplane_info)
                     .await;
             } else {
                 debug!(self.logger, "UE confirms existing session {}", session.id);

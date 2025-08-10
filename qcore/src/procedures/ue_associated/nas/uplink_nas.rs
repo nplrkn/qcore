@@ -142,7 +142,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
             let status = crate::nas::build::fgmm_status(
                 FGMM_CAUSE_DNN_NOT_SUPPORTED_OR_NOT_SUBSCRIBED_IN_THE_SLICE,
             );
-            self.nas_indication(status).await?;
+            self.send_nas(status).await?;
             Ok(false)
         } else {
             Ok(true)
