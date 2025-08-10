@@ -1,5 +1,4 @@
 use crate::{NasContext, PduSession, nas::Tmsi};
-use derive_deref::Deref;
 use f1ap::GnbDuUeF1apId;
 use ngap::{AmfUeNgapId, RanUeNgapId};
 use pdcp::PdcpTx;
@@ -8,7 +7,7 @@ use xxap::NrCgi;
 // 5G encryption and integrity capabilities in NAS format.
 pub type UeSecurityCapabilities = [u8; 2];
 
-#[derive(Debug, Deref)]
+#[derive(Debug)]
 pub struct Ksi(pub u8);
 impl Default for Ksi {
     fn default() -> Self {
@@ -47,8 +46,6 @@ impl UeContext5GC {
     }
 }
 
-// TODO - to finish but key point is that is doesn't have 5GC data, so that NgapUeProcedure etc can
-// be defined without a borrow on the UeContext5GC.
 // TODO - deduplicate tac??
 #[derive(Debug, Default)]
 pub struct UeRanContext {
@@ -58,12 +55,9 @@ pub struct UeRanContext {
     pub remote_ran_ue_id: u32,
     pub nr_cgi: Option<NrCgi>,
     pub tac: [u8; 3],
-    //pub security_capabilities: UeSecurityCapabilities,
 
     // // CU only RAN data
     pub rat_capabilities: Option<Vec<u8>>, // ASN.1 encoded Rrc UE-CapabilityRAT-ContainerList
-                                           // pub pdcp_tx: PdcpTx,
-                                           // pub rat_capabilities: Option<Vec<u8>>, // ASN.1 encoded Rrc UE-CapabilityRAT-ContainerList
 }
 
 #[derive(Debug, Default)]
@@ -95,13 +89,6 @@ pub struct UeContext {
     pub core: UeContext5GC,
     pub rrc: UeRrcContext,
     pub ran: UeRanContext,
-    // pub local_ran_ue_id: u32,
-    // pub remote_ran_ue_id: u32,
-    // pub nr_cgi: Option<NrCgi>,
-
-    // // CU only RAN data
-    // pub pdcp_tx: PdcpTx,
-    // pub rat_capabilities: Option<Vec<u8>>, // ASN.1 encoded Rrc UE-CapabilityRAT-ContainerList
 }
 
 impl UeContext {

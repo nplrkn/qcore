@@ -1,7 +1,5 @@
 use super::prelude::*;
 use crate::nas::*;
-use crate::nas_filter;
-use crate::nas_request_filter;
 use crate::{SimCreds, SubscriberAuthParams};
 use oxirush_nas::Nas5gmmMessage;
 use oxirush_nas::Nas5gsMessage;
@@ -22,16 +20,6 @@ enum NasAuthOutcome {
     Kseaf([u8; 32]),
     RetryWithNewKSI,
     ResyncSqn([u8; 6]),
-}
-
-// Called before the procedure starts to extract a GUTI mobile identity.
-pub fn peek_mobile_identity(r: &Nas5gsMessage) -> Result<MobileIdentity> {
-    match r {
-        Nas5gsMessage::Gmm(_header, Nas5gmmMessage::RegistrationRequest(registration_request)) => {
-            crate::nas::parse::fgs_mobile_identity(&registration_request.fgs_mobile_identity)
-        }
-        _ => bail!("Not a registration request"),
-    }
 }
 
 impl<'a, B: NasBase> NasProcedure<'a, B> {
@@ -148,7 +136,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
                     } else {
                         self.ue.reset_nas_security();
                         let imsi = self.query_ue_identity().await?;
-                        self.supi_registration(&imsi, ue_security_capability)
+                        self.supi_registration(&imsi.0, ue_security_capability)
                             .await?
                     }
                 }
@@ -249,7 +237,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         ue_security_capabilities: NasUeSecurityCapability,
     ) -> Result<NasMessageContainer> {
         self.configure_nas_security(&ue_security_capabilities);
-        let r = crate::nas::build::security_mode_command(ue_security_capabilities, *self.ue.ksi);
+        let r = crate::nas::build::security_mode_command(ue_security_capabilities, self.ue.ksi.0);
         self.log_message("<< NasSecurityModeCommand");
         let Ok(security_mode_complete) = self
             .nas_request(
@@ -273,7 +261,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         let req = crate::nas::build::authentication_request(
             &challenge.rand,
             &challenge.autn,
-            *self.ue.ksi,
+            self.ue.ksi.0,
         );
 
         self.log_message("<< NasAuthenticationRequest");
@@ -428,7 +416,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
             &auth_params.sim_creds.ki,
             &auth_params.sim_creds.opc,
             self.api.config().serving_network_name.as_bytes(),
-            &auth_params.sqn,
+            &auth_params.sqn.0,
         );
 
         // println!("Challenge generated:");
@@ -497,7 +485,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
     // TODO: commonize with service.rs
     async fn perform_configuration_update2(&mut self) -> Result<()> {
         let command = crate::nas::build::configuration_update_command(
-            Some(&self.api.config().network_display_name),
+            Some(self.api.config().network_display_name.as_bytes()),
             None,
         );
         self.log_message("<< Nas ConfigurationUpdateCommand");

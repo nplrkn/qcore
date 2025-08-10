@@ -1,9 +1,7 @@
+use super::prelude::*;
+use crate::data::PduSession;
 use anyhow::ensure;
 use ngap::PduSessionResourceSetupListSuRes;
-
-use crate::data::PduSession;
-
-use super::prelude::*;
 
 impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
     pub async fn pdu_session_resource_setup(

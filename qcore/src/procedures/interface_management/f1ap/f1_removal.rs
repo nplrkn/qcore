@@ -2,10 +2,8 @@ use super::prelude::*;
 use f1ap::{F1RemovalFailure, F1RemovalRequest, F1RemovalResponse};
 use xxap::{RequestError, ResponseAction};
 
-define_procedure!(F1RemovalProcedure);
-
-impl<'a, A: HandlerApi> F1RemovalProcedure<'a, A> {
-    pub async fn run(
+impl<'a, A: HandlerApi> Procedure<'a, A> {
+    pub async fn f1_removal(
         &self,
         r: F1RemovalRequest,
     ) -> Result<ResponseAction<F1RemovalResponse>, RequestError<F1RemovalFailure>> {

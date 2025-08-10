@@ -18,10 +18,10 @@ impl<'a, A: HandlerApi> Procedure<'a, A> {
     // }
 }
 
-impl<A: HandlerApi> std::ops::Deref for Procedure<'_, A> {
-    type Target = A;
+// impl<A: HandlerApi> std::ops::Deref for Procedure<'_, A> {
+//     type Target = A;
 
-    fn deref(&self) -> &Self::Target {
-        self.api
-    }
-}
+//     fn deref(&self) -> &Self::Target {
+//         self.api
+//     }
+// }

@@ -3,12 +3,11 @@ use super::prelude::*;
 use f1ap::{F1SetupFailure, F1SetupRequest, F1SetupResponse, GnbDuServedCellsItem};
 use xxap::{RequestError, ResponseAction};
 
-define_procedure!(F1SetupProcedure);
-impl<'a, A: HandlerApi> F1SetupProcedure<'a, A> {
+impl<'a, A: HandlerApi> Procedure<'a, A> {
     // F1 Setup Procedure
     // 1.    F1ap F1SetupRequest >>
     // 2.    F1ap F1SetupResponse <<
-    pub async fn run(
+    pub async fn f1_setup(
         &self,
         r: F1SetupRequest,
     ) -> Result<ResponseAction<F1SetupResponse>, RequestError<F1SetupFailure>> {
@@ -29,16 +28,17 @@ impl<'a, A: HandlerApi> F1SetupProcedure<'a, A> {
             .map(|x| x.0)
             .into_iter()
             .flatten()
-            .filter(|x| x.served_cell_information.nr_cgi.plmn_identity == self.config().plmn)
+            .filter(|x| x.served_cell_information.nr_cgi.plmn_identity == self.api.config().plmn)
             .collect();
 
         let response = crate::f1ap::build::f1_setup_response(
             r.transaction_id,
-            self.config().clone().name,
+            self.api.config().clone().name,
             &gnb_du_served_cells_list,
         )?;
 
-        self.served_cells()
+        self.api
+            .served_cells()
             .lock()
             .await
             .insert(r.gnb_du_id.0, gnb_du_served_cells_list);

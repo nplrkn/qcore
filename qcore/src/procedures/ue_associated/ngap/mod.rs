@@ -1,15 +1,10 @@
 mod initial_context_setup;
-use asn1_per::SerDes;
 mod initial_ue_message;
-mod uplink_nas_transport;
-use ngap::{
-    AmfUeNgapId, Cause, NgapPdu, PduSessionResourceSetupResponseTransfer,
-    UpTransportLayerInformation,
-};
-use slog::{Logger, debug, info};
 mod pdu_session_resource_release;
 mod pdu_session_resource_setup;
 mod ue_context_release;
+mod uplink_nas_transport;
+
 use super::prelude::*;
 use crate::{
     Config,
@@ -19,6 +14,12 @@ use crate::{
     procedures::ue_associated::{NasBase, NasProcedure},
     protocols::nas::Tmsi,
 };
+use asn1_per::SerDes;
+use ngap::{
+    AmfUeNgapId, Cause, NgapPdu, PduSessionResourceSetupResponseTransfer,
+    UpTransportLayerInformation,
+};
+use slog::{Logger, debug, info};
 
 pub struct NgapUeProcedure<'a, B: RanUeBase> {
     pub ue: &'a mut UeRanContext,
@@ -114,6 +115,7 @@ impl<'a, B: RanUeBase> NasBase for &mut NgapUeProcedure<'a, B> {
             async fn lookup_subscriber_creds_and_inc_sqn(&self, imsi: &str) -> Option<SubscriberAuthParams>;
             async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
             async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
+            #[call(unexpected_pdu)]
             fn unexpected_nas_pdu(&mut self, pdu: DecodedNas, expected: &str) -> Result<()>;
             async fn reserve_userplane_session(&self, [self.logger]) -> Result<UserplaneSession>;
             async fn delete_userplane_session(

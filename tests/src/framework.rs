@@ -124,5 +124,5 @@ pub async fn pass_through_ue_to_ue_ipv4<T: Transport>(
 }
 
 pub fn nth_imsi(n: usize, sub_db: &SubscriberDb) -> String {
-    sub_db.keys().nth(n).unwrap().clone()
+    sub_db.0.keys().nth(n).unwrap().clone()
 }

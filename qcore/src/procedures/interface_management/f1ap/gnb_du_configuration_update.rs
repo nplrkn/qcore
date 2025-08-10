@@ -4,13 +4,11 @@ use super::prelude::*;
 use f1ap::*;
 use xxap::{RequestError, ResponseAction};
 
-define_procedure!(GnbDuConfigurationUpdateProcedure);
-
-impl<'a, A: HandlerApi> GnbDuConfigurationUpdateProcedure<'a, A> {
+impl<'a, A: HandlerApi> Procedure<'a, A> {
     // F1 Setup Procedure
     // 1.    F1ap GnbDuConfigurationUpdate >>
     // 2.    F1ap GnbDuConfigurationUpdateAcknowledge <<
-    pub async fn run(
+    pub async fn gnb_du_configuration_update(
         &self,
         r: GnbDuConfigurationUpdate,
     ) -> Result<

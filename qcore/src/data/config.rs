@@ -1,6 +1,5 @@
 use anyhow::{Result, anyhow};
 use asn1_per::*;
-use derive_deref::Deref;
 use ngap::{AmfPointer, AmfRegionId, AmfSetId};
 use std::{
     fmt::Display,
@@ -57,7 +56,7 @@ pub struct Config {
 }
 
 /// NetworkDisplayName - UCS2 16-bit format, in network byte order
-#[derive(Debug, Clone, Deref)]
+#[derive(Debug, Clone)]
 pub struct NetworkDisplayName(Vec<u8>);
 impl NetworkDisplayName {
     pub fn new(s: &str) -> Result<Self> {
@@ -68,6 +67,9 @@ impl NetworkDisplayName {
             v.extend_from_slice(&c.to_be_bytes())
         }
         Ok(NetworkDisplayName(v))
+    }
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.0
     }
 }
 
@@ -87,7 +89,7 @@ impl Display for PdcpSequenceNumberLength {
 
 impl Config {
     pub fn guami(&self) -> ngap::Guami {
-        let amf_id_bits: &BitSlice<u8, Msb0> = self.amf_ids.view_bits::<Msb0>();
+        let amf_id_bits: &BitSlice<u8, Msb0> = self.amf_ids.0.view_bits::<Msb0>();
 
         ngap::Guami {
             plmn_identity: self.plmn.clone(),

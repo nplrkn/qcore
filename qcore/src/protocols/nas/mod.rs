@@ -1,10 +1,8 @@
-use std::fmt::Display;
-
-use derive_deref::Deref;
-use xxap::PlmnIdentity;
-
 pub mod build;
 pub mod parse;
+
+use std::fmt::Display;
+use xxap::PlmnIdentity;
 
 // TS24.501, Table 9.11.3.2.1
 
@@ -30,10 +28,10 @@ pub const FGSM_CAUSE_REGULAR_DEACTIVATION: u8 = 0b00100100;
 pub const REGISTRATION_TYPE_MASK: u8 = 0b111;
 pub const REGISTRATION_TYPE_INITIAL: u8 = 1;
 
-#[derive(Deref, Debug)]
+#[derive(Debug)]
 pub struct Imsi(pub String);
 
-#[derive(Deref, Debug, Eq, Hash, PartialEq, Clone)]
+#[derive(Debug, Eq, Hash, PartialEq, Clone)]
 pub struct Tmsi(pub [u8; 4]);
 impl Display for Tmsi {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -45,7 +43,7 @@ impl Display for Tmsi {
     }
 }
 
-#[derive(Deref, Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct AmfIds(pub [u8; 3]);
 impl Display for AmfIds {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -53,7 +51,7 @@ impl Display for AmfIds {
     }
 }
 
-#[derive(Deref, Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct AmfSetAndPointer(pub [u8; 2]);
 impl Display for AmfSetAndPointer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

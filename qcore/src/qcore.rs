@@ -227,7 +227,7 @@ impl HandlerApi for QCore {
         &self,
         imsi: &str,
     ) -> Option<SubscriberAuthParams> {
-        self.sub_db.lock().await.get_mut(imsi).map(|entry| {
+        self.sub_db.lock().await.0.get_mut(imsi).map(|entry| {
             let pre_increment = entry.clone();
             entry.sqn.inc();
             pre_increment
@@ -244,6 +244,7 @@ impl HandlerApi for QCore {
         self.sub_db
             .lock()
             .await
+            .0
             .get_mut(imsi)
             .ok_or(anyhow!("IMSI not found"))
             .map(|entry| entry.sqn = sqn)

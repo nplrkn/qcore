@@ -1,6 +1,5 @@
-use crate::{data::UeContext5GC, procedures::ue_associated::NasProcedure};
-
 use super::prelude::*;
+use crate::{data::UeContext5GC, procedures::ue_associated::NasProcedure};
 use ngap::UplinkNasTransport;
 
 impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {

@@ -1,5 +1,4 @@
 use anyhow::{Result, bail};
-use derive_deref::{Deref, DerefMut};
 use serde::Deserialize;
 use slog::{Logger, error, info};
 use std::collections::HashMap;
@@ -22,7 +21,7 @@ pub struct Subscriber {
 }
 pub type SubscriberAuthParams = Subscriber;
 
-#[derive(Deref, DerefMut, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct Sqn(pub [u8; 6]);
 
 impl Sqn {
@@ -32,15 +31,15 @@ impl Sqn {
         let mut s = u64::from_be_bytes(scratch);
         s += amount as u64;
         let scratch = s.to_be_bytes();
-        self.clone_from_slice(&scratch[2..8]);
+        self.0.clone_from_slice(&scratch[2..8]);
     }
     pub fn inc(&mut self) {
         self.add(1);
     }
 }
 
-#[derive(Deref, DerefMut, Clone)]
-pub struct SubscriberDb(HashMap<String, Subscriber>);
+#[derive(Clone)]
+pub struct SubscriberDb(pub HashMap<String, Subscriber>);
 
 impl SubscriberDb {
     pub fn new_from_sim_file(filename: &str, logger: &Logger) -> Result<Self> {

@@ -1,17 +1,11 @@
+mod rrc_base;
 mod rrc_reconfiguration;
 mod rrc_security_mode;
 mod rrc_setup;
 mod rrc_ue_capability_enquiry;
 mod ul_information_transfer;
-use anyhow::{Result, bail};
-use asn1_per::SerDes;
-use f1ap::SrbId;
-use rrc::{
-    C1_6, CriticalExtensions37, DedicatedNasMessage, UlDcchMessage, UlDcchMessageType,
-    UlInformationTransfer, UlInformationTransferIEs,
-};
-use slog::{Logger, debug};
-use xxap::NrCgi;
+
+pub use rrc_base::RrcBase;
 
 use crate::{
     Config,
@@ -20,40 +14,20 @@ use crate::{
     },
     procedures::ue_associated::{NasBase, NasProcedure},
     protocols::nas::Tmsi,
-    qcore::ServedCellsStore,
 };
+use anyhow::{Result, bail};
+use asn1_per::SerDes;
+use f1ap::SrbId;
+use rrc::{
+    C1_6, CriticalExtensions37, DedicatedNasMessage, UlDcchMessage, UlDcchMessageType,
+    UlInformationTransfer, UlInformationTransferIEs,
+};
+use slog::{Logger, debug};
 
 pub struct RrcProcedure<'a, B: RrcBase> {
     pub ue: &'a mut UeRrcContext,
     pub logger: &'a Logger,
     pub api: B,
-}
-
-pub trait RrcBase {
-    async fn receive_rrc(&mut self) -> Result<Vec<u8>>;
-    async fn send_rrc(&mut self, srb: SrbId, rrc: Vec<u8>) -> Result<()>;
-
-    fn unexpected_rrc_pdu(&mut self, pdu: Box<UlDcchMessage>) -> Result<()>;
-    fn unexpected_nas_pdu(&mut self, pdu: DecodedNas, expected: &str) -> Result<()>;
-
-    fn config(&self) -> &Config;
-    fn served_cells(&self) -> &ServedCellsStore;
-    fn nr_cgi(&self) -> &Option<NrCgi>;
-    fn set_rat_capabilities(&mut self, rat_capabilities: Vec<u8>);
-    fn rat_capabilities(&self) -> &Option<Vec<u8>>;
-
-    async fn reserve_userplane_session(&self) -> Result<UserplaneSession>;
-    async fn lookup_subscriber_creds_and_inc_sqn(&self, imsi: &str)
-    -> Option<SubscriberAuthParams>;
-    async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
-    async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
-    async fn delete_userplane_session(&self, session: &UserplaneSession);
-    async fn register_new_tmsi(&self, tmsi: Tmsi);
-    async fn ran_session_setup(&mut self, session: &mut PduSession) -> Result<Vec<u8>>; // Returns cell group config
-    async fn ran_session_release(
-        &mut self,
-        released_session: &PduSession,
-    ) -> Result<Option<Vec<u8>>>;
 }
 
 impl<'a, B: RrcBase> RrcProcedure<'a, B> {
@@ -128,7 +102,7 @@ impl<'a, B: RrcBase> RrcProcedure<'a, B> {
                         self.logger,
                         "Queue message (wanted {expected} got {:?})", ul_dcch_message
                     );
-                    self.api.unexpected_rrc_pdu(ul_dcch_message)?;
+                    self.api.unexpected_pdu(ul_dcch_message, expected)?;
                 }
             }
         }
@@ -169,6 +143,7 @@ impl<'a, B: RrcBase> NasBase for &mut RrcProcedure<'a, B> {
             &self,
             session: &UserplaneSession
         );
+        #[call(unexpected_pdu)]
         fn unexpected_nas_pdu(&mut self, pdu: DecodedNas, expected: &str) -> Result<()>;
         async fn register_new_tmsi(
             &self,

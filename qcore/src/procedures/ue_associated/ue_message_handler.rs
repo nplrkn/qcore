@@ -327,13 +327,8 @@ impl<A: HandlerApi> RanUeBase for &mut UeMessageHandler<A> {
         }
     }
 
-    fn unexpected_nas_pdu(&mut self, pdu: crate::data::DecodedNas, expected: &str) -> Result<()> {
-        debug!(self.logger, "Queue NAS PDU (wanted {expected})");
-        self.enqueue_message(UeMessage::Nas(pdu))
-    }
-
-    fn unexpected_rrc_pdu(&mut self, pdu: Box<rrc::UlDcchMessage>) -> Result<()> {
-        debug!(self.logger, "Queue RRC PDU");
-        self.enqueue_message(UeMessage::Rrc(pdu))
+    fn unexpected_pdu<T: Into<UeMessage>>(&mut self, pdu: T, expected: &str) -> Result<()> {
+        debug!(self.logger, "Queue PDU (wanted {expected})");
+        self.enqueue_message(pdu.into())
     }
 }

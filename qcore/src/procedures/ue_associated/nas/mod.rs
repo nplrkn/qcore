@@ -1,15 +1,15 @@
 mod deregistration;
+mod nas_base;
 mod registration;
-pub use registration::*;
-mod session_establishment;
-pub mod uplink_nas;
-use slog::{Logger, debug, warn};
 mod service;
+mod session_establishment;
 mod session_release;
+pub mod uplink_nas;
+
+pub use nas_base::NasBase;
 
 use crate::{
-    Config,
-    data::{DecodedNas, PduSession, SubscriberAuthParams, UeContext5GC, UserplaneSession},
+    data::{DecodedNas, UeContext5GC},
     protocols::nas::{ABORT_PROCEDURE, FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED, Tmsi, parse},
 };
 use anyhow::{Result, ensure};
@@ -17,57 +17,12 @@ use oxirush_nas::{
     Nas5gmmMessage, Nas5gsMessage, Nas5gsmMessage, NasFGsMobileIdentity, NasPduSessionStatus,
     NasUplinkDataStatus, decode_nas_5gs_message, messages::Nas5gsSecurityHeader,
 };
+use slog::{Logger, debug, warn};
 
 pub struct NasProcedure<'a, B: NasBase> {
     pub ue: &'a mut UeContext5GC,
     pub logger: &'a Logger,
     pub api: B,
-}
-
-pub trait NasBase {
-    fn config(&self) -> &Config;
-    async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
-
-    async fn reserve_userplane_session(&self) -> Result<UserplaneSession>;
-    async fn delete_userplane_session(&self, session: &UserplaneSession);
-
-    // These must take the sessions as a mut &.  Because the NasProcedure has a borrow on them.
-    // So if the NasProcedure continues to exist, it must lend them.
-
-    // The underlying layer cannot simultaneously know about them implicitly.
-    // This models an exchange over a network API.
-
-    // What the underlying layer _can_ know about its own UE context.
-    // Conclusion - sessions get passed as parameter?
-
-    // Solve that problem, implement this trait and them come back to the take() of the Ue5GCContext.
-
-    async fn ran_session_setup(&mut self, pdu_session: &mut PduSession, nas: Vec<u8>)
-    -> Result<()>;
-
-    async fn ran_context_create(
-        &mut self,
-        kgnb: &[u8; 32],
-        nas: Vec<u8>,
-        ue_session_list: &mut Vec<PduSession>,
-        ue_security_capabilities: &[u8; 2],
-    ) -> Result<()>;
-
-    async fn ran_session_release(
-        &mut self,
-        released_session: &PduSession,
-        nas: Vec<u8>,
-    ) -> Result<()>;
-
-    async fn lookup_subscriber_creds_and_inc_sqn(&self, imsi: &str)
-    -> Option<SubscriberAuthParams>;
-
-    async fn send_nas(&mut self, nas: Vec<u8>) -> Result<()>;
-    async fn receive_nas(&mut self) -> Result<Vec<u8>>;
-    fn unexpected_nas_pdu(&mut self, pdu: DecodedNas, expected: &str) -> Result<()>;
-    async fn register_new_tmsi(&self, tmsi: Tmsi);
-
-    async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
 }
 
 impl<'a, B: NasBase> NasProcedure<'a, B> {
@@ -124,6 +79,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
                     }
                 }
             }
+
             // This is not the message we are looking for.  Park the top level NAS PDU.  This is rather inefficient
             // since it means we will decode the inner message again later.
             self.api.unexpected_nas_pdu(nas, expected)?;
@@ -164,9 +120,9 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         amf_set_and_pointer: &[u8],
         tmsi: &[u8],
     ) -> Result<bool, u8> {
-        let guami_matches = amf_set_and_pointer == &self.api.config().amf_ids[1..3]
+        let guami_matches = amf_set_and_pointer == &self.api.config().amf_ids.0[1..3]
             && amf_region
-                .map(|x| x == self.api.config().amf_ids[0])
+                .map(|x| x == self.api.config().amf_ids.0[0])
                 .unwrap_or(true);
         if !guami_matches {
             warn!(
@@ -287,6 +243,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
 mod prelude {
     pub use super::super::prelude::*;
     pub use super::{NasBase, NasProcedure};
+    pub use crate::{nas_filter, nas_request_filter};
 }
 
 #[macro_export]

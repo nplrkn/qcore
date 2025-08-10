@@ -1,4 +1,3 @@
-use super::interface_management::NgSetupProcedure;
 use super::prelude::*;
 use crate::procedures::UeMessage;
 use async_trait::async_trait;
@@ -12,12 +11,15 @@ use xxap::{
     EventHandler, IndicationHandler, RequestError, RequestProvider, ResponseAction, TnlaEvent,
 };
 
-#[derive(Clone, Deref)]
+#[derive(Clone)]
 pub struct NgapHandler<A: HandlerApi>(A);
 
 impl<A: HandlerApi> NgapHandler<A> {
     pub fn new_ngap_application(api: A) -> NgapAmf<NgapHandler<A>> {
         NgapAmf(NgapHandler(api))
+    }
+    async fn dispatch_ue_message(&self, ue_id: u32, message: UeMessage) -> Result<()> {
+        self.0.dispatch_ue_message(ue_id, message).await
     }
 }
 
@@ -28,9 +30,7 @@ impl<A: HandlerApi> RequestProvider<ngap::NgSetupProcedure> for NgapHandler<A> {
         r: NgSetupRequest,
         logger: &Logger,
     ) -> Result<ResponseAction<NgSetupResponse>, RequestError<NgSetupFailure>> {
-        NgSetupProcedure::new(Procedure::new(&self.0, logger))
-            .run(r)
-            .await
+        Procedure::new(&self.0, logger).ng_setup(r).await
     }
 }
 
@@ -117,7 +117,7 @@ impl<A: HandlerApi> EventHandler for NgapHandler<A> {
                 // Treat this as equivalent to NG termination.
                 // TODO - in the case of multiple TNLAs or multiple gNBs, this is too broad.
                 info!(logger, "NGAP TNLA {} closed", tnla_id);
-                self.disconnect_ues().await;
+                self.0.disconnect_ues().await;
             }
         };
     }

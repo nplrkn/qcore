@@ -1,7 +1,6 @@
 //! uplink_nas - transfer of a Nas message from UE to AMF
 use super::prelude::*;
 use crate::data::DecodedNas;
-use crate::procedures::ue_associated::peek_mobile_identity;
 use crate::protocols::nas::{
     FGMM_CAUSE_DNN_NOT_SUPPORTED_OR_NOT_SUBSCRIBED_IN_THE_SLICE, Guti, MobileIdentity,
 };
@@ -49,7 +48,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
                     peek_mobile_identity(nas)
                 {
                     match self
-                        .retrieve_ue(Some(amf_ids[0]), &amf_ids[1..3], &tmsi.0)
+                        .retrieve_ue(Some(amf_ids.0[0]), &amf_ids.0[1..3], &tmsi.0)
                         .await
                     {
                         Ok(false) => {
@@ -147,5 +146,15 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         } else {
             Ok(true)
         }
+    }
+}
+
+// Called before the procedure starts to extract a GUTI mobile identity.
+pub fn peek_mobile_identity(r: &Nas5gsMessage) -> Result<MobileIdentity> {
+    match r {
+        Nas5gsMessage::Gmm(_header, Nas5gmmMessage::RegistrationRequest(registration_request)) => {
+            crate::nas::parse::fgs_mobile_identity(&registration_request.fgs_mobile_identity)
+        }
+        _ => bail!("Not a registration request"),
     }
 }

@@ -2,6 +2,11 @@
 
 ## In progress
 - Tidying + Refactoring
+  - asymmetry that NasBase has reserve but not commit userplane session - can it be moved down?
+    -  reserve is used to get the session info prior to sending accept
+    -  delete is used in reconcile_sessions()
+  - split out NAS Base etc into different files
+  - less verbose creation of higher layer procedure
   - clean up registration procedure code
   - commonize service and registration session handling 
   - switch "if ngap_mode" etc to use Strategy pattern?

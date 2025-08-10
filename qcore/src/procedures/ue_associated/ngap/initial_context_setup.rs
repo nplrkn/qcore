@@ -1,9 +1,7 @@
+use super::prelude::*;
+use crate::data::PduSession;
 use asn1_per::SerDes;
 use ngap::{InitialContextSetupResponse, PduSessionResourceSetupUnsuccessfulTransfer};
-
-use crate::data::PduSession;
-
-use super::prelude::*;
 
 impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
     pub async fn initial_context_setup(

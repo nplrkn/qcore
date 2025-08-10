@@ -1,10 +1,6 @@
 //! f1ap - F1AP entry points
-use crate::procedures::UeMessage;
-
-use super::interface_management::{
-    F1RemovalProcedure, F1SetupProcedure, GnbDuConfigurationUpdateProcedure,
-};
 use super::prelude::*;
+use crate::procedures::UeMessage;
 use async_trait::async_trait;
 use f1ap::{
     self, F1RemovalFailure, F1RemovalRequest, F1RemovalResponse, F1SetupFailure, F1SetupRequest,
@@ -19,12 +15,15 @@ use xxap::{
     EventHandler, IndicationHandler, RequestError, RequestProvider, ResponseAction, TnlaEvent,
 };
 
-#[derive(Clone, Deref)]
+#[derive(Clone)]
 pub struct F1apHandler<A: HandlerApi>(A);
 
 impl<A: HandlerApi> F1apHandler<A> {
     pub fn new_f1ap_application(api: A) -> F1apCu<F1apHandler<A>> {
         F1apCu::new(F1apHandler(api))
+    }
+    async fn dispatch_ue_message(&self, ue_id: u32, message: UeMessage) -> Result<()> {
+        self.0.dispatch_ue_message(ue_id, message).await
     }
 }
 
@@ -35,9 +34,7 @@ impl<A: HandlerApi> RequestProvider<f1ap::F1SetupProcedure> for F1apHandler<A> {
         r: F1SetupRequest,
         logger: &Logger,
     ) -> Result<ResponseAction<F1SetupResponse>, RequestError<F1SetupFailure>> {
-        F1SetupProcedure::new(Procedure::new(&self.0, logger))
-            .run(r)
-            .await
+        Procedure::new(&self.0, logger).f1_setup(r).await
     }
 }
 
@@ -48,9 +45,7 @@ impl<A: HandlerApi> RequestProvider<f1ap::F1RemovalProcedure> for F1apHandler<A>
         r: F1RemovalRequest,
         logger: &Logger,
     ) -> Result<ResponseAction<F1RemovalResponse>, RequestError<F1RemovalFailure>> {
-        F1RemovalProcedure::new(Procedure::new(&self.0, logger))
-            .run(r)
-            .await
+        Procedure::new(&self.0, logger).f1_removal(r).await
     }
 }
 
@@ -64,8 +59,8 @@ impl<A: HandlerApi> RequestProvider<f1ap::GnbDuConfigurationUpdateProcedure> for
         ResponseAction<GnbDuConfigurationUpdateAcknowledge>,
         RequestError<GnbDuConfigurationUpdateFailure>,
     > {
-        GnbDuConfigurationUpdateProcedure::new(Procedure::new(&self.0, logger))
-            .run(r)
+        Procedure::new(&self.0, logger)
+            .gnb_du_configuration_update(r)
             .await
     }
 }
@@ -141,7 +136,7 @@ impl<A: HandlerApi> EventHandler for F1apHandler<A> {
                 // Treat this as equivalent to an F1 Removal.
                 // TODO - in the case of multiple TNLAs or multiple DUs, this is too broad.
                 info!(logger, "F1AP TNLA {} closed - delete UE channels", tnla_id);
-                self.disconnect_ues().await;
+                self.0.disconnect_ues().await;
             }
         };
     }

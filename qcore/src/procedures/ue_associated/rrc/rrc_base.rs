@@ -1,0 +1,39 @@
+use crate::{
+    Config,
+    data::{PduSession, SubscriberAuthParams, UeContext5GC, UserplaneSession},
+    procedures::UeMessage,
+    protocols::nas::Tmsi,
+    qcore::ServedCellsStore,
+};
+use anyhow::Result;
+use f1ap::SrbId;
+use xxap::NrCgi;
+
+pub trait RrcBase {
+    async fn receive_rrc(&mut self) -> Result<Vec<u8>>;
+    async fn send_rrc(&mut self, srb: SrbId, rrc: Vec<u8>) -> Result<()>;
+
+    fn unexpected_pdu<T: Into<UeMessage>>(&mut self, pdu: T, expected: &str) -> Result<()>;
+
+    fn config(&self) -> &Config;
+    fn served_cells(&self) -> &ServedCellsStore;
+    fn nr_cgi(&self) -> &Option<NrCgi>;
+    fn set_rat_capabilities(&mut self, rat_capabilities: Vec<u8>);
+    fn rat_capabilities(&self) -> &Option<Vec<u8>>;
+
+    async fn reserve_userplane_session(&self) -> Result<UserplaneSession>;
+    async fn delete_userplane_session(&self, session: &UserplaneSession);
+
+    async fn lookup_subscriber_creds_and_inc_sqn(&self, imsi: &str)
+    -> Option<SubscriberAuthParams>;
+    async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
+
+    async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
+    async fn register_new_tmsi(&self, tmsi: Tmsi);
+
+    async fn ran_session_setup(&mut self, session: &mut PduSession) -> Result<Vec<u8>>; // Returns cell group config
+    async fn ran_session_release(
+        &mut self,
+        released_session: &PduSession,
+    ) -> Result<Option<Vec<u8>>>;
+}

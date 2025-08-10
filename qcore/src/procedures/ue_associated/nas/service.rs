@@ -1,5 +1,5 @@
 use super::prelude::*;
-use crate::{nas::*, nas_filter};
+use crate::nas::*;
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gsMessage, NasFGsMobileIdentity, decode_nas_5gs_message,
     messages::NasServiceRequest,
@@ -24,7 +24,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         let mut tmsi_matches = false;
         if let Ok(MobileIdentity::STmsi(x)) = crate::nas::parse::fgs_mobile_identity(&r.fg_s_tmsi) {
             if let Some(tmsi) = &self.ue.tmsi {
-                if tmsi.0 == *x.1 && self.api.config().amf_ids[1..3] == x.0.0 {
+                if tmsi.0 == x.1.0 && self.api.config().amf_ids.0[1..3] == x.0.0 {
                     tmsi_matches = true;
                 }
             } else {

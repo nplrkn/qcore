@@ -2,24 +2,28 @@ mod initial_ul_rrc_message_transfer;
 mod ue_context_modification;
 mod ue_context_release;
 mod ue_context_setup;
+
 use super::prelude::*;
+use crate::{
+    Config,
+    data::{
+        DecodedNas, PduSession, SubscriberAuthParams, UeContext5GC, UeRanContext, UeRrcContext,
+        UserplaneSession,
+    },
+    procedures::{
+        UeMessage,
+        ue_associated::{RrcBase, RrcProcedure},
+    },
+    protocols::nas::Tmsi,
+    qcore::ServedCellsStore,
+};
 use f1ap::{Cause, DlRrcMessageTransferProcedure, F1apPdu, RrcContainer};
 use rrc::UlDcchMessage;
 use slog::debug;
 use xxap::NrCgi;
 
-use crate::{
-    Config,
-    data::{
-        DecodedNas, PduSession, SubscriberAuthParams, UeContext5GC, UeRrcContext, UserplaneSession,
-    },
-    procedures::ue_associated::{RrcBase, RrcProcedure},
-    protocols::nas::Tmsi,
-    qcore::ServedCellsStore,
-};
-
 pub struct F1apUeProcedure<'a, B: RanUeBase> {
-    pub ue: &'a mut crate::UeRanContext,
+    pub ue: &'a mut UeRanContext,
     pub logger: &'a Logger,
     pub api: B,
     pub release_cause: Cause,
@@ -115,8 +119,7 @@ impl<'a, B: RanUeBase> RrcBase for &mut F1apUeProcedure<'a, B> {
         async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
         async fn register_new_tmsi(&self, tmsi: Tmsi, [self.ue.local_ran_ue_id], [self.logger]);
         async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
-        fn unexpected_nas_pdu(&mut self, pdu: DecodedNas, expected: &str) -> Result<()>;
-        fn unexpected_rrc_pdu(&mut self, pdu: Box<UlDcchMessage>) -> Result<()>;
+        fn unexpected_pdu<T:Into<UeMessage>>(&mut self, pdu:T, expected: &str) -> Result<()>;
         fn served_cells(&self) -> &ServedCellsStore;
     }}
 

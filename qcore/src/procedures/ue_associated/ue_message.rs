@@ -1,11 +1,9 @@
-use std::fmt::Display;
-
+use crate::data::{DecodedNas, UeContext5GC};
 use async_std::channel::Sender;
 use f1ap::F1apPdu;
 use ngap::NgapPdu;
 use rrc::UlDcchMessage;
-
-use crate::data::{DecodedNas, UeContext5GC};
+use std::fmt::Display;
 
 #[derive(Debug)]
 pub enum UeMessage {
@@ -63,5 +61,17 @@ impl From<Box<NgapPdu>> for UeMessage {
 impl From<Box<F1apPdu>> for UeMessage {
     fn from(value: Box<F1apPdu>) -> Self {
         UeMessage::F1ap(value)
+    }
+}
+
+impl From<Box<UlDcchMessage>> for UeMessage {
+    fn from(value: Box<UlDcchMessage>) -> Self {
+        UeMessage::Rrc(value)
+    }
+}
+
+impl From<DecodedNas> for UeMessage {
+    fn from(value: DecodedNas) -> Self {
+        UeMessage::Nas(value)
     }
 }

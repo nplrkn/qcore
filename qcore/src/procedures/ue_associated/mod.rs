@@ -1,39 +1,21 @@
 mod f1ap;
 mod nas;
 mod ngap;
-mod rrc;
-mod ue_message_handler;
-pub use f1ap::*;
-pub use nas::*;
-pub use ngap::*;
 mod ran_ue_base;
+mod rrc;
 pub mod ue_message;
-pub use ran_ue_base::RanUeBase;
-pub use rrc::*;
-//mod ue_procedure;
+mod ue_message_handler;
 
+pub use f1ap::F1apUeProcedure;
+pub use nas::{NasBase, NasProcedure};
+pub use ngap::NgapUeProcedure;
+pub use ran_ue_base::RanUeBase;
+pub use rrc::{RrcBase, RrcProcedure};
 pub use ue_message::UeMessage;
 pub use ue_message_handler::UeMessageHandler;
-//pub use ue_procedure::UeProcedure;
 
 // Used to reduce boilerplate at the start of UE procedure implementation modules.
 mod prelude {
     pub use super::super::prelude::*;
     pub use super::ran_ue_base::RanUeBase;
-    //pub use super::UeProcedure;
-    //pub use crate::define_ue_procedure;
 }
-
-// Reduce procedure boilerplate by defining the newtype struct and the new() function.
-// #[macro_export]
-// macro_rules! define_ue_procedure {
-//     ($t:ident) => {
-//         #[derive(Deref, DerefMut)]
-//         pub struct $t<'a, A: HandlerApi>(UeProcedure<'a, A>);
-//         impl<'a, A: HandlerApi> $t<'a, A> {
-//             pub fn new(inner: UeProcedure<'a, A>) -> Self {
-//                 $t(inner)
-//             }
-//         }
-//     };
-// }
