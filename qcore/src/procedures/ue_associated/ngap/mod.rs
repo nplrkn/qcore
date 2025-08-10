@@ -81,6 +81,28 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
     pub fn log_message(&self, s: &str) {
         debug!(self.logger, "{}", s)
     }
+
+    // TODO: commonize with F1AP?
+    async fn connect_session_downlink(
+        &self,
+        pdu_session_resource_setup_response_transfer_bytes: &[u8],
+        session: &mut PduSession,
+    ) -> Result<()> {
+        let pdu_session_resource_setup_response_transfer =
+            PduSessionResourceSetupResponseTransfer::from_bytes(
+                pdu_session_resource_setup_response_transfer_bytes,
+            )?;
+
+        let UpTransportLayerInformation::GtpTunnel(gtp_tunnel) =
+            pdu_session_resource_setup_response_transfer
+                .dl_qos_flow_per_tnl_information
+                .up_transport_layer_information;
+
+        session.userplane_info.remote_tunnel_info = Some(gtp_tunnel);
+        self.api
+            .commit_userplane_session(&session.userplane_info, self.logger)
+            .await
+    }
 }
 
 use delegate::delegate;
@@ -112,10 +134,7 @@ impl<'a, B: RanUeBase> NasBase for &mut NgapUeProcedure<'a, B> {
         pdu_session: &mut PduSession,
         nas: Vec<u8>,
     ) -> Result<()> {
-        self.pdu_session_resource_setup(nas, pdu_session).await?;
-        self.api
-            .commit_userplane_session(&pdu_session.userplane_info, self.logger)
-            .await
+        self.pdu_session_resource_setup(nas, pdu_session).await
     }
 
     async fn ran_context_create(
@@ -175,21 +194,3 @@ mod prelude {
 }
 
 use anyhow::{Result, bail};
-
-fn connect_session_downlink(
-    pdu_session_resource_setup_response_transfer_bytes: &[u8],
-    session: &mut PduSession,
-) -> Result<()> {
-    let pdu_session_resource_setup_response_transfer =
-        PduSessionResourceSetupResponseTransfer::from_bytes(
-            pdu_session_resource_setup_response_transfer_bytes,
-        )?;
-
-    let UpTransportLayerInformation::GtpTunnel(gtp_tunnel) =
-        pdu_session_resource_setup_response_transfer
-            .dl_qos_flow_per_tnl_information
-            .up_transport_layer_information;
-
-    session.userplane_info.remote_tunnel_info = Some(gtp_tunnel);
-    Ok(())
-}

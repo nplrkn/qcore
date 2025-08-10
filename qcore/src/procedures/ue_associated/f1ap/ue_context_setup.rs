@@ -26,6 +26,10 @@ impl<'a, B: RanUeBase> F1apUeProcedure<'a, B> {
         // Ngap InitialContextSetupResponse and F1ap UeContextSetupResponse
         let (cell_group_config, gtp_tunnel) = self.check_ue_context_setup_response(rsp)?;
         session.userplane_info.remote_tunnel_info = Some(gtp_tunnel);
+        self.api
+            .commit_userplane_session(&session.userplane_info, self.logger)
+            .await?;
+
         Ok(cell_group_config.0)
     }
 

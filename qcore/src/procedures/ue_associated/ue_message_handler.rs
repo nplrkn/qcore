@@ -55,10 +55,10 @@ impl<A: HandlerApi> UeMessageHandler<A> {
             // procedure before passing up the error.
             if result.is_ok() {
                 result = self.dispatch(ue, &mut disconnected).await;
-            } else if !disconnected {
-                debug!(self.logger, "UE was disconnected - skip RAN release");
             } else {
-                if self.api.ngap_mode() {
+                if disconnected {
+                    debug!(self.logger, "UE was disconnected - skip RAN release");
+                } else if self.api.ngap_mode() {
                     NgapUeProcedure {
                         ue: &mut ue.ran,
                         logger: &self.logger.clone(),
@@ -79,6 +79,7 @@ impl<A: HandlerApi> UeMessageHandler<A> {
                     .ue_context_release()
                     .await
                 }
+
                 return result;
             }
         }

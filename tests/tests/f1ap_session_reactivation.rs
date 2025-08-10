@@ -13,7 +13,7 @@ async fn f1ap_session_reactivation() -> anyhow::Result<()> {
 
     // Re-establish the F1 interface.
     du.perform_f1_removal().await?;
-    du.perform_f1_setup(qc.ip_addr()).await?;
+    du.perform_f1_setup_with_existing_tnla().await?;
 
     // UE sends a registration request with GUTI and reactivates its previous session.
     let mut ue = MockUeF1ap::new_from_base(ue_data, 1, &du, qc.ip_addr(), &logger).await?;

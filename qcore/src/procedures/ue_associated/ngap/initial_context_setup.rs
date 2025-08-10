@@ -36,11 +36,8 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
         // Ngap InitialContextSetupResponse and F1ap UeContextSetupResponse
         let sessions = std::mem::take(session_list);
         for mut session in sessions.into_iter() {
-            match self.connect_matching_session(&mut session, &rsp) {
+            match self.connect_matching_session(&mut session, &rsp).await {
                 Ok(()) => {
-                    self.api
-                        .commit_userplane_session(&session.userplane_info, self.logger)
-                        .await?;
                     session_list.push(session);
                 }
 
@@ -75,7 +72,7 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
         Ok(())
     }
 
-    fn connect_matching_session(
+    async fn connect_matching_session(
         &self,
         session: &mut PduSession,
         rsp: &InitialContextSetupResponse,
@@ -86,10 +83,11 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
                 .iter()
                 .find(|item| item.pdu_session_id.0 == session.id)
             {
-                super::connect_session_downlink(
+                self.connect_session_downlink(
                     &matching_item.pdu_session_resource_setup_response_transfer,
                     session,
-                )?;
+                )
+                .await?;
                 return Ok(());
             }
         }

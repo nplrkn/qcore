@@ -94,6 +94,10 @@ impl MockDu {
         info!(self.logger, "Connect to CU {}", transport_address);
         self.connect(&transport_address, &bind_address, F1AP_SCTP_PPID)
             .await;
+        self.perform_f1_setup_with_existing_tnla().await
+    }
+
+    pub async fn perform_f1_setup_with_existing_tnla(&mut self) -> Result<()> {
         let pdu = build_f1ap::f1_setup_request();
         info!(self.logger, "F1ap SetupRequest >>");
         self.send(&pdu, None).await;

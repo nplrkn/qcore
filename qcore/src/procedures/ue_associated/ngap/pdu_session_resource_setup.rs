@@ -43,10 +43,11 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
 
                 // TODO: commonize setting of remote tunnel info and error handling in Ngap PduSessionResourceSetupResponse,
                 // Ngap InitialContextSetupResponse and F1ap UeContextSetupResponse
-                super::connect_session_downlink(
+                self.connect_session_downlink(
                     &x.first().pdu_session_resource_setup_response_transfer,
                     pdu_session,
-                )?;
+                )
+                .await?;
             }
             None => bail!("GNB failed session set up"),
         }
