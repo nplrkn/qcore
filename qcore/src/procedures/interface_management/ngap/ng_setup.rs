@@ -2,7 +2,7 @@ use super::prelude::*;
 use ngap::{NgSetupFailure, NgSetupRequest, NgSetupResponse};
 use xxap::{RequestError, ResponseAction};
 
-impl<'a, A: HandlerApi> Procedure<'a, A> {
+impl<'a, A: ProcedureBase> Procedure<'a, A> {
     // Ng Setup Procedure
     // 1.    Ngap NgSetupRequest >>
     // 2.    Ngap NgSetupResponse <<

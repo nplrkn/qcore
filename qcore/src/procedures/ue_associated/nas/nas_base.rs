@@ -7,6 +7,8 @@ use anyhow::Result;
 
 pub trait NasBase {
     fn config(&self) -> &Config;
+    fn ue_tac(&self) -> &[u8; 3];
+
     async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
 
     async fn reserve_userplane_session(&self) -> Result<UserplaneSession>;

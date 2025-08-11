@@ -6,7 +6,7 @@ mod subscriber_db;
 mod userplane;
 
 use data::*;
-use procedures::HandlerApi;
+use procedures::ProcedureBase;
 use protocols::*;
 
 pub use ::xxap::PlmnIdentity;

@@ -128,6 +128,10 @@ impl<'a, B: RanUeBase> NasBase for &mut NgapUeProcedure<'a, B> {
             async fn register_new_tmsi(&self, tmsi: Tmsi, [self.ue.local_ran_ue_id], [&self.logger]);
     }}
 
+    fn ue_tac(&self) -> &[u8; 3] {
+        &self.ue.tac
+    }
+
     async fn ran_session_setup(
         &mut self,
         pdu_session: &mut PduSession,

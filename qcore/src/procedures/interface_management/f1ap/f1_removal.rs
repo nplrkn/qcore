@@ -2,7 +2,7 @@ use super::prelude::*;
 use f1ap::{F1RemovalFailure, F1RemovalRequest, F1RemovalResponse};
 use xxap::{RequestError, ResponseAction};
 
-impl<'a, A: HandlerApi> Procedure<'a, A> {
+impl<'a, A: ProcedureBase> Procedure<'a, A> {
     pub async fn f1_removal(
         &self,
         r: F1RemovalRequest,

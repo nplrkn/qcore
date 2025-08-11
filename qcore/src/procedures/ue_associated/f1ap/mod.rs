@@ -119,12 +119,20 @@ impl<'a, B: RanUeBase> RrcBase for &mut F1apUeProcedure<'a, B> {
         fn served_cells(&self) -> &ServedCellsMap;
     }}
 
-    fn set_rat_capabilities(&mut self, rat_capabilities: Vec<u8>) {
+    fn set_ue_rat_capabilities(&mut self, rat_capabilities: Vec<u8>) {
         self.ue.rat_capabilities = Some(rat_capabilities);
     }
 
-    fn rat_capabilities(&self) -> &Option<Vec<u8>> {
+    fn ue_rat_capabilities(&self) -> &Option<Vec<u8>> {
         &self.ue.rat_capabilities
+    }
+
+    fn ue_nr_cgi(&self) -> &Option<NrCgi> {
+        &self.ue.nr_cgi
+    }
+
+    fn ue_tac(&self) -> &[u8; 3] {
+        &self.ue.tac
     }
 
     async fn receive_rrc(&mut self) -> Result<Vec<u8>> {
@@ -158,17 +166,11 @@ impl<'a, B: RanUeBase> RrcBase for &mut F1apUeProcedure<'a, B> {
         Ok(())
     }
 
-    fn nr_cgi(&self) -> &Option<NrCgi> {
-        &self.ue.nr_cgi
-    }
-
-    // TODO: rename to ue_context_setup (the 'ran' is an abstraction for the NasBase not appropriate for the RrcBase)
-    async fn ran_session_setup(&mut self, session: &mut PduSession) -> Result<Vec<u8>> {
+    async fn ran_ue_context_setup(&mut self, session: &mut PduSession) -> Result<Vec<u8>> {
         self.ue_context_setup(session).await
     }
 
-    // TODO: likewise
-    async fn ran_session_release(
+    async fn ran_ue_context_modification(
         &mut self,
         released_session: &PduSession,
     ) -> Result<Option<Vec<u8>>> {

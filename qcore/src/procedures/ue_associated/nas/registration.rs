@@ -86,7 +86,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
             self.api.config().sst,
             guti,
             &self.api.config().plmn,
-            &self.ue.tac,
+            self.api.ue_tac(),
             registration_request
                 .uplink_data_status
                 .map(|_| reactivation_result),

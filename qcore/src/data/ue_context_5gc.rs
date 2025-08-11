@@ -12,7 +12,6 @@ pub struct UeContext5GC {
     pub pdu_sessions: Vec<PduSession>,
     pub nas: NasContext,
     pub security_capabilities: UeSecurityCapabilities,
-    pub tac: [u8; 3],
 }
 
 impl UeContext5GC {

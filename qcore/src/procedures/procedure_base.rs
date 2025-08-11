@@ -9,7 +9,7 @@ use xxap::{Indication, Procedure, RequestError};
 
 /// Trait representing the collection of services needed by QCore procedure handlers.
 #[async_trait]
-pub trait HandlerApi: Send + Sync + Clone + 'static {
+pub trait ProcedureBase: Send + Sync + Clone + 'static {
     fn config(&self) -> &Config;
     fn ngap_mode(&self) -> bool;
     fn served_cells(&self) -> &ServedCellsMap;
@@ -17,7 +17,7 @@ pub trait HandlerApi: Send + Sync + Clone + 'static {
     // Returns the K, OPC and SQN, and increments the SQN.
     // The returned SQN is the one _before_ the increment.  This means that
     // resync_subscriber_sqn() followed by lookup_subscriber_creds_and_inc_sqn()
-    // returns the SQN supplied by the UE for the next challenge.
+    // returns the SQN that the UE will use for the next challenge.
     async fn lookup_subscriber_creds_and_inc_sqn(&self, imsi: &str)
     -> Option<SubscriberAuthParams>;
     async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;

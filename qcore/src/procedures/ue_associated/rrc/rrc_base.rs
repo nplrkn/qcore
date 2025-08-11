@@ -16,9 +16,11 @@ pub trait RrcBase {
 
     fn config(&self) -> &Config;
     fn served_cells(&self) -> &ServedCellsMap;
-    fn nr_cgi(&self) -> &Option<NrCgi>;
-    fn set_rat_capabilities(&mut self, rat_capabilities: Vec<u8>);
-    fn rat_capabilities(&self) -> &Option<Vec<u8>>;
+
+    fn ue_nr_cgi(&self) -> &Option<NrCgi>;
+    fn set_ue_rat_capabilities(&mut self, rat_capabilities: Vec<u8>);
+    fn ue_rat_capabilities(&self) -> &Option<Vec<u8>>;
+    fn ue_tac(&self) -> &[u8; 3];
 
     async fn reserve_userplane_session(&self) -> Result<UserplaneSession>;
     async fn delete_userplane_session(&self, session: &UserplaneSession);
@@ -30,8 +32,8 @@ pub trait RrcBase {
     async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
     async fn register_new_tmsi(&self, tmsi: Tmsi);
 
-    async fn ran_session_setup(&mut self, session: &mut PduSession) -> Result<Vec<u8>>; // Returns cell group config
-    async fn ran_session_release(
+    async fn ran_ue_context_setup(&mut self, session: &mut PduSession) -> Result<Vec<u8>>; // Returns cell group config
+    async fn ran_ue_context_modification(
         &mut self,
         released_session: &PduSession,
     ) -> Result<Option<Vec<u8>>>;

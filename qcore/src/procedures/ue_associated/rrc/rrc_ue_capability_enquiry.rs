@@ -36,7 +36,7 @@ impl<'a, B: RrcBase> RrcProcedure<'a, B> {
             ..
         } = ue_capability_information
         {
-            self.api.set_rat_capabilities(capabilities.as_bytes()?);
+            self.api.set_ue_rat_capabilities(capabilities.as_bytes()?);
         }
         Ok(())
     }
@@ -45,7 +45,7 @@ impl<'a, B: RrcBase> RrcProcedure<'a, B> {
         let mut bands: HashSet<u16> = HashSet::new();
         let nr_cgi = self
             .api
-            .nr_cgi()
+            .ue_nr_cgi()
             .as_ref()
             .ok_or_else(|| anyhow!("NR CGI missing"))?;
 

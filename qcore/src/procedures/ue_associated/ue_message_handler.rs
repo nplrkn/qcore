@@ -1,5 +1,5 @@
 use crate::{
-    HandlerApi, UeContext,
+    ProcedureBase, UeContext,
     data::{UeContext5GC, UeContextRan, UserplaneSession},
     procedures::{
         UeMessage,
@@ -14,7 +14,7 @@ use ngap::NgapPdu;
 use slog::{Logger, debug, info, warn};
 use std::collections::VecDeque;
 
-pub struct UeMessageHandler<A: HandlerApi> {
+pub struct UeMessageHandler<A: ProcedureBase> {
     receiver: Receiver<UeMessage>,
     api: A,
     logger: Logger,
@@ -22,7 +22,7 @@ pub struct UeMessageHandler<A: HandlerApi> {
     give_context: Option<Sender<UeContext5GC>>,
 }
 
-impl<A: HandlerApi> UeMessageHandler<A> {
+impl<A: ProcedureBase> UeMessageHandler<A> {
     pub fn spawn(ue_id: u32, api: A, logger: Logger) -> Sender<UeMessage> {
         let (sender, receiver) = channel::unbounded();
         async_std::task::spawn(async move {
@@ -235,7 +235,7 @@ impl<A: HandlerApi> UeMessageHandler<A> {
 
 use delegate::delegate;
 
-impl<A: HandlerApi> RanUeBase for &mut UeMessageHandler<A> {
+impl<A: ProcedureBase> RanUeBase for &mut UeMessageHandler<A> {
     delegate! {
         to self.api {
             fn config(&self) -> &crate::Config;

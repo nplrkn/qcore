@@ -151,6 +151,7 @@ impl<'a, B: RrcBase> NasBase for &mut RrcProcedure<'a, B> {
             &self,
             tmsi: Tmsi,
         );
+        fn ue_tac(&self) -> &[u8; 3];
     }}
 
     async fn ran_session_setup(
@@ -158,7 +159,7 @@ impl<'a, B: RrcBase> NasBase for &mut RrcProcedure<'a, B> {
         pdu_session: &mut PduSession,
         nas: Vec<u8>,
     ) -> Result<()> {
-        let cell_group_config = self.api.ran_session_setup(pdu_session).await?;
+        let cell_group_config = self.api.ran_ue_context_setup(pdu_session).await?;
         self.reconfiguration_add_session(pdu_session, nas, cell_group_config)
             .await
     }
@@ -173,7 +174,7 @@ impl<'a, B: RrcBase> NasBase for &mut RrcProcedure<'a, B> {
         _ue_security_capabilities: &[u8; 2],
     ) -> Result<()> {
         self.security_mode(kgnb).await?;
-        if self.api.rat_capabilities().is_none() {
+        if self.api.ue_rat_capabilities().is_none() {
             self.ue_capability_enquiry().await?;
         };
 
@@ -193,7 +194,10 @@ impl<'a, B: RrcBase> NasBase for &mut RrcProcedure<'a, B> {
         nas: Vec<u8>,
     ) -> Result<()> {
         // Send a UE context modification to delete the DRB.
-        let cell_group_config = self.api.ran_session_release(released_session).await?;
+        let cell_group_config = self
+            .api
+            .ran_ue_context_modification(released_session)
+            .await?;
         self.reconfiguration_delete_session(nas, released_session, cell_group_config)
             .await
     }

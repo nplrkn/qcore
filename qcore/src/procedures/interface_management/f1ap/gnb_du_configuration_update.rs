@@ -4,7 +4,7 @@ use super::prelude::*;
 use f1ap::*;
 use xxap::{RequestError, ResponseAction};
 
-impl<'a, A: HandlerApi> Procedure<'a, A> {
+impl<'a, A: ProcedureBase> Procedure<'a, A> {
     // F1 Setup Procedure
     // 1.    F1ap GnbDuConfigurationUpdate >>
     // 2.    F1ap GnbDuConfigurationUpdateAcknowledge <<

@@ -12,9 +12,9 @@ use xxap::{
 };
 
 #[derive(Clone)]
-pub struct NgapHandler<A: HandlerApi>(A);
+pub struct NgapHandler<A: ProcedureBase>(A);
 
-impl<A: HandlerApi> NgapHandler<A> {
+impl<A: ProcedureBase> NgapHandler<A> {
     pub fn new_ngap_application(api: A) -> NgapAmf<NgapHandler<A>> {
         NgapAmf(NgapHandler(api))
     }
@@ -24,7 +24,7 @@ impl<A: HandlerApi> NgapHandler<A> {
 }
 
 #[async_trait]
-impl<A: HandlerApi> RequestProvider<ngap::NgSetupProcedure> for NgapHandler<A> {
+impl<A: ProcedureBase> RequestProvider<ngap::NgSetupProcedure> for NgapHandler<A> {
     async fn request(
         &self,
         r: NgSetupRequest,
@@ -35,7 +35,7 @@ impl<A: HandlerApi> RequestProvider<ngap::NgSetupProcedure> for NgapHandler<A> {
 }
 
 #[async_trait]
-impl<A: HandlerApi> IndicationHandler<ngap::InitialUeMessageProcedure> for NgapHandler<A> {
+impl<A: ProcedureBase> IndicationHandler<ngap::InitialUeMessageProcedure> for NgapHandler<A> {
     async fn handle(&self, i: InitialUeMessage, logger: &Logger) {
         let id = self.0.spawn_ue_message_handler().await;
         if let Err(e) = self
@@ -53,7 +53,7 @@ impl<A: HandlerApi> IndicationHandler<ngap::InitialUeMessageProcedure> for NgapH
 }
 
 #[async_trait]
-impl<A: HandlerApi> IndicationHandler<ngap::UplinkNasTransportProcedure> for NgapHandler<A> {
+impl<A: ProcedureBase> IndicationHandler<ngap::UplinkNasTransportProcedure> for NgapHandler<A> {
     async fn handle(&self, i: UplinkNasTransport, logger: &Logger) {
         if let Err(e) = self
             .dispatch_ue_message(
@@ -70,7 +70,9 @@ impl<A: HandlerApi> IndicationHandler<ngap::UplinkNasTransportProcedure> for Nga
 }
 
 #[async_trait]
-impl<A: HandlerApi> IndicationHandler<ngap::UeContextReleaseRequestProcedure> for NgapHandler<A> {
+impl<A: ProcedureBase> IndicationHandler<ngap::UeContextReleaseRequestProcedure>
+    for NgapHandler<A>
+{
     async fn handle(&self, i: ngap::UeContextReleaseRequest, logger: &Logger) {
         if let Err(e) = self
             .dispatch_ue_message(
@@ -87,7 +89,7 @@ impl<A: HandlerApi> IndicationHandler<ngap::UeContextReleaseRequestProcedure> fo
 }
 
 #[async_trait]
-impl<A: HandlerApi> RequestProvider<RanConfigurationUpdateProcedure> for NgapHandler<A> {
+impl<A: ProcedureBase> RequestProvider<RanConfigurationUpdateProcedure> for NgapHandler<A> {
     async fn request(
         &self,
         _r: RanConfigurationUpdate,
@@ -104,7 +106,7 @@ impl<A: HandlerApi> RequestProvider<RanConfigurationUpdateProcedure> for NgapHan
 }
 
 #[async_trait]
-impl<A: HandlerApi> EventHandler for NgapHandler<A> {
+impl<A: ProcedureBase> EventHandler for NgapHandler<A> {
     async fn handle_event(&self, event: TnlaEvent, tnla_id: u32, logger: &Logger) {
         match event {
             TnlaEvent::Established(addr) => {
@@ -124,7 +126,7 @@ impl<A: HandlerApi> EventHandler for NgapHandler<A> {
 }
 
 #[async_trait]
-impl<A: HandlerApi> IndicationHandler<ngap::UeRadioCapabilityInfoIndicationProcedure>
+impl<A: ProcedureBase> IndicationHandler<ngap::UeRadioCapabilityInfoIndicationProcedure>
     for NgapHandler<A>
 {
     async fn handle(&self, i: UeRadioCapabilityInfoIndication, logger: &Logger) {
