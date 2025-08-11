@@ -8,7 +8,6 @@
       - if yes, 5g libs
       - why both security_context and nas_context?
   - "protocols" -> "procedures/parse_build" ?
-  - "entrypoints" under "procedures"
   - clean up registration procedure code
   - commonize service and registration session handling 
   - switch "if ngap_mode" etc to use Strategy pattern?
