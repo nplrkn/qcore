@@ -26,7 +26,7 @@ use xxap::{
 
 pub type DuServedCells = Vec<GnbDuServedCellsItem>;
 pub type DuId = u64;
-pub type ServedCellsStore = Arc<Mutex<HashMap<DuId, DuServedCells>>>;
+pub type ServedCellsMap = Arc<Mutex<HashMap<DuId, DuServedCells>>>;
 
 #[derive(Clone)]
 pub struct QCore {
@@ -38,7 +38,7 @@ pub struct QCore {
     ue_tasks: Arc<Mutex<HashMap<u32, Sender<UeMessage>>>>,
     sub_db: Arc<Mutex<SubscriberDb>>,
     tmsis: Arc<Mutex<HashMap<[u8; 4], CoreContextLocator>>>,
-    served_cells: ServedCellsStore,
+    served_cells: ServedCellsMap,
     ngap_mode: bool,
 }
 
@@ -219,7 +219,7 @@ impl HandlerApi for QCore {
         self.ngap_mode
     }
 
-    fn served_cells(&self) -> &ServedCellsStore {
+    fn served_cells(&self) -> &ServedCellsMap {
         &self.served_cells
     }
 

@@ -1,6 +1,4 @@
 use super::prelude::*;
-use crate::{data::UeContext5GC, procedures::ue_associated::NasProcedure};
-use f1ap::SrbId;
 use rrc::{
     C1_6, CriticalExtensions22, Ng5gSTmsi, Ng5gSTmsiValue, RrcSetupComplete, RrcSetupRequest,
     UlDcchMessageType,
@@ -11,7 +9,7 @@ impl<'a, B: RrcBase> RrcProcedure<'a, B> {
         &mut self,
         _r: Box<RrcSetupRequest>,
         cell_group_config: Vec<u8>,
-        core_context: &mut UeContext5GC,
+        core_context: &'a mut UeContext5GC,
     ) -> Result<()> {
         self.log_message(">> Rrc SetupRequest");
 
@@ -39,15 +37,11 @@ impl<'a, B: RrcBase> RrcProcedure<'a, B> {
             None
         };
 
-        NasProcedure {
-            ue: core_context,
-            logger: &self.logger.clone(),
-            api: self,
-        }
-        .initial_nas(
-            rrc_setup_complete_ies.dedicated_nas_message.0,
-            stmsi.as_deref(),
-        )
-        .await
+        self.nas_procedure(core_context)
+            .initial_nas(
+                rrc_setup_complete_ies.dedicated_nas_message.0,
+                stmsi.as_deref(),
+            )
+            .await
     }
 }

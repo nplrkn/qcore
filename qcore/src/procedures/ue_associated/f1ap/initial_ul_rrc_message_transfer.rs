@@ -1,8 +1,3 @@
-use crate::{
-    data::{UeContext5GC, UeContextRrc},
-    procedures::ue_associated::RrcProcedure,
-};
-
 use super::prelude::*;
 use asn1_per::SerDes;
 use f1ap::{DuToCuRrcContainer, InitialUlRrcMessageTransfer};
@@ -12,8 +7,8 @@ impl<'a, B: RanUeBase> F1apUeProcedure<'a, B> {
     pub async fn initial_ul_rrc_message_transfer(
         &mut self,
         r: Box<InitialUlRrcMessageTransfer>,
-        rrc_context: &mut UeContextRrc,
-        core_context: &mut UeContext5GC,
+        rrc_context: &'a mut UeContextRrc,
+        core_context: &'a mut UeContext5GC,
     ) -> Result<()> {
         self.log_message(">> F1ap InitialUlRrcMessageTransfer");
 
@@ -33,12 +28,8 @@ impl<'a, B: RanUeBase> F1apUeProcedure<'a, B> {
             bail!("Initial RRC message is not Rrc Setup {:?}", rrc);
         };
 
-        RrcProcedure {
-            ue: rrc_context,
-            logger: &self.logger.clone(),
-            api: self,
-        }
-        .setup(Box::new(rrc_setup_request), cell_group_config, core_context)
-        .await
+        self.rrc_procedure(rrc_context)
+            .setup(Box::new(rrc_setup_request), cell_group_config, core_context)
+            .await
     }
 }

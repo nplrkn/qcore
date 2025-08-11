@@ -1,6 +1,4 @@
 use super::prelude::*;
-use crate::rrc_request_filter;
-use f1ap::SrbId;
 use rrc::{C1_6, UlDcchMessage, UlDcchMessageType};
 
 impl<'a, B: RrcBase> RrcProcedure<'a, B> {

@@ -1,11 +1,11 @@
 use crate::{
     HandlerApi, UeContext,
-    data::{UeContext5GC, UserplaneSession},
+    data::{UeContext5GC, UeContextRan, UserplaneSession},
     procedures::{
         UeMessage,
         ue_associated::{F1apUeProcedure, NgapUeProcedure, RanUeBase},
     },
-    qcore::ServedCellsStore,
+    qcore::ServedCellsMap,
 };
 use anyhow::{Result, anyhow, bail};
 use async_std::channel::{self, Receiver, Sender};
@@ -25,14 +25,14 @@ pub struct UeMessageHandler<A: HandlerApi> {
 impl<A: HandlerApi> UeMessageHandler<A> {
     pub fn spawn(ue_id: u32, api: A, logger: Logger) -> Sender<UeMessage> {
         let (sender, receiver) = channel::unbounded();
-        let mut handler = Box::new(UeMessageHandler {
-            receiver,
-            api,
-            logger,
-            queue: VecDeque::new(),
-            give_context: None,
-        });
         async_std::task::spawn(async move {
+            let mut handler = UeMessageHandler {
+                receiver,
+                api,
+                logger,
+                queue: VecDeque::new(),
+                give_context: None,
+            };
             if let Err(e) = handler.run(ue_id).await {
                 warn!(handler.logger, "UE message handler exiting: {e}");
             }
@@ -59,25 +59,13 @@ impl<A: HandlerApi> UeMessageHandler<A> {
                 if disconnected {
                     debug!(self.logger, "UE was disconnected - skip RAN release");
                 } else if self.api.ngap_mode() {
-                    NgapUeProcedure {
-                        ue: &mut ue.ran,
-                        logger: &self.logger.clone(),
-                        api: self,
-                        release_cause: ngap::Cause::Nas(ngap::CauseNas::NormalRelease),
-                    }
-                    .ue_context_release()
-                    .await
+                    self.ngap_ue_procedure(&mut ue.ran)
+                        .ue_context_release()
+                        .await
                 } else {
-                    F1apUeProcedure {
-                        ue: &mut ue.ran,
-                        logger: &self.logger.clone(),
-                        api: self,
-                        release_cause: f1ap::Cause::RadioNetwork(
-                            f1ap::CauseRadioNetwork::NormalRelease,
-                        ),
-                    }
-                    .ue_context_release()
-                    .await
+                    self.f1ap_ue_procedure(&mut ue.ran)
+                        .ue_context_release()
+                        .await
                 }
 
                 return result;
@@ -85,8 +73,31 @@ impl<A: HandlerApi> UeMessageHandler<A> {
         }
     }
 
-    // TODO move these into a different trait and/or file "Dispatcher"?
-    // Return Err if the UE handler should exit.
+    fn ngap_ue_procedure<'a>(
+        &mut self,
+        ue: &'a mut UeContextRan,
+    ) -> NgapUeProcedure<'a, &mut Self> {
+        NgapUeProcedure {
+            ue,
+            logger: self.logger.clone(),
+            api: self,
+            release_cause: ngap::Cause::Nas(ngap::CauseNas::NormalRelease),
+        }
+    }
+
+    fn f1ap_ue_procedure<'a>(
+        &mut self,
+        ue: &'a mut UeContextRan,
+    ) -> F1apUeProcedure<'a, &mut Self> {
+        F1apUeProcedure {
+            ue,
+            logger: self.logger.clone(),
+            api: self,
+            release_cause: f1ap::Cause::RadioNetwork(f1ap::CauseRadioNetwork::NormalRelease),
+        }
+    }
+
+    // Returns Err if the UE handler should exit.
     pub async fn dispatch(&mut self, ue: &mut UeContext, disconnected: &mut bool) -> Result<()> {
         // Process any queued messages before going to the inbox.
         let next_message = if let Some(message) = self.queue.pop_front() {
@@ -97,60 +108,29 @@ impl<A: HandlerApi> UeMessageHandler<A> {
 
         match next_message {
             UeMessage::Ngap(pdu) => {
-                NgapUeProcedure {
-                    ue: &mut ue.ran,
-                    logger: &self.logger.clone(),
-                    api: self,
-                    release_cause: ngap::Cause::Nas(ngap::CauseNas::NormalRelease),
-                }
-                .dispatch(pdu, &mut ue.core)
-                .await
+                self.ngap_ue_procedure(&mut ue.ran)
+                    .dispatch(pdu, &mut ue.core)
+                    .await
             }
             UeMessage::F1ap(pdu) => {
-                F1apUeProcedure {
-                    ue: &mut ue.ran,
-                    logger: &self.logger.clone(),
-                    api: self,
-                    release_cause: f1ap::Cause::RadioNetwork(
-                        f1ap::CauseRadioNetwork::NormalRelease,
-                    ),
-                }
-                .dispatch(pdu, &mut ue.rrc, &mut ue.core)
-                .await
+                self.f1ap_ue_procedure(&mut ue.ran)
+                    .dispatch(pdu, &mut ue.rrc, &mut ue.core)
+                    .await
             }
             UeMessage::Rrc(pdu) => {
-                F1apUeProcedure {
-                    ue: &mut ue.ran,
-                    logger: &self.logger.clone(),
-                    api: self,
-                    release_cause: f1ap::Cause::RadioNetwork(
-                        f1ap::CauseRadioNetwork::NormalRelease,
-                    ),
-                }
-                .dispatch_rrc(pdu, &mut ue.rrc, &mut ue.core)
-                .await
+                self.f1ap_ue_procedure(&mut ue.ran)
+                    .dispatch_rrc(pdu, &mut ue.rrc, &mut ue.core)
+                    .await
             }
             UeMessage::Nas(pdu) => {
                 if self.api.ngap_mode() {
-                    NgapUeProcedure {
-                        ue: &mut ue.ran,
-                        logger: &self.logger.clone(),
-                        api: self,
-                        release_cause: ngap::Cause::Nas(ngap::CauseNas::NormalRelease),
-                    }
-                    .dispatch_nas(pdu, &mut ue.core)
-                    .await
+                    self.ngap_ue_procedure(&mut ue.ran)
+                        .dispatch_nas(pdu, &mut ue.core)
+                        .await
                 } else {
-                    F1apUeProcedure {
-                        ue: &mut ue.ran,
-                        logger: &self.logger.clone(),
-                        api: self,
-                        release_cause: f1ap::Cause::RadioNetwork(
-                            f1ap::CauseRadioNetwork::NormalRelease,
-                        ),
-                    }
-                    .dispatch_nas(pdu, &mut ue.rrc, &mut ue.core)
-                    .await
+                    self.f1ap_ue_procedure(&mut ue.ran)
+                        .dispatch_nas(pdu, &mut ue.rrc, &mut ue.core)
+                        .await
                 }
             }
             UeMessage::TakeContext(sender) => {
@@ -259,7 +239,7 @@ impl<A: HandlerApi> RanUeBase for &mut UeMessageHandler<A> {
     delegate! {
         to self.api {
             fn config(&self) -> &crate::Config;
-            fn served_cells(&self) -> &ServedCellsStore;
+            fn served_cells(&self) -> &ServedCellsMap;
             async fn reserve_userplane_session(&self, logger: &Logger) -> Result<UserplaneSession>;
         async fn xxap_request<P: xxap::Procedure>(
             &self,
@@ -272,11 +252,6 @@ impl<A: HandlerApi> RanUeBase for &mut UeMessageHandler<A> {
             session: &crate::data::UserplaneSession,
             logger: &Logger,
         ) -> Result<()>;
-        // async fn deactivate_userplane_session(
-        //     &self,
-        //     session: &crate::data::UserplaneSession,
-        //     logger: &Logger,
-        // );
         async fn delete_userplane_session(
             &self,
             session: &crate::data::UserplaneSession,
@@ -296,15 +271,6 @@ impl<A: HandlerApi> RanUeBase for &mut UeMessageHandler<A> {
         async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
     }}
 
-    /// Receive an NGAP or F1AP message mid-procedure.  
-    ///
-    /// The caller provides a filter that skips over any unwanted messages.  The caller
-    /// may also call enqueue_message() itself if more complex filtering is needed.
-    ///
-    /// Attempting to queue certain messages will immediately fail and abort the procedure - for example
-    /// a Ue Context release request from the DU.  Otherwise, a queue message will be processed later in dispatch().
-    ///
-    /// The TakeContext message immediately causes any procedure to abort.
     async fn receive_xxap_pdu<T, BoxP>(
         &mut self,
         filter: fn(BoxP) -> Result<T, BoxP>,

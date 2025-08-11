@@ -1,5 +1,4 @@
 use super::prelude::*;
-use crate::data::PduSession;
 use asn1_per::SerDes;
 use ngap::{InitialContextSetupResponse, PduSessionResourceSetupUnsuccessfulTransfer};
 
@@ -24,7 +23,7 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
             .api
             .xxap_request::<ngap::InitialContextSetupProcedure>(
                 initial_context_setup_request,
-                self.logger,
+                &self.logger,
             )
             .await?;
         self.log_message(">> Ngap InitialContextSetupResponse");
@@ -45,7 +44,7 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
                         "Failed to reactivate session {} - {e}", session.id
                     );
                     self.api
-                        .delete_userplane_session(&session.userplane_info, self.logger)
+                        .delete_userplane_session(&session.userplane_info, &self.logger)
                         .await;
                 }
             }

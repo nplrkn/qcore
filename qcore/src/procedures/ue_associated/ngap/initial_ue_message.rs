@@ -1,12 +1,11 @@
 use super::prelude::*;
-use crate::{data::UeContext5GC, procedures::ue_associated::NasProcedure};
 use ngap::{InitialUeMessage, UserLocationInformation, UserLocationInformationNr};
 
 impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
     pub async fn initial_ue_message(
         &mut self,
         r: Box<InitialUeMessage>,
-        core_context: &mut UeContext5GC,
+        core_context: &'a mut UeContext5GC,
     ) -> Result<()> {
         self.log_message(">> Ngap InitialUeMessage");
 
@@ -31,12 +30,8 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
         });
 
         // TODO - pass in the TAC so it can be populated in the core context
-        NasProcedure {
-            ue: core_context,
-            logger: &self.logger.clone(),
-            api: self,
-        }
-        .initial_nas(r.nas_pdu.0, stmsi.as_deref())
-        .await
+        self.nas_procedure(core_context)
+            .initial_nas(r.nas_pdu.0, stmsi.as_deref())
+            .await
     }
 }

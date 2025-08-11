@@ -2,7 +2,6 @@
 
 ## In progress
 - Tidying + Refactoring
-  - less verbose creation of higher layer procedure
   - "nas_context.rs" is not just data -> put in protocols or 5g libs? (but see below)
     - key point - will it be used by integration test framework?
       - if yes, 5g libs
@@ -10,7 +9,6 @@
   - "protocols" -> "procedures/parse_build" ?
   - clean up registration procedure code
   - commonize service and registration session handling 
-  - switch "if ngap_mode" etc to use Strategy pattern?
   - test scripts - move to builder pattern (new_with_base() etc)?
 
 - OAI test broken - simulated UE doesn't send Configuration Update Complete

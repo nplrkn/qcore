@@ -1,5 +1,4 @@
 use super::prelude::*;
-use crate::data::PduSession;
 use ngap::{Cause, CauseMisc};
 
 impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
@@ -18,7 +17,7 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
         self.log_message("<< Ngap PduSessionResourceReleaseCommand");
         let _rsp = self
             .api
-            .xxap_request::<ngap::PduSessionResourceReleaseProcedure>(req, self.logger)
+            .xxap_request::<ngap::PduSessionResourceReleaseProcedure>(req, &self.logger)
             .await?;
         self.log_message(">> Ngap PduSessionResourceReleaseResponse");
         Ok(())

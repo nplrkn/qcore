@@ -15,7 +15,7 @@ use crate::{
         ue_associated::{RrcBase, RrcProcedure},
     },
     protocols::nas::Tmsi,
-    qcore::ServedCellsStore,
+    qcore::ServedCellsMap,
 };
 use f1ap::{Cause, DlRrcMessageTransferProcedure, F1apPdu, RrcContainer};
 use rrc::UlDcchMessage;
@@ -24,7 +24,7 @@ use xxap::NrCgi;
 
 pub struct F1apUeProcedure<'a, B: RanUeBase> {
     pub ue: &'a mut UeContextRan,
-    pub logger: &'a Logger,
+    pub logger: Logger,
     pub api: B,
     pub release_cause: Cause,
 }
@@ -33,8 +33,8 @@ impl<'a, B: RanUeBase> F1apUeProcedure<'a, B> {
     pub async fn dispatch(
         &mut self,
         pdu: Box<F1apPdu>,
-        rrc_context: &mut UeContextRrc,
-        core_context: &mut UeContext5GC,
+        rrc_context: &'a mut UeContextRrc,
+        core_context: &'a mut UeContext5GC,
     ) -> Result<()> {
         match *pdu {
             F1apPdu::InitiatingMessage(f1ap::InitiatingMessage::InitialUlRrcMessageTransfer(r)) => {
@@ -43,13 +43,9 @@ impl<'a, B: RanUeBase> F1apUeProcedure<'a, B> {
             }
             F1apPdu::InitiatingMessage(f1ap::InitiatingMessage::UlRrcMessageTransfer(r)) => {
                 self.log_message(">> F1ap UlRrcMessageTransfer");
-                RrcProcedure {
-                    ue: rrc_context,
-                    logger: &self.logger.clone(),
-                    api: self,
-                }
-                .dispatch_pdcp(&r.rrc_container.0, core_context)
-                .await?;
+                self.rrc_procedure(rrc_context)
+                    .dispatch_pdcp(&r.rrc_container.0, core_context)
+                    .await?;
             }
             F1apPdu::InitiatingMessage(f1ap::InitiatingMessage::UeContextReleaseRequest(r)) => {
                 self.log_message(">> F1ap UeContextReleaseRequest");
@@ -68,34 +64,34 @@ impl<'a, B: RanUeBase> F1apUeProcedure<'a, B> {
         Ok(())
     }
 
+    fn rrc_procedure(&mut self, rrc_context: &'a mut UeContextRrc) -> RrcProcedure<'a, &mut Self> {
+        RrcProcedure {
+            ue: rrc_context,
+            logger: self.logger.clone(),
+            api: self,
+        }
+    }
+
     pub async fn dispatch_rrc(
         &mut self,
         pdu: Box<UlDcchMessage>,
-        rrc_context: &mut UeContextRrc,
-        core_context: &mut UeContext5GC,
+        rrc_context: &'a mut UeContextRrc,
+        core_context: &'a mut UeContext5GC,
     ) -> Result<()> {
-        RrcProcedure {
-            ue: rrc_context,
-            logger: &self.logger.clone(),
-            api: self,
-        }
-        .dispatch_ul_dcch(pdu, core_context)
-        .await
+        self.rrc_procedure(rrc_context)
+            .dispatch_ul_dcch(pdu, core_context)
+            .await
     }
 
     pub async fn dispatch_nas(
         &mut self,
         pdu: DecodedNas,
-        rrc_context: &mut UeContextRrc,
-        core_context: &mut UeContext5GC,
+        rrc_context: &'a mut UeContextRrc,
+        core_context: &'a mut UeContext5GC,
     ) -> Result<()> {
-        RrcProcedure {
-            ue: rrc_context,
-            logger: &self.logger.clone(),
-            api: self,
-        }
-        .dispatch_nas(pdu, core_context)
-        .await
+        self.rrc_procedure(rrc_context)
+            .dispatch_nas(pdu, core_context)
+            .await
     }
 
     pub fn log_message(&self, s: &str) {
@@ -109,18 +105,18 @@ impl<'a, B: RanUeBase> RrcBase for &mut F1apUeProcedure<'a, B> {
     delegate! {
     to self.api {
         fn config(&self) -> &Config;
-        async fn reserve_userplane_session(&self, [self.logger]) -> Result<UserplaneSession>;
+        async fn reserve_userplane_session(&self, [&self.logger]) -> Result<UserplaneSession>;
         async fn delete_userplane_session(
             &self,
             session: &UserplaneSession,
-            [self.logger],
+            [&self.logger],
         );
         async fn lookup_subscriber_creds_and_inc_sqn(&self, imsi: &str) -> Option<SubscriberAuthParams>;
         async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
-        async fn register_new_tmsi(&self, tmsi: Tmsi, [self.ue.local_ran_ue_id], [self.logger]);
+        async fn register_new_tmsi(&self, tmsi: Tmsi, [self.ue.local_ran_ue_id], [&self.logger]);
         async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
         fn unexpected_pdu<T:Into<UeMessage>>(&mut self, pdu:T, expected: &str) -> Result<()>;
-        fn served_cells(&self) -> &ServedCellsStore;
+        fn served_cells(&self) -> &ServedCellsMap;
     }}
 
     fn set_rat_capabilities(&mut self, rat_capabilities: Vec<u8>) {
@@ -157,7 +153,7 @@ impl<'a, B: RanUeBase> RrcBase for &mut F1apUeProcedure<'a, B> {
         );
         self.log_message("<< F1ap DlRrcMessageTransfer");
         self.api
-            .xxap_indication::<DlRrcMessageTransferProcedure>(dl_message, self.logger)
+            .xxap_indication::<DlRrcMessageTransferProcedure>(dl_message, &self.logger)
             .await;
         Ok(())
     }

@@ -1,6 +1,4 @@
 use super::prelude::*;
-use crate::data::PduSession;
-use anyhow::ensure;
 use ngap::PduSessionResourceSetupListSuRes;
 
 impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
@@ -23,7 +21,7 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
         self.log_message("<< Ngap PduSessionResourceSetupRequest");
         let rsp = self
             .api
-            .xxap_request::<ngap::PduSessionResourceSetupProcedure>(req, self.logger)
+            .xxap_request::<ngap::PduSessionResourceSetupProcedure>(req, &self.logger)
             .await?;
         self.log_message(">> Ngap PduSessionResourceSetupResponse");
 

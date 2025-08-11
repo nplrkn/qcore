@@ -1,5 +1,3 @@
-use crate::data::PduSession;
-
 use super::prelude::*;
 use f1ap::{
     CellGroupConfig, DlUpTnlInformationToBeSetupItem, DuToCuRrcInformation, UeContextSetupResponse,
@@ -18,7 +16,7 @@ impl<'a, B: RanUeBase> F1apUeProcedure<'a, B> {
         self.log_message("<< F1ap UeContextSetupRequest");
         let rsp = self
             .api
-            .xxap_request::<f1ap::UeContextSetupProcedure>(ue_context_setup_request, self.logger)
+            .xxap_request::<f1ap::UeContextSetupProcedure>(ue_context_setup_request, &self.logger)
             .await?;
         self.log_message(">> F1ap UeContextSetupResponse");
 
@@ -27,7 +25,7 @@ impl<'a, B: RanUeBase> F1apUeProcedure<'a, B> {
         let (cell_group_config, gtp_tunnel) = self.check_ue_context_setup_response(rsp)?;
         session.userplane_info.remote_tunnel_info = Some(gtp_tunnel);
         self.api
-            .commit_userplane_session(&session.userplane_info, self.logger)
+            .commit_userplane_session(&session.userplane_info, &self.logger)
             .await?;
 
         Ok(cell_group_config.0)

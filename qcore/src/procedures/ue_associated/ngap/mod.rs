@@ -23,7 +23,7 @@ use slog::{Logger, debug, info};
 
 pub struct NgapUeProcedure<'a, B: RanUeBase> {
     pub ue: &'a mut UeContextRan,
-    pub logger: &'a Logger,
+    pub logger: Logger,
     pub api: B,
     pub release_cause: Cause,
 }
@@ -32,7 +32,7 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
     pub async fn dispatch(
         &mut self,
         pdu: Box<NgapPdu>,
-        core_context: &mut UeContext5GC,
+        core_context: &'a mut UeContext5GC,
     ) -> Result<()> {
         match *pdu {
             NgapPdu::InitiatingMessage(ngap::InitiatingMessage::InitialUeMessage(r)) => {
@@ -65,18 +65,20 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
         Ok(())
     }
 
+    fn nas_procedure(&mut self, core_context: &'a mut UeContext5GC) -> NasProcedure<'a, &mut Self> {
+        NasProcedure {
+            ue: core_context,
+            logger: self.logger.clone(),
+            api: self,
+        }
+    }
+
     pub async fn dispatch_nas(
         &mut self,
         pdu: DecodedNas,
-        core_context: &mut UeContext5GC,
+        core_context: &'a mut UeContext5GC,
     ) -> Result<()> {
-        NasProcedure {
-            ue: core_context,
-            logger: &self.logger.clone(),
-            api: self,
-        }
-        .dispatch(pdu)
-        .await
+        self.nas_procedure(core_context).dispatch(pdu).await
     }
 
     pub fn log_message(&self, s: &str) {
@@ -101,7 +103,7 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
 
         session.userplane_info.remote_tunnel_info = Some(gtp_tunnel);
         self.api
-            .commit_userplane_session(&session.userplane_info, self.logger)
+            .commit_userplane_session(&session.userplane_info, &self.logger)
             .await
     }
 }
@@ -117,13 +119,13 @@ impl<'a, B: RanUeBase> NasBase for &mut NgapUeProcedure<'a, B> {
             async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
             #[call(unexpected_pdu)]
             fn unexpected_nas_pdu(&mut self, pdu: DecodedNas, expected: &str) -> Result<()>;
-            async fn reserve_userplane_session(&self, [self.logger]) -> Result<UserplaneSession>;
+            async fn reserve_userplane_session(&self, [&self.logger]) -> Result<UserplaneSession>;
             async fn delete_userplane_session(
                 &self,
                 session: &UserplaneSession,
-                [self.logger],
+                [&self.logger],
             );
-            async fn register_new_tmsi(&self, tmsi: Tmsi, [self.ue.local_ran_ue_id], [self.logger]);
+            async fn register_new_tmsi(&self, tmsi: Tmsi, [self.ue.local_ran_ue_id], [&self.logger]);
     }}
 
     async fn ran_session_setup(
@@ -162,7 +164,7 @@ impl<'a, B: RanUeBase> NasBase for &mut NgapUeProcedure<'a, B> {
         );
 
         self.api
-            .xxap_indication::<ngap::DownlinkNasTransportProcedure>(ngap, self.logger)
+            .xxap_indication::<ngap::DownlinkNasTransportProcedure>(ngap, &self.logger)
             .await;
         Ok(())
     }
@@ -189,5 +191,3 @@ mod prelude {
     pub use super::super::prelude::*;
     pub use super::NgapUeProcedure;
 }
-
-use anyhow::{Result, bail};

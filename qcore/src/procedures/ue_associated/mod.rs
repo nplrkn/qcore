@@ -18,4 +18,5 @@ pub use ue_message_handler::UeMessageHandler;
 mod prelude {
     pub use super::super::prelude::*;
     pub use super::ran_ue_base::RanUeBase;
+    pub use crate::data::{PduSession, UeContext5GC, UeContextRrc};
 }

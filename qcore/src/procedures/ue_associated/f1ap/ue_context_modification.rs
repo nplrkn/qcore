@@ -1,5 +1,4 @@
 use super::prelude::*;
-use crate::data::PduSession;
 
 impl<'a, B: RanUeBase> F1apUeProcedure<'a, B> {
     pub async fn ue_context_modification(
@@ -13,7 +12,7 @@ impl<'a, B: RanUeBase> F1apUeProcedure<'a, B> {
             self.api
                 .xxap_request::<f1ap::UeContextModificationProcedure>(
                     ue_context_modification_request,
-                    self.logger,
+                    &self.logger,
                 )
                 .await?,
         );

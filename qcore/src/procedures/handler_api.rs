@@ -1,6 +1,6 @@
 use crate::{
     Config, SubscriberAuthParams, UserplaneSession, data::UeContext5GC, nas::Tmsi,
-    procedures::UeMessage, qcore::ServedCellsStore,
+    procedures::UeMessage, qcore::ServedCellsMap,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -12,7 +12,7 @@ use xxap::{Indication, Procedure, RequestError};
 pub trait HandlerApi: Send + Sync + Clone + 'static {
     fn config(&self) -> &Config;
     fn ngap_mode(&self) -> bool;
-    fn served_cells(&self) -> &ServedCellsStore;
+    fn served_cells(&self) -> &ServedCellsMap;
 
     // Returns the K, OPC and SQN, and increments the SQN.
     // The returned SQN is the one _before_ the increment.  This means that

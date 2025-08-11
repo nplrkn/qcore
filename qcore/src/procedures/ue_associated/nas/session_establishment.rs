@@ -1,5 +1,4 @@
 use super::prelude::*;
-use crate::PduSession;
 use oxirush_nas::messages::{Nas5gsmHeader, NasPduSessionEstablishmentRequest};
 use xxap::Snssai;
 

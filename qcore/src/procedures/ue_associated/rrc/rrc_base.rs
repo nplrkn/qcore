@@ -1,12 +1,11 @@
+use super::prelude::*;
 use crate::{
     Config,
-    data::{PduSession, SubscriberAuthParams, UeContext5GC, UserplaneSession},
+    data::{SubscriberAuthParams, UserplaneSession},
     procedures::UeMessage,
     protocols::nas::Tmsi,
-    qcore::ServedCellsStore,
+    qcore::ServedCellsMap,
 };
-use anyhow::Result;
-use f1ap::SrbId;
 use xxap::NrCgi;
 
 pub trait RrcBase {
@@ -16,7 +15,7 @@ pub trait RrcBase {
     fn unexpected_pdu<T: Into<UeMessage>>(&mut self, pdu: T, expected: &str) -> Result<()>;
 
     fn config(&self) -> &Config;
-    fn served_cells(&self) -> &ServedCellsStore;
+    fn served_cells(&self) -> &ServedCellsMap;
     fn nr_cgi(&self) -> &Option<NrCgi>;
     fn set_rat_capabilities(&mut self, rat_capabilities: Vec<u8>);
     fn rat_capabilities(&self) -> &Option<Vec<u8>>;

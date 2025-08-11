@@ -1,13 +1,14 @@
 use super::prelude::*;
 use crate::nas::*;
 use crate::{SimCreds, SubscriberAuthParams};
-use oxirush_nas::Nas5gmmMessage;
-use oxirush_nas::Nas5gsMessage;
 use oxirush_nas::messages::{
     Nas5gsSecurityHeader, NasAuthenticationFailure, NasAuthenticationResponse,
     NasRegistrationRequest, NasSecurityModeComplete,
 };
-use oxirush_nas::{NasMessageContainer, NasUeSecurityCapability, decode_nas_5gs_message};
+use oxirush_nas::{
+    Nas5gmmMessage, Nas5gsMessage, NasMessageContainer, NasUeSecurityCapability,
+    decode_nas_5gs_message,
+};
 use security::{Challenge, resync_sqn};
 
 enum RegistrationType {

@@ -26,7 +26,7 @@ use slog::{Logger, debug};
 
 pub struct RrcProcedure<'a, B: RrcBase> {
     pub ue: &'a mut UeContextRrc,
-    pub logger: &'a Logger,
+    pub logger: Logger,
     pub api: B,
 }
 
@@ -34,7 +34,7 @@ impl<'a, B: RrcBase> RrcProcedure<'a, B> {
     pub async fn dispatch_ul_dcch(
         &mut self,
         rrc: Box<UlDcchMessage>,
-        core_context: &mut UeContext5GC,
+        core_context: &'a mut UeContext5GC,
     ) -> Result<()> {
         match rrc.message {
             UlDcchMessageType::C1(C1_6::UlInformationTransfer(ul_information_transfer)) => {
@@ -51,24 +51,26 @@ impl<'a, B: RrcBase> RrcProcedure<'a, B> {
     pub async fn dispatch_pdcp(
         &mut self,
         pdcp_bytes: &[u8],
-        core_context: &mut UeContext5GC,
+        core_context: &'a mut UeContext5GC,
     ) -> Result<()> {
         let rrc = self.extract_ul_dcch_message(pdcp_bytes)?;
         self.dispatch_ul_dcch(rrc, core_context).await
     }
 
+    fn nas_procedure(&mut self, core_context: &'a mut UeContext5GC) -> NasProcedure<'a, &mut Self> {
+        NasProcedure {
+            ue: core_context,
+            logger: self.logger.clone(),
+            api: self,
+        }
+    }
+
     pub async fn dispatch_nas(
         &mut self,
         pdu: DecodedNas,
-        core_context: &mut UeContext5GC,
+        core_context: &'a mut UeContext5GC,
     ) -> Result<()> {
-        NasProcedure {
-            ue: core_context,
-            logger: &self.logger.clone(),
-            api: self,
-        }
-        .dispatch(pdu)
-        .await
+        self.nas_procedure(core_context).dispatch(pdu).await
     }
 
     // TODO - get rid of these?
@@ -263,4 +265,6 @@ macro_rules! rrc_request_filter {
 mod prelude {
     pub use super::super::prelude::*;
     pub use super::{RrcBase, RrcProcedure};
+    pub use f1ap::SrbId;
+    pub use {rrc_filter, rrc_request_filter};
 }

@@ -16,7 +16,7 @@ impl<'a, B: RanUeBase> F1apUeProcedure<'a, B> {
             .api
             .xxap_request::<f1ap::UeContextReleaseProcedure>(
                 ue_context_release_command,
-                self.logger,
+                &self.logger,
             )
             .await?;
         self.log_message(">> F1ap UeContextReleaseComplete");

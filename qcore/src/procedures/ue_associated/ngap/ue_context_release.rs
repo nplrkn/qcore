@@ -21,7 +21,7 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
             .api
             .xxap_request::<ngap::UeContextReleaseProcedure>(
                 ue_context_release_command,
-                self.logger,
+                &self.logger,
             )
             .await?;
         self.log_message(">> Ngap UeContextReleaseComplete");

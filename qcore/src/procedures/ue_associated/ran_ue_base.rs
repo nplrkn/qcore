@@ -3,7 +3,7 @@ use crate::{
     data::{SubscriberAuthParams, UeContext5GC, UserplaneSession},
     procedures::UeMessage,
     protocols::nas::Tmsi,
-    qcore::ServedCellsStore,
+    qcore::ServedCellsMap,
 };
 use anyhow::Result;
 use slog::Logger;
@@ -11,7 +11,7 @@ use xxap::{Indication, Procedure, RequestError};
 
 pub trait RanUeBase {
     fn config(&self) -> &Config;
-    fn served_cells(&self) -> &ServedCellsStore;
+    fn served_cells(&self) -> &ServedCellsMap;
 
     async fn xxap_request<P: Procedure>(
         &self,
@@ -20,6 +20,16 @@ pub trait RanUeBase {
     ) -> Result<P::Success, RequestError<P::Failure>>;
     async fn xxap_indication<P: Indication>(&self, r: Box<P::Request>, logger: &Logger);
 
+    /// Receive an NGAP or F1AP message mid-procedure.  
+    ///
+    /// The caller provides a filter that skips over any unwanted messages.  For more complex filtering, the
+    /// caller can receive a message using this function and then put it back in the queue if unwanted using
+    /// unexpected_pdu().
+    ///
+    /// Attempting to queue certain messages will immediately fail and abort the procedure - for example
+    /// a Ue Context release request from the DU.  Otherwise, a queue message will be processed later in dispatch().
+    ///
+    /// The TakeContext message immediately causes any procedure to abort.
     async fn receive_xxap_pdu<T, BoxP>(
         &mut self,
         filter: fn(BoxP) -> Result<T, BoxP>,
@@ -27,6 +37,7 @@ pub trait RanUeBase {
     ) -> Result<T>
     where
         BoxP: TryFrom<UeMessage, Error = UeMessage> + Into<UeMessage>;
+
     fn unexpected_pdu<T: Into<UeMessage>>(&mut self, pdu: T, expected: &str) -> Result<()>;
 
     async fn reserve_userplane_session(&self, logger: &Logger) -> Result<UserplaneSession>;

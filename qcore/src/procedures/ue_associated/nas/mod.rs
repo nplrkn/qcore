@@ -21,7 +21,7 @@ use slog::{Logger, debug, warn};
 
 pub struct NasProcedure<'a, B: NasBase> {
     pub ue: &'a mut UeContext5GC,
-    pub logger: &'a Logger,
+    pub logger: Logger,
     pub api: B,
 }
 
