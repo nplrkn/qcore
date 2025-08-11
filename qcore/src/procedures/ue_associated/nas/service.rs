@@ -1,8 +1,7 @@
 use super::prelude::*;
 use crate::nas::*;
 use oxirush_nas::{
-    Nas5gmmMessage, Nas5gsMessage, NasFGsMobileIdentity, decode_nas_5gs_message,
-    messages::NasServiceRequest,
+    Nas5gmmMessage, Nas5gsMessage, decode_nas_5gs_message, messages::NasServiceRequest,
 };
 
 impl<'a, B: NasBase> NasProcedure<'a, B> {
@@ -77,9 +76,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         //   If a new 5G-GUTI was included in the CONFIGURATION UPDATE COMMAND message, the AMF shall
         //   consider the new 5G-GUTI as valid and the old 5G-GUTI as invalid.
         let guti = self.allocate_guti().await;
-        self.perform_configuration_update(Some(guti)).await?;
-
-        Ok(())
+        self.perform_configuration_update(Some(guti)).await
     }
 
     async fn reject(&mut self, cause: u8) -> Result<()> {

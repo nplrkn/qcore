@@ -1,7 +1,10 @@
+mod authentication;
 mod configuration_update;
 mod deregistration;
+mod identity;
 mod nas_base;
 mod registration;
+mod security_mode;
 mod service;
 mod session_establishment;
 mod session_release;

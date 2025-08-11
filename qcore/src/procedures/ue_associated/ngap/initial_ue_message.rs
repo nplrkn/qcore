@@ -29,7 +29,6 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
             stmsi
         });
 
-        // TODO - pass in the TAC so it can be populated in the core context
         self.nas_procedure(core_context)
             .initial_nas(r.nas_pdu.0, stmsi.as_deref())
             .await

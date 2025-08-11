@@ -2,11 +2,7 @@
 
 ## In progress
 - Tidying + Refactoring
-  - move NAS security mode, NAS authentication, NAS identity into their own procedure module rather than
-    keeping them in registration  
   - "protocols" -> "procedures/parse_build" ?
-  - clean up registration procedure code
-  - commonize service and registration session handling 
   - test scripts - move to builder pattern (new_with_base() etc)?
 
 - OAI test broken - simulated UE doesn't send Configuration Update Complete

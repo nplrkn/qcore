@@ -8,8 +8,6 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
         pdu_session: &mut PduSession,
     ) -> Result<()> {
         // TODO - support > 1 session
-        // let session_index = 0usize;
-        // let pdu_session = &self.ue.core.pdu_sessions[session_index];
 
         let req = crate::ngap::build::pdu_session_resource_setup_request(
             self.ue.amf_ue_ngap_id(),
@@ -37,8 +35,6 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
                     pdu_session.id
                 );
 
-                // TODO: commonize setting of remote tunnel info and error handling in Ngap PduSessionResourceSetupResponse,
-                // Ngap InitialContextSetupResponse and F1ap UeContextSetupResponse
                 self.connect_session_downlink(
                     &x.first().pdu_session_resource_setup_response_transfer,
                     pdu_session,

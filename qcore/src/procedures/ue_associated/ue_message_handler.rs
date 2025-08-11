@@ -166,7 +166,6 @@ impl<A: ProcedureBase> UeMessageHandler<A> {
             .await;
         debug!(self.logger, "Deleted UE channel");
         self.receiver.close();
-
         while !self.receiver.is_empty() {
             debug!(self.logger, "Receive and discard pending message");
             let _ = self.receiver.recv().await;

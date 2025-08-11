@@ -71,7 +71,6 @@ impl<'a, B: RrcBase> RrcProcedure<'a, B> {
         self.nas_procedure(core_context).dispatch(pdu).await
     }
 
-    // TODO - get rid of these?
     pub fn log_message(&self, s: &str) {
         debug!(self.logger, "{}", s)
     }

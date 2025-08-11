@@ -83,7 +83,6 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
         debug!(self.logger, "{}", s)
     }
 
-    // TODO: commonize with F1AP?
     async fn connect_session_downlink(
         &self,
         pdu_session_resource_setup_response_transfer_bytes: &[u8],

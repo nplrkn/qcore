@@ -14,7 +14,6 @@ pub use rrc::{RrcBase, RrcProcedure};
 pub use ue_message::UeMessage;
 pub use ue_message_handler::UeMessageHandler;
 
-// Used to reduce boilerplate at the start of UE procedure implementation modules.
 mod prelude {
     pub use super::super::prelude::*;
     pub use super::ran_ue_base::RanUeBase;

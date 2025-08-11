@@ -1,15 +1,10 @@
 use super::prelude::*;
 use crate::nas::*;
-use crate::{SimCreds, SubscriberAuthParams};
-use oxirush_nas::messages::{
-    Nas5gsSecurityHeader, NasAuthenticationFailure, NasAuthenticationResponse,
-    NasRegistrationRequest, NasSecurityModeComplete,
-};
+use oxirush_nas::messages::{Nas5gsSecurityHeader, NasRegistrationRequest};
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gsMessage, NasFGsMobileIdentity, NasMessageContainer,
     NasUeSecurityCapability, decode_nas_5gs_message,
 };
-use security::{Challenge, resync_sqn};
 
 impl<'a, B: NasBase> NasProcedure<'a, B> {
     pub async fn registration(
@@ -17,25 +12,25 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         request: Box<NasRegistrationRequest>,
         _security_header: Option<Nas5gsSecurityHeader>,
     ) -> Result<()> {
-        let request = match self.validate_registration(request).await {
-            Ok(r) => r,
+        match self.validate_registration(request).await {
+            Ok(request) => {
+                let (current_sessions, reactivation_result) =
+                    self.process_session_reactivation(&request).await?;
+                let guti = self.allocate_guti().await;
+                let accept =
+                    self.build_registration_accept(guti, reactivation_result, current_sessions);
+                self.ran_context_create(accept).await?;
+                self.receive_registration_complete().await?;
+                self.perform_configuration_update(None).await
+            }
             Err(cause) => {
                 if cause == ABORT_PROCEDURE {
                     bail!("Abort registration procedure")
                 } else {
-                    self.reject_registration(cause).await?;
-                    return Ok(());
+                    self.reject_registration(cause).await
                 }
             }
-        };
-
-        let (current_sessions, reactivation_result) =
-            self.process_session_reactivation(&request).await?;
-        let guti = self.allocate_guti().await;
-        let accept = self.build_registration_accept(guti, reactivation_result, current_sessions);
-        self.ran_context_create(accept).await?;
-        self.receive_registration_complete().await?;
-        self.perform_configuration_update(None).await
+        }
     }
 
     async fn reject_registration(&mut self, cause: u8) -> Result<()> {
@@ -117,7 +112,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         let nas_message_container = {
             match self.check_registration_request(&request)? {
                 (RegistrationType::Supi(Imsi(imsi)), ue_security_capability) => {
-                    self.supi_registration(&imsi, ue_security_capability)
+                    self.supi_registration(&imsi, &ue_security_capability)
                         .await?
                 }
 
@@ -136,7 +131,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
                     } else {
                         self.ue.reset_nas_security();
                         let imsi = self.query_ue_identity().await?;
-                        self.supi_registration(&imsi.0, ue_security_capability)
+                        self.supi_registration(&imsi.0, &ue_security_capability)
                             .await?
                     }
                 }
@@ -166,31 +161,19 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
     }
 
     async fn query_ue_identity(&mut self) -> Result<Imsi, u8> {
-        self.query_ue_identity_inner().await.map_err(|e| {
+        self.identity().await.map_err(|e| {
             warn!(self.logger, "Identity procedure failed - {e}");
             FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED
         })
     }
 
-    async fn query_ue_identity_inner(&mut self) -> Result<Imsi> {
-        let r = crate::nas::build::identity_request();
-        self.log_message("<< Nas IdentityRequest");
-        let rsp = self
-            .nas_request(r, nas_filter!(IdentityResponse), "Identity response")
-            .await?;
-        self.log_message(">> Nas IdentityResponse");
-        crate::nas::parse::identity_response(&rsp)
-    }
-
     async fn supi_registration(
         &mut self,
         imsi: &str,
-        ue_security_capability: NasUeSecurityCapability,
+        ue_security_capability: &NasUeSecurityCapability,
     ) -> Result<NasMessageContainer, u8> {
         info!(self.logger, "SUPI registration for imsi-{imsi}");
-
-        self.authenticate_ue(imsi).await?;
-
+        self.authentication(imsi).await?;
         self.activate_nas_security(ue_security_capability)
             .await
             .map_err(|e| {
@@ -199,153 +182,17 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
             })
     }
 
-    async fn authenticate_ue(&mut self, imsi: &str) -> Result<(), u8> {
-        let mut ksi_retry_done = false;
-        let mut resync_retry_done = false;
-        loop {
-            match self.perform_nas_authentication(imsi).await? {
-                NasAuthOutcome::Kseaf(kseaf) => {
-                    self.ue.kamf = security::derive_kamf(&kseaf, imsi.as_bytes());
-                    return Ok(());
-                }
-                NasAuthOutcome::RetryWithNewKSI if !ksi_retry_done => {
-                    ksi_retry_done = true;
-                    continue;
-                }
-                NasAuthOutcome::ResyncSqn(sqn) if !resync_retry_done => {
-                    self.api
-                        .resync_subscriber_sqn(imsi, sqn)
-                        .await
-                        .map_err(|e| {
-                            warn!(self.logger, "Resync signature failure - {e}");
-                            ABORT_PROCEDURE
-                        })?;
-                    resync_retry_done = true;
-                    debug!(self.logger, "Resynchronized SQN to UE {:02x?}", sqn);
-                    continue;
-                }
-                x => {
-                    warn!(self.logger, "Successive auth failures {:?}", x);
-                    return Err(ABORT_PROCEDURE);
-                }
-            }
-        }
-    }
-
     async fn activate_nas_security(
         &mut self,
-        ue_security_capabilities: NasUeSecurityCapability,
+        ue_security_capabilities: &NasUeSecurityCapability,
     ) -> Result<NasMessageContainer> {
-        self.configure_nas_security(&ue_security_capabilities);
-        let r = crate::nas::build::security_mode_command(ue_security_capabilities, self.ue.ksi.0);
-        self.log_message("<< NasSecurityModeCommand");
-        let Ok(security_mode_complete) = self
-            .nas_request(
-                r,
-                nas_request_filter!(SecurityModeComplete, SecurityModeReject),
-                "Security Mode response",
-            )
-            .await?
-        else {
-            bail!("Security mode command failed");
-        };
-        self.log_message(">> Nas SecurityModeComplete");
-        self.check_nas_security_mode_complete(Box::new(security_mode_complete))
-    }
+        self.ue.security_capabilities =
+            crate::nas::parse::nas_ue_security_capability(ue_security_capabilities);
 
-    async fn perform_nas_authentication(&mut self, imsi: &str) -> Result<NasAuthOutcome, u8> {
-        let (challenge, auth_params) = self.generate_challenge(imsi).await.map_err(|e| {
-            warn!(self.logger, "While generating challenge - {e}");
-            FGMM_CAUSE_ILLEGAL_UE
-        })?;
-        let req = crate::nas::build::authentication_request(
-            &challenge.rand,
-            &challenge.autn,
-            self.ue.ksi.0,
-        );
-
-        self.log_message("<< NasAuthenticationRequest");
-        match self
-            .nas_request(
-                req,
-                nas_request_filter!(AuthenticationResponse, AuthenticationFailure),
-                "Authentication result",
-            )
-            .await
-            .map_err(|e| {
-                warn!(
-                    self.logger,
-                    "While waiting for authentication response - {e}"
-                );
-                ABORT_PROCEDURE
-            })? {
-            Ok(rsp) => {
-                self.log_message(">> Nas AuthenticationResponse");
-                self.check_authentication_response(&rsp, &challenge)
-                    .map_err(|e| {
-                        warn!(self.logger, "Bad authentication respnse - {e}");
-                        ABORT_PROCEDURE
-                    })?;
-                Ok(NasAuthOutcome::Kseaf(challenge.kseaf))
-            }
-            Err(m) => self.authentication_failure(&m, &auth_params, &challenge.rand),
-        }
-    }
-
-    fn authentication_failure(
-        &mut self,
-        auth_failure: &NasAuthenticationFailure,
-        auth_params: &SubscriberAuthParams,
-        rand: &[u8; 16],
-    ) -> Result<NasAuthOutcome, u8> {
-        self.log_message(">> Nas AuthenticationFailure");
-        match auth_failure.fgmm_cause.value {
-            FGMM_CAUSE_SYNCH_FAILURE => {
-                debug!(self.logger, "Synch failure");
-                match self.try_sqn_resynchronization(auth_failure, &auth_params.sim_creds, rand) {
-                    Ok(sqn) => Ok(NasAuthOutcome::ResyncSqn(sqn)),
-                    Err(e) => {
-                        if self.api.config().skip_ue_authentication_check {
-                            warn!(
-                                &self.logger,
-                                "Skipping authentication failure for testability - {e}"
-                            );
-                            Ok(NasAuthOutcome::ResyncSqn(auth_params.sqn.0))
-                        } else {
-                            Err(ABORT_PROCEDURE)
-                        }
-                    }
-                }
-            }
-            FGMM_CAUSE_NGKSI_ALREADY_IN_USE => {
-                debug!(self.logger, "ngKSI already in use");
-                Ok(NasAuthOutcome::RetryWithNewKSI)
-            }
-            cause => {
-                warn!(self.logger, "UE failed authentication with cause {cause}");
-                Err(cause)
-            }
-        }
-    }
-
-    fn try_sqn_resynchronization(
-        &mut self,
-        m: &NasAuthenticationFailure,
-        sim_creds: &SimCreds,
-        rand: &[u8; 16],
-    ) -> Result<[u8; 6]> {
-        let Some(ref auts) = m.authentication_failure_parameter else {
-            bail!("Missing authentication failure parameter on NAS authentication synch failure");
-        };
-        let Ok(auts) = auts.value.clone().try_into() else {
-            bail!(
-                "Bad authentication failure parameter length on NAS authentication synch failure",
-            );
-        };
-
-        debug!(self.logger, "auts: {:x?}", auts);
-        resync_sqn(&auts, &sim_creds.ki, &sim_creds.opc, rand)
-            .ok_or_else(|| anyhow!("Invalid AUTS signature on NAS authentication synch failure"))
+        // TS33.501, 6.7.2: AMF starts integrity protection before transmitting SecurityModeCommand.
+        let knasint = security::derive_knasint(&self.ue.kamf);
+        self.ue.nas.enable_security(knasint);
+        self.security_mode().await
     }
 
     fn check_registration_request(
@@ -396,101 +243,9 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
 
         Ok(ret)
     }
-
-    async fn generate_challenge(
-        &mut self,
-        imsi: &str,
-    ) -> Result<(Challenge, SubscriberAuthParams)> {
-        let auth_params = self
-            .api
-            .lookup_subscriber_creds_and_inc_sqn(imsi)
-            .await
-            .ok_or_else(|| anyhow!("Unknown IMSI"))?;
-
-        debug!(self.logger, "SQN for challenge: {:02x?}", auth_params.sqn);
-
-        // Generate a new KSI for each challenge.
-        self.ue.ksi.inc();
-
-        let challenge = security::generate_challenge(
-            &auth_params.sim_creds.ki,
-            &auth_params.sim_creds.opc,
-            self.api.config().serving_network_name.as_bytes(),
-            &auth_params.sqn.0,
-        );
-
-        // println!("Challenge generated:");
-        // println!("SQN:      {:02x?}", auth_params.sqn);
-        // println!("K:        {:02x?}", auth_params.sim_creds.ki);
-        // println!("OPC:      {:02x?}", auth_params.sim_creds.opc);
-        // println!("rand:     {:02x?}", challenge.rand);
-        // println!("autn:     {:02x?}", challenge.autn);
-        // println!("xresstar: {:02x?}", challenge.xres_star);
-        // println!("kseaf:    {:02x?}", challenge.kseaf);
-
-        Ok((challenge, auth_params))
-    }
-
-    fn check_authentication_response(
-        &self,
-        response: &NasAuthenticationResponse,
-        challenge: &Challenge,
-    ) -> Result<()> {
-        let Some(ref authentication_response_parameter) =
-            response.authentication_response_parameter
-        else {
-            bail!("Missing authentication response parameter on NasAuthenticationResponse")
-        };
-
-        if self.api.config().skip_ue_authentication_check {
-            warn!(
-                self.logger,
-                "Skipping authentication checks for testability reasons"
-            );
-        } else if authentication_response_parameter.value != challenge.xres_star {
-            bail!("Ue responded incorrectly to challenge")
-        }
-
-        Ok(())
-    }
-
-    fn check_nas_security_mode_complete(
-        &mut self,
-        security_mode_complete: Box<NasSecurityModeComplete>,
-    ) -> Result<NasMessageContainer> {
-        match *security_mode_complete {
-            NasSecurityModeComplete {
-                imeisv: _imeisv,
-                nas_message_container: Some(nas_message_container),
-                non_imeisv_pei: _non_imeisv_pei,
-            } => Ok(nas_message_container),
-            _ => {
-                bail!(
-                    "Nas Message container missing from {:?}",
-                    security_mode_complete
-                );
-            }
-        }
-    }
-
-    fn configure_nas_security(&mut self, ue_security_capabilities: &NasUeSecurityCapability) {
-        self.ue.security_capabilities =
-            crate::nas::parse::nas_ue_security_capability(ue_security_capabilities);
-
-        // TS33.501, 6.7.2: AMF starts integrity protection before transmitting SecurityModeCommand.
-        let knasint = security::derive_knasint(&self.ue.kamf);
-        self.ue.nas.enable_security(knasint);
-    }
 }
 
 enum RegistrationType {
     Supi(Imsi),
     Guti,
-}
-
-#[derive(Debug)]
-enum NasAuthOutcome {
-    Kseaf([u8; 32]),
-    RetryWithNewKSI,
-    ResyncSqn([u8; 6]),
 }

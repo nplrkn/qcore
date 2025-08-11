@@ -10,10 +10,9 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         dnn: Option<Vec<u8>>,
     ) -> Result<()> {
         self.log_message(">> Nas PduSessionEstablishmentRequest");
-        // TODO: check request
-        let session_id = hdr.pdu_session_identity;
-        let session = PduSession {
-            id: session_id,
+
+        let mut session = PduSession {
+            id: hdr.pdu_session_identity,
             snssai: Snssai(self.api.config().sst, Some([0, 0, 0])),
             userplane_info: self.api.allocate_userplane_session().await?,
             dnn: dnn.unwrap_or(b"internet".to_vec()),
@@ -25,13 +24,11 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
             self.api.config().sst,
         )?;
 
-        // TODO: once all tests are working, try moving this after the .ran_session_setup
-        // so as to get rid of the last_mut().unwrap().
-        self.ue.pdu_sessions.push(session);
         self.log_message("<< Nas PduSessionEstablishmentAccept");
         let accept = self.ue.nas.encode(accept)?;
-        self.api
-            .ran_session_setup(self.ue.pdu_sessions.last_mut().unwrap(), accept)
-            .await
+        self.api.ran_session_setup(&mut session, accept).await?;
+        self.ue.pdu_sessions.push(session);
+
+        Ok(())
     }
 }

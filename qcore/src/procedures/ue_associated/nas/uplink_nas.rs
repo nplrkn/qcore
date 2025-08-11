@@ -9,8 +9,6 @@ use oxirush_nas::{
     messages::NasUlNasTransport,
 };
 
-// TOOD: should this be NasProcedure::dispatch()?
-
 impl<'a, B: NasBase> NasProcedure<'a, B> {
     pub async fn uplink_nas(&mut self, nas: Vec<u8>) -> Result<()> {
         let nas = self.nas_decode(&nas)?;
