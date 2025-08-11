@@ -1,22 +1,17 @@
 # Backlog
 
 ## In progress
-- Tidying + Refactoring
-  - "protocols" -> "procedures/parse_build" ?
-  - test scripts - move to builder pattern (new_with_base() etc)?
-
-- OAI test broken - simulated UE doesn't send Configuration Update Complete
-
 - Live testing with multiple phones, update readme documenting interop status.
 
-- Sessions / IP addresses should not persist forever.  Timeout; flush on TMSI register/service request without session reactivation; flush on IMSI registration? 
+## Interop
 - Rejection of Registration Request from Security Mode Command if slice asked for is eMBB / SST 1 with "no network slices available"
   -  causes OnePlus phone to reregister with MIoT SST 3 / SD 0.
 -  Unhandled RrcReestablishmentRequest
-- use different forwarding tables for NGAP vs F1AP 
-- "NG setup with GNB name" - log line - trace of bitvec global gnb ID is ugly 
-- PDU session release command should flow on SRB 2, not SRB 1  
 
+## Bugs
+- Poor download speed in F1ap mode possibly caused by out of order seq nos 
+- PDU session release command should flow on SRB 2, not SRB 1  
+- OAI test broken - simulated UE doesn't send Configuration Update Complete
 
 ## Performance
 - iperf framework
@@ -30,6 +25,7 @@
 ## Function gaps
 - Deregistration accept
 - Update / Remove a DU's served cells on Du configuration update, F1 Remove, disconnection
+- Sessions / IP addresses should not persist forever.  Timeout; flush on TMSI register/service request without session reactivation; flush on IMSI registration? 
 - Large SCTP messages - e.g. unfiltered UE Capability Information
 - Idle / paging
 - UE static IP
@@ -57,12 +53,10 @@
   its session setup request (with no intervening delete) after not liking the response.
 
 ## Tidying + refactoring
-- reduce test boilerplate
+- "NG setup with GNB name" - log line - trace of bitvec global gnb ID is ugly 
+- use different forwarding tables for NGAP vs F1AP 
+- test scripts - move to builder pattern (new_with_base() etc)?
 - struct Config should be split into information that is used on startup (which doesn't need to be cloned), and information that is used by procedures (which does need to be cloned) 
-- give rrc its own directory under ue_associated procedures
-- avoid having to expect() on UeContext fields
-- message logs in both test framework and QCORE debug should use consistent F1 / RRC / NAS prefix
-- simplify xxap 
 
 ## Regression tests
 - should check there are no further messages when a mock is dropped
@@ -72,3 +66,8 @@
 - dl delivery status packet with / without payload
 - tcp out through NAT masquerade
 - stats (add new QCore pub method)
+
+## XXAP + autogen
+- retire use of async_trait?
+- simplify Stack / transport provider?
+- todo()s

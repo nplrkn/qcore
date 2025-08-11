@@ -1,6 +1,6 @@
 //! build_f1ap - construction of F1AP messages
 use crate::{PdcpSequenceNumberLength, PduSession, data::UeContextRan};
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use asn1_per::*;
 use f1ap::*;
 use rrc::{
@@ -274,7 +274,11 @@ pub fn ue_context_setup_request(
     Ok(Box::new(UeContextSetupRequest {
         gnb_cu_ue_f1ap_id: GnbCuUeF1apId(ue.local_ran_ue_id),
         gnb_du_ue_f1ap_id: Some(ue.gnb_du_ue_f1ap_id()),
-        sp_cell_id: ue.nr_cgi.as_ref().expect("NR CGI must be present").clone(),
+        sp_cell_id: ue
+            .nr_cgi
+            .as_ref()
+            .ok_or_else(|| anyhow!("NR CGI must be present"))?
+            .clone(),
         serv_cell_index: f1ap::ServCellIndex(0), // TODO
         sp_cell_ul_configured: Some(CellUlConfigured::None),
         cu_to_du_rrc_information: CuToDuRrcInformation {
@@ -307,7 +311,10 @@ pub fn ue_context_setup_request(
         drx_cycle: None,
         resource_coordination_transfer_container: None,
         s_cell_to_be_setup_list: Some(SCellToBeSetupList(nonempty![scell_to_be_setup_item(
-            ue.nr_cgi.as_ref().expect("NR CGI must be present").clone(),
+            ue.nr_cgi
+                .as_ref()
+                .ok_or_else(|| anyhow!("NR CGI must be present"))?
+                .clone(),
         )])),
         srbs_to_be_setup_list: Some(SrbsToBeSetupList(nonempty![SrbsToBeSetupItem {
             srb_id: SrbId(2),
