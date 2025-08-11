@@ -30,7 +30,7 @@ pub trait RrcBase {
     async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
 
     async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
-    async fn register_new_tmsi(&self, tmsi: Tmsi);
+    async fn register_new_tmsi(&self) -> [u8; 4];
 
     async fn ran_ue_context_setup(&mut self, session: &mut PduSession) -> Result<Vec<u8>>; // Returns cell group config
     async fn ran_ue_context_modification(

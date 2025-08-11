@@ -190,7 +190,7 @@ impl<A: ProcedureBase> UeMessageHandler<A> {
                 debug!(self.logger, "Store core context for TMSI {tmsi}");
                 self.api
                     .put_core_context(
-                        tmsi,
+                        tmsi.0,
                         ue_context.ran.local_ran_ue_id,
                         ue_context.core,
                         0,
@@ -264,10 +264,9 @@ impl<A: ProcedureBase> RanUeBase for &mut UeMessageHandler<A> {
         async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
         async fn register_new_tmsi(
             &self,
-            tmsi: crate::protocols::nas::Tmsi,
             ue_id: u32,
             logger: &Logger,
-        );
+        ) -> [u8;4];
         async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
     }}
 

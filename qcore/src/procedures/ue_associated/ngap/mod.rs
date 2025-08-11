@@ -124,7 +124,7 @@ impl<'a, B: RanUeBase> NasBase for &mut NgapUeProcedure<'a, B> {
                 session: &UserplaneSession,
                 [&self.logger],
             );
-            async fn register_new_tmsi(&self, tmsi: Tmsi, [self.ue.local_ran_ue_id], [&self.logger]);
+            async fn register_new_tmsi(&self, [self.ue.local_ran_ue_id], [&self.logger]) -> [u8;4];
     }}
 
     fn ue_tac(&self) -> &[u8; 3] {

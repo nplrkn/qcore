@@ -189,20 +189,20 @@ impl QCore {
 
     async fn put_tmsi(
         &self,
-        tmsi: Tmsi,
+        tmsi: [u8; 4],
         v: CoreContextLocator,
         op: &str,
         ue_id: u32,
         logger: &Logger,
     ) {
-        let old = self.tmsis.lock().await.insert(tmsi.0, v);
+        let old = self.tmsis.lock().await.insert(tmsi, v);
 
         match old {
             Some(CoreContextLocator::Stored(_)) => {
-                warn!(logger, "Duplicate {tmsi} {op} (stored)");
+                warn!(logger, "Duplicate {tmsi:?} {op} (stored)");
             }
             Some(CoreContextLocator::OwnedByUeTask(old_ue_id)) if old_ue_id != ue_id => {
-                warn!(logger, "Duplicate {tmsi} {op} - (owned by {old_ue_id})");
+                warn!(logger, "Duplicate {tmsi:?} {op} - (owned by {old_ue_id})");
             }
             _ => {}
         }
@@ -272,7 +272,7 @@ impl ProcedureBase for QCore {
 
     async fn put_core_context(
         &self,
-        tmsi: Tmsi,
+        tmsi: [u8; 4],
         ue_id: u32,
         c: UeContext5GC,
         _ttl_secs: u32,
@@ -282,15 +282,19 @@ impl ProcedureBase for QCore {
             .await
     }
 
-    async fn register_new_tmsi(&self, tmsi: Tmsi, ue_id: u32, logger: &Logger) {
+    async fn register_new_tmsi(&self, ue_id: u32, logger: &Logger) -> [u8; 4] {
+        let tmsi: [u8; 4] = rand::random(); // TODO: 0xffffffff is not a valid TMSI (TS23.003, 2.4))
+        debug!(self.logger, "Assigned {:?}", tmsi);
+
         self.put_tmsi(
-            tmsi,
+            tmsi.clone(),
             CoreContextLocator::OwnedByUeTask(ue_id),
             "register",
             ue_id,
             logger,
         )
-        .await
+        .await;
+        tmsi
     }
 
     async fn spawn_ue_message_handler(&self) -> u32 {

@@ -33,15 +33,14 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
     }
 
     async fn allocate_tmsi(&mut self) -> NasFGsMobileIdentity {
-        let tmsi = Tmsi(rand::random()); // TODO: 0xffffffff is not a valid TMSI (TS23.003, 2.4))
-        debug!(self.logger, "Assigned {}", tmsi);
-        self.api.register_new_tmsi(tmsi.clone()).await;
+        let tmsi = self.api.register_new_tmsi().await;
         let guti = crate::protocols::nas::build::nas_mobile_identity_guti(
             &self.api.config().plmn,
             &self.api.config().amf_ids,
-            &tmsi.0,
+            &tmsi,
         );
-        self.ue.tmsi = Some(tmsi);
+        self.ue.tmsi = Some(Tmsi(tmsi));
+
         guti
     }
 

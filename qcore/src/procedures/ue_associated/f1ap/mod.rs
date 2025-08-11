@@ -111,7 +111,7 @@ impl<'a, B: RanUeBase> RrcBase for &mut F1apUeProcedure<'a, B> {
         );
         async fn lookup_subscriber_creds_and_inc_sqn(&self, imsi: &str) -> Option<SubscriberAuthParams>;
         async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
-        async fn register_new_tmsi(&self, tmsi: Tmsi, [self.ue.local_ran_ue_id], [&self.logger]);
+        async fn register_new_tmsi(&self, [self.ue.local_ran_ue_id], [&self.logger]) -> [u8;4];
         async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
         fn unexpected_pdu<T:Into<UeMessage>>(&mut self, pdu:T, expected: &str) -> Result<()>;
         fn served_cells(&self) -> &ServedCellsMap;

@@ -1,7 +1,6 @@
 use crate::{
     Config,
     data::{PduSession, SubscriberAuthParams, UeContext5GC, UserplaneSession},
-    protocols::nas::Tmsi,
 };
 use anyhow::Result;
 use nas::DecodedNas;
@@ -10,6 +9,7 @@ pub trait NasBase {
     fn config(&self) -> &Config;
     fn ue_tac(&self) -> &[u8; 3];
 
+    async fn register_new_tmsi(&self) -> [u8; 4];
     async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
 
     async fn reserve_userplane_session(&self) -> Result<UserplaneSession>;
@@ -49,7 +49,6 @@ pub trait NasBase {
     async fn send_nas(&mut self, nas: Vec<u8>) -> Result<()>;
     async fn receive_nas(&mut self) -> Result<Vec<u8>>;
     fn unexpected_nas_pdu(&mut self, pdu: DecodedNas, expected: &str) -> Result<()>;
-    async fn register_new_tmsi(&self, tmsi: Tmsi);
 
     async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
 }
