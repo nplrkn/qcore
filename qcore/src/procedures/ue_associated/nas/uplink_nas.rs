@@ -1,9 +1,9 @@
 //! uplink_nas - transfer of a Nas message from UE to AMF
 use super::prelude::*;
-use crate::data::DecodedNas;
 use crate::protocols::nas::{
     FGMM_CAUSE_DNN_NOT_SUPPORTED_OR_NOT_SUBSCRIBED_IN_THE_SLICE, Guti, MobileIdentity,
 };
+use nas::DecodedNas;
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gsMessage, Nas5gsmMessage, decode_nas_5gs_message,
     messages::NasUlNasTransport,

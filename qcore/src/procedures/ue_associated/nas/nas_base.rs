@@ -1,9 +1,10 @@
 use crate::{
     Config,
-    data::{DecodedNas, PduSession, SubscriberAuthParams, UeContext5GC, UserplaneSession},
+    data::{PduSession, SubscriberAuthParams, UeContext5GC, UserplaneSession},
     protocols::nas::Tmsi,
 };
 use anyhow::Result;
+use nas::DecodedNas;
 
 pub trait NasBase {
     fn config(&self) -> &Config;

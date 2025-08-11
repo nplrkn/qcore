@@ -2,7 +2,6 @@ use f1ap::GnbDuUeF1apId;
 use ngap::{AmfUeNgapId, RanUeNgapId};
 use xxap::NrCgi;
 
-// TODO - deduplicate tac??
 #[derive(Debug, Default)]
 pub struct UeContextRan {
     // RAN UE context data, indexed by the local_ran_ue_id = NGAP AMF UE ID or F1AP CU UE ID as appropriate

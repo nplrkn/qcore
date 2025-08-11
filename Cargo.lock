@@ -1372,6 +1372,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "nas"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "oxirush-nas",
+ "security",
+]
+
+[[package]]
 name = "neli"
 version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1735,6 +1744,7 @@ dependencies = [
  "index-pool",
  "libc",
  "local-ip-address",
+ "nas",
  "ngap",
  "num_cpus",
  "oxirush-nas",

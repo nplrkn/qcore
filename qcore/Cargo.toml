@@ -19,6 +19,7 @@ ngap = { path = "../5g-libs/ngap" }
 xxap = { path = "../5g-libs/xxap" }
 pdcp = { path = "../5g-libs/pdcp" }
 rrc = { path = "../5g-libs/rrc" }
+nas = { path = "../5g-libs/nas" }
 asn1-per = { path = "../5g-libs/asn1-per" }
 stop-token = "0.7.0"
 oxirush-nas = { git = "https://github.com/nplrkn/oxirush-nas", rev = "fceec54" }

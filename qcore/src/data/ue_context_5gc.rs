@@ -1,5 +1,6 @@
 use super::{Ksi, UeSecurityCapabilities};
-use crate::{NasContext, PduSession, nas::Tmsi};
+use crate::{PduSession, nas::Tmsi};
+use nas::NasContext;
 
 #[derive(Debug, Default)]
 pub struct UeContext5GC {

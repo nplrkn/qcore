@@ -6,10 +6,7 @@ mod ue_context_setup;
 use super::prelude::*;
 use crate::{
     Config,
-    data::{
-        DecodedNas, PduSession, SubscriberAuthParams, UeContext5GC, UeContextRan, UeContextRrc,
-        UserplaneSession,
-    },
+    data::{SubscriberAuthParams, UeContextRan, UserplaneSession},
     procedures::{
         UeMessage,
         ue_associated::{RrcBase, RrcProcedure},
@@ -18,6 +15,7 @@ use crate::{
     qcore::ServedCellsMap,
 };
 use f1ap::{Cause, DlRrcMessageTransferProcedure, F1apPdu, RrcContainer};
+use nas::DecodedNas;
 use rrc::UlDcchMessage;
 use slog::debug;
 use xxap::NrCgi;

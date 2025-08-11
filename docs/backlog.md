@@ -2,10 +2,6 @@
 
 ## In progress
 - Tidying + Refactoring
-  - "nas_context.rs" is not just data -> put in protocols or 5g libs? (but see below)
-    - key point - will it be used by integration test framework?
-      - if yes, 5g libs
-      - why both security_context and nas_context?
   - "protocols" -> "procedures/parse_build" ?
   - clean up registration procedure code
   - commonize service and registration session handling 

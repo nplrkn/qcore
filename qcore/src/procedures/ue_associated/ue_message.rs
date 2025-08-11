@@ -1,6 +1,7 @@
-use crate::data::{DecodedNas, UeContext5GC};
+use crate::data::UeContext5GC;
 use async_std::channel::Sender;
 use f1ap::F1apPdu;
+use nas::DecodedNas;
 use ngap::NgapPdu;
 use rrc::UlDcchMessage;
 use std::fmt::Display;

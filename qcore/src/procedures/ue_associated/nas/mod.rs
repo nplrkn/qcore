@@ -9,10 +9,11 @@ pub mod uplink_nas;
 pub use nas_base::NasBase;
 
 use crate::{
-    data::{DecodedNas, UeContext5GC},
+    data::UeContext5GC,
     protocols::nas::{ABORT_PROCEDURE, FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED, Tmsi, parse},
 };
 use anyhow::{Result, ensure};
+use nas::DecodedNas;
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gsMessage, Nas5gsmMessage, NasFGsMobileIdentity, NasPduSessionStatus,
     NasUplinkDataStatus, decode_nas_5gs_message, messages::Nas5gsSecurityHeader,
@@ -43,7 +44,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         self.ue.tmsi = Some(tmsi);
         guti
     }
-    // Rename to expect_nas? and get rid of the  _inner in recieve_nas_inner
+
     async fn receive_nas_response<T>(
         &mut self,
         filter: fn(DecodedNas) -> Result<T, DecodedNas>,

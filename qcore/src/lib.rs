@@ -9,8 +9,8 @@ use data::*;
 use procedures::ProcedureBase;
 use protocols::*;
 
+pub use crate::nas::AmfIds;
 pub use ::xxap::PlmnIdentity;
 pub use data::{Config, NetworkDisplayName, PdcpSequenceNumberLength, SimCreds};
-pub use nas::AmfIds;
 pub use qcore::{ProgramHandle, QCore};
 pub use subscriber_db::SubscriberDb;

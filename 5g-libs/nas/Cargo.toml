@@ -1,0 +1,9 @@
+[package]
+name = "nas"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+oxirush-nas = { git = "https://github.com/nplrkn/oxirush-nas", rev = "fceec54" }
+security = { path = "../security" }
+anyhow = "1.0.97"

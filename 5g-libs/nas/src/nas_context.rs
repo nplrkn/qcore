@@ -1,23 +1,27 @@
-use anyhow::Result;
+use anyhow::{Result, anyhow, bail, ensure};
 use oxirush_nas::{
-    Nas5gsMessage, Nas5gsSecurityHeaderType, encode_nas_5gs_message, messages::Nas5gsSecurityHeader,
+    Nas5gsMessage, Nas5gsSecurityHeaderType, decode_nas_5gs_message, encode_nas_5gs_message,
+    messages::Nas5gsSecurityHeader,
 };
 use security::nia2::calculate_nia2_mac;
 
-#[derive(Debug)]
-pub struct SecurityContext {
+#[derive(Debug, Default)]
+pub struct NasContext {
+    security_activated: bool,
     ik: [u8; 16],
     dl_count: u32,
     pub ul_count: u32,
 }
 
-impl SecurityContext {
-    pub fn new(ik: [u8; 16]) -> Self {
-        SecurityContext {
-            ik,
-            dl_count: 0,
-            ul_count: 0,
-        }
+pub type DecodedNas = (Box<Nas5gsMessage>, Option<Nas5gsSecurityHeader>);
+
+impl NasContext {
+    pub fn security_activated(&self) -> bool {
+        self.security_activated
+    }
+
+    pub fn ul_nas_count(&self) -> u32 {
+        self.ul_count
     }
 
     pub fn admit_message(
@@ -25,6 +29,11 @@ impl SecurityContext {
         security_header: Option<&Nas5gsSecurityHeader>,
         _bytes: &[u8], // for integrity check in future
     ) -> Result<()> {
+        ensure!(
+            self.security_activated,
+            "Cannot admit message without a security context"
+        );
+
         if let Some(security_header) = security_header {
             // TODO: Check the security header type
             // For example,
@@ -92,5 +101,39 @@ impl SecurityContext {
 
         self.dl_count = (self.dl_count + 1) & 0xffffff;
         Ok(nas_bytes)
+    }
+
+    pub fn decode(&mut self, data: &[u8]) -> Result<DecodedNas> {
+        let nas_message = Box::new(
+            decode_nas_5gs_message(data)
+                .map_err(|e| anyhow!("NAS decode error - {e} - message bytes: {:?}", data))?,
+        );
+        let (nas, security_header) = match *nas_message {
+            Nas5gsMessage::Gmm(_, _) => (nas_message, None),
+            Nas5gsMessage::SecurityProtected(hdr, bx) => (bx, Some(hdr)),
+            Nas5gsMessage::Gsm(_, _) => bail!("Unexpected Nas SM message {:?} ", nas_message),
+        };
+
+        if self.security_activated {
+            self.admit_message(security_header.as_ref(), data)?;
+        }
+
+        Ok((nas, security_header))
+    }
+
+    pub fn enable_security(&mut self, knasint: [u8; 16]) {
+        self.security_activated = true;
+        self.ik = knasint;
+        self.ul_count = 0;
+        self.dl_count = 0;
+    }
+
+    pub fn encode(&mut self, nas: Box<Nas5gsMessage>) -> Result<Vec<u8>> {
+        let nas = if self.security_activated {
+            self.encode_with_integrity(nas)?
+        } else {
+            encode_nas_5gs_message(&nas)?
+        };
+        Ok(nas)
     }
 }

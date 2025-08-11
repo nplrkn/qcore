@@ -8,13 +8,12 @@ mod uplink_nas_transport;
 use super::prelude::*;
 use crate::{
     Config,
-    data::{
-        DecodedNas, PduSession, SubscriberAuthParams, UeContext5GC, UeContextRan, UserplaneSession,
-    },
+    data::{PduSession, SubscriberAuthParams, UeContext5GC, UeContextRan, UserplaneSession},
     procedures::ue_associated::{NasBase, NasProcedure},
     protocols::nas::Tmsi,
 };
 use asn1_per::SerDes;
+use nas::DecodedNas;
 use ngap::{
     AmfUeNgapId, Cause, NgapPdu, PduSessionResourceSetupResponseTransfer,
     UpTransportLayerInformation,
