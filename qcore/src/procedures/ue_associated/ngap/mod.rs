@@ -10,7 +10,6 @@ use crate::{
     Config,
     data::{PduSession, SubscriberAuthParams, UeContext5GC, UeContextRan, UserplaneSession},
     procedures::ue_associated::{NasBase, NasProcedure},
-    protocols::nas::Tmsi,
 };
 use asn1_per::SerDes;
 use nas::DecodedNas;

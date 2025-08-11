@@ -11,7 +11,6 @@ use crate::{
     Config,
     data::{PduSession, SubscriberAuthParams, UeContext5GC, UeContextRrc, UserplaneSession},
     procedures::ue_associated::{NasBase, NasProcedure},
-    protocols::nas::Tmsi,
 };
 use anyhow::{Result, bail};
 use asn1_per::SerDes;

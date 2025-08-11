@@ -1,7 +1,6 @@
 use super::subscriber_db::SubscriberDb;
 use super::userplane::PacketProcessor;
 use crate::f1ap::{F1AP_BIND_PORT, F1AP_SCTP_PPID};
-use crate::nas::Tmsi;
 use crate::ngap::{NGAP_BIND_PORT, NGAP_SCTP_PPID};
 use crate::procedures::{F1apHandler, NgapHandler, UeMessage, UeMessageHandler};
 use crate::{Config, ProcedureBase, Sqn, SubscriberAuthParams, UeContext5GC, UserplaneSession};

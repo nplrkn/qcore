@@ -1,6 +1,6 @@
 use crate::{
-    Config, SubscriberAuthParams, UserplaneSession, data::UeContext5GC, nas::Tmsi,
-    procedures::UeMessage, qcore::ServedCellsMap,
+    Config, SubscriberAuthParams, UserplaneSession, data::UeContext5GC, procedures::UeMessage,
+    qcore::ServedCellsMap,
 };
 use anyhow::Result;
 use async_trait::async_trait;

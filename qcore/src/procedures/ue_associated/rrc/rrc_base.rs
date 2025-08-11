@@ -3,7 +3,6 @@ use crate::{
     Config,
     data::{SubscriberAuthParams, UserplaneSession},
     procedures::UeMessage,
-    protocols::nas::Tmsi,
     qcore::ServedCellsMap,
 };
 use xxap::NrCgi;

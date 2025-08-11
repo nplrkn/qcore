@@ -11,7 +11,6 @@ use crate::{
         UeMessage,
         ue_associated::{RrcBase, RrcProcedure},
     },
-    protocols::nas::Tmsi,
     qcore::ServedCellsMap,
 };
 use f1ap::{Cause, DlRrcMessageTransferProcedure, F1apPdu, RrcContainer};

@@ -2,7 +2,6 @@ use crate::{
     Config,
     data::{SubscriberAuthParams, UeContext5GC, UserplaneSession},
     procedures::UeMessage,
-    protocols::nas::Tmsi,
     qcore::ServedCellsMap,
 };
 use anyhow::Result;
