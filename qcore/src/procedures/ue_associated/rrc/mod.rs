@@ -10,7 +10,7 @@ pub use rrc_base::RrcBase;
 use crate::{
     Config,
     data::{
-        DecodedNas, PduSession, SubscriberAuthParams, UeContext5GC, UeRrcContext, UserplaneSession,
+        DecodedNas, PduSession, SubscriberAuthParams, UeContext5GC, UeContextRrc, UserplaneSession,
     },
     procedures::ue_associated::{NasBase, NasProcedure},
     protocols::nas::Tmsi,
@@ -25,7 +25,7 @@ use rrc::{
 use slog::{Logger, debug};
 
 pub struct RrcProcedure<'a, B: RrcBase> {
-    pub ue: &'a mut UeRrcContext,
+    pub ue: &'a mut UeContextRrc,
     pub logger: &'a Logger,
     pub api: B,
 }

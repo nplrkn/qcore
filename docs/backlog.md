@@ -2,11 +2,7 @@
 
 ## In progress
 - Tidying + Refactoring
-  - asymmetry that NasBase has reserve but not commit userplane session - can it be moved down?
-    -  reserve is used to get the session info prior to sending accept
-    -  delete is used in reconcile_sessions()
   - less verbose creation of higher layer procedure
-  - split out all data structures (e.g. KSI)
   - "nas_context.rs" is not just data -> put in protocols or 5g libs? (but see below)
     - key point - will it be used by integration test framework?
       - if yes, 5g libs

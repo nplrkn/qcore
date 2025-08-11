@@ -1,5 +1,5 @@
 //! build_f1ap - construction of F1AP messages
-use crate::{PdcpSequenceNumberLength, PduSession, data::UeRanContext};
+use crate::{PdcpSequenceNumberLength, PduSession, data::UeContextRan};
 use anyhow::Result;
 use asn1_per::*;
 use f1ap::*;
@@ -259,7 +259,7 @@ fn scell_to_be_setup_item(nr_cgi: NrCgi) -> SCellToBeSetupItem {
 }
 
 pub fn ue_context_setup_request(
-    ue: &UeRanContext,
+    ue: &UeContextRan,
     transport_layer_address: TransportLayerAddress,
     session: &PduSession,
 ) -> Result<Box<UeContextSetupRequest>> {
@@ -373,7 +373,7 @@ pub fn ue_context_setup_request(
 }
 
 pub fn ue_context_modification_request(
-    ue: &UeRanContext,
+    ue: &UeContextRan,
     _released_session: &PduSession,
 ) -> Box<UeContextModificationRequest> {
     let drbs_to_be_released_list = Some(DrbsToBeReleasedList(nonempty![DrbsToBeReleasedItem {
@@ -477,7 +477,7 @@ pub fn ue_context_modification_request(
     })
 }
 
-pub fn ue_context_release_command(ue: &UeRanContext, cause: Cause) -> Box<UeContextReleaseCommand> {
+pub fn ue_context_release_command(ue: &UeContextRan, cause: Cause) -> Box<UeContextReleaseCommand> {
     Box::new(UeContextReleaseCommand {
         gnb_cu_ue_f1ap_id: GnbCuUeF1apId(ue.local_ran_ue_id),
         gnb_du_ue_f1ap_id: ue.gnb_du_ue_f1ap_id(),

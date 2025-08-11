@@ -1,5 +1,5 @@
 use crate::{
-    data::{UeContext5GC, UeRrcContext},
+    data::{UeContext5GC, UeContextRrc},
     procedures::ue_associated::RrcProcedure,
 };
 
@@ -12,7 +12,7 @@ impl<'a, B: RanUeBase> F1apUeProcedure<'a, B> {
     pub async fn initial_ul_rrc_message_transfer(
         &mut self,
         r: Box<InitialUlRrcMessageTransfer>,
-        rrc_context: &mut UeRrcContext,
+        rrc_context: &mut UeContextRrc,
         core_context: &mut UeContext5GC,
     ) -> Result<()> {
         self.log_message(">> F1ap InitialUlRrcMessageTransfer");

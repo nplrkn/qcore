@@ -1,7 +1,7 @@
 //! build_f1ap - construction of F1AP messages
 use crate::{
     Config,
-    data::{PduSession, UeRanContext},
+    data::{PduSession, UeContextRan},
 };
 use anyhow::Result;
 use asn1_per::*;
@@ -46,7 +46,7 @@ pub fn initial_context_setup_request(
     config: &Config,
     kgnb: &[u8; 32],
     nas_pdu: Option<Vec<u8>>,
-    ue: &UeRanContext,
+    ue: &UeContextRan,
     session_list: &Vec<PduSession>,
     ue_security_capabilities: &[u8; 2],
 ) -> Result<Box<InitialContextSetupRequest>> {

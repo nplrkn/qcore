@@ -7,7 +7,7 @@ use super::prelude::*;
 use crate::{
     Config,
     data::{
-        DecodedNas, PduSession, SubscriberAuthParams, UeContext5GC, UeRanContext, UeRrcContext,
+        DecodedNas, PduSession, SubscriberAuthParams, UeContext5GC, UeContextRan, UeContextRrc,
         UserplaneSession,
     },
     procedures::{
@@ -23,7 +23,7 @@ use slog::debug;
 use xxap::NrCgi;
 
 pub struct F1apUeProcedure<'a, B: RanUeBase> {
-    pub ue: &'a mut UeRanContext,
+    pub ue: &'a mut UeContextRan,
     pub logger: &'a Logger,
     pub api: B,
     pub release_cause: Cause,
@@ -33,7 +33,7 @@ impl<'a, B: RanUeBase> F1apUeProcedure<'a, B> {
     pub async fn dispatch(
         &mut self,
         pdu: Box<F1apPdu>,
-        rrc_context: &mut UeRrcContext,
+        rrc_context: &mut UeContextRrc,
         core_context: &mut UeContext5GC,
     ) -> Result<()> {
         match *pdu {
@@ -71,7 +71,7 @@ impl<'a, B: RanUeBase> F1apUeProcedure<'a, B> {
     pub async fn dispatch_rrc(
         &mut self,
         pdu: Box<UlDcchMessage>,
-        rrc_context: &mut UeRrcContext,
+        rrc_context: &mut UeContextRrc,
         core_context: &mut UeContext5GC,
     ) -> Result<()> {
         RrcProcedure {
@@ -86,7 +86,7 @@ impl<'a, B: RanUeBase> F1apUeProcedure<'a, B> {
     pub async fn dispatch_nas(
         &mut self,
         pdu: DecodedNas,
-        rrc_context: &mut UeRrcContext,
+        rrc_context: &mut UeContextRrc,
         core_context: &mut UeContext5GC,
     ) -> Result<()> {
         RrcProcedure {

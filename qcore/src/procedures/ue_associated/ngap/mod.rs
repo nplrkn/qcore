@@ -9,7 +9,7 @@ use super::prelude::*;
 use crate::{
     Config,
     data::{
-        DecodedNas, PduSession, SubscriberAuthParams, UeContext5GC, UeRanContext, UserplaneSession,
+        DecodedNas, PduSession, SubscriberAuthParams, UeContext5GC, UeContextRan, UserplaneSession,
     },
     procedures::ue_associated::{NasBase, NasProcedure},
     protocols::nas::Tmsi,
@@ -22,7 +22,7 @@ use ngap::{
 use slog::{Logger, debug, info};
 
 pub struct NgapUeProcedure<'a, B: RanUeBase> {
-    pub ue: &'a mut UeRanContext,
+    pub ue: &'a mut UeContextRan,
     pub logger: &'a Logger,
     pub api: B,
     pub release_cause: Cause,
