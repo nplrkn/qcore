@@ -76,8 +76,8 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         // has been acknowledged - TS 24.501, 5.4.4.4
         //   If a new 5G-GUTI was included in the CONFIGURATION UPDATE COMMAND message, the AMF shall
         //   consider the new 5G-GUTI as valid and the old 5G-GUTI as invalid.
-        let guti = self.allocate_tmsi().await;
-        self.perform_configuration_update(guti).await?;
+        let guti = self.allocate_guti().await;
+        self.perform_configuration_update(Some(guti)).await?;
 
         Ok(())
     }
@@ -86,20 +86,5 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         let reject = crate::nas::build::service_reject(cause);
         self.log_message("<< Nas ServiceReject");
         self.send_nas(reject).await
-    }
-
-    // TODO: commonize with registration.rs
-    async fn perform_configuration_update(&mut self, guti: NasFGsMobileIdentity) -> Result<()> {
-        let command = crate::nas::build::configuration_update_command(None, Some(guti));
-        self.log_message("<< Nas ConfigurationUpdateCommand");
-        let _configuration_update_complete = self
-            .nas_request(
-                command,
-                nas_filter!(ConfigurationUpdateComplete),
-                "Configuration update complete",
-            )
-            .await?;
-        self.log_message(">> Nas ConfigurationUpdateComplete");
-        Ok(())
     }
 }

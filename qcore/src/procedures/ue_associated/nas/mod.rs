@@ -1,3 +1,4 @@
+mod configuration_update;
 mod deregistration;
 mod nas_base;
 mod registration;
@@ -32,7 +33,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         self.api.send_nas(nas_bytes).await
     }
 
-    async fn allocate_tmsi(&mut self) -> NasFGsMobileIdentity {
+    async fn allocate_guti(&mut self) -> NasFGsMobileIdentity {
         let tmsi = self.api.register_new_tmsi().await;
         let guti = crate::protocols::nas::build::nas_mobile_identity_guti(
             &self.api.config().plmn,
@@ -179,10 +180,10 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
     // Returns (current sessions, reactivation result).
     async fn reconcile_sessions(
         &mut self,
-        uplink_data_status: &Option<NasUplinkDataStatus>,
+        uplink_data_status_request: &Option<NasUplinkDataStatus>,
         pdu_session_status: &Option<NasPduSessionStatus>,
-    ) -> Result<(u16, u16)> {
-        let uplink_data_status = parse::uplink_data_status(uplink_data_status);
+    ) -> Result<(u16, Option<u16>)> {
+        let uplink_data_status = parse::uplink_data_status(uplink_data_status_request);
         let pdu_session_status = parse::pdu_session_status(pdu_session_status);
 
         debug!(
@@ -236,7 +237,12 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
 
         let active_sessions = pdu_session_status & !sessions_to_reactivate;
 
-        Ok((active_sessions, sessions_to_reactivate))
+        // We only return a reactivation result if the UE requested reactivation.
+        let reactivation_result = uplink_data_status_request
+            .as_ref()
+            .map(|_| sessions_to_reactivate);
+
+        Ok((active_sessions, reactivation_result))
     }
 }
 
