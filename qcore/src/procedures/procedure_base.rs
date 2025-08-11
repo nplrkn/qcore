@@ -45,7 +45,7 @@ pub trait ProcedureBase: Send + Sync + Clone + 'static {
     ) -> Result<P::Success, RequestError<P::Failure>>;
     async fn xxap_indication<P: Indication>(&self, r: Box<P::Request>, logger: &Logger);
 
-    async fn reserve_userplane_session(&self, logger: &Logger) -> Result<UserplaneSession>;
+    async fn allocate_userplane_session(&self, logger: &Logger) -> Result<UserplaneSession>;
     async fn commit_userplane_session(
         &self,
         session: &UserplaneSession,

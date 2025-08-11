@@ -15,7 +15,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         let session = PduSession {
             id: session_id,
             snssai: Snssai(self.api.config().sst, Some([0, 0, 0])),
-            userplane_info: self.api.reserve_userplane_session().await?,
+            userplane_info: self.api.allocate_userplane_session().await?,
             dnn: dnn.unwrap_or(b"internet".to_vec()),
         };
 

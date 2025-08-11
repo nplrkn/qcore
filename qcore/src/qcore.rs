@@ -345,9 +345,9 @@ impl ProcedureBase for QCore {
         <Stack as IndicationHandler<P>>::handle(&self.stack, *r, logger).await
     }
 
-    async fn reserve_userplane_session(&self, logger: &Logger) -> Result<UserplaneSession> {
+    async fn allocate_userplane_session(&self, logger: &Logger) -> Result<UserplaneSession> {
         self.packet_processor
-            .reserve_userplane_session(self.config().five_qi, self.config().pdcp_sn_length, logger)
+            .allocate_userplane_session(self.config().five_qi, self.config().pdcp_sn_length, logger)
             .await
     }
 

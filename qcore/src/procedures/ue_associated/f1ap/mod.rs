@@ -103,7 +103,7 @@ impl<'a, B: RanUeBase> RrcBase for &mut F1apUeProcedure<'a, B> {
     delegate! {
     to self.api {
         fn config(&self) -> &Config;
-        async fn reserve_userplane_session(&self, [&self.logger]) -> Result<UserplaneSession>;
+        async fn allocate_userplane_session(&self, [&self.logger]) -> Result<UserplaneSession>;
         async fn delete_userplane_session(
             &self,
             session: &UserplaneSession,

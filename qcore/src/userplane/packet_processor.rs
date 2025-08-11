@@ -112,7 +112,7 @@ impl PacketProcessor {
     }
 
     /// Allocates an IP address and TEID for a userplane session.
-    pub async fn reserve_userplane_session(
+    pub async fn allocate_userplane_session(
         &self,
         five_qi: u8,
         pdcp_sn_length: PdcpSequenceNumberLength,

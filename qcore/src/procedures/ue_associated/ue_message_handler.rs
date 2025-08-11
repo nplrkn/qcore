@@ -240,7 +240,7 @@ impl<A: ProcedureBase> RanUeBase for &mut UeMessageHandler<A> {
         to self.api {
             fn config(&self) -> &crate::Config;
             fn served_cells(&self) -> &ServedCellsMap;
-            async fn reserve_userplane_session(&self, logger: &Logger) -> Result<UserplaneSession>;
+            async fn allocate_userplane_session(&self, logger: &Logger) -> Result<UserplaneSession>;
         async fn xxap_request<P: xxap::Procedure>(
             &self,
             r: Box<P::Request>,
