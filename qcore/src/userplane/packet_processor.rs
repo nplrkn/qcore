@@ -162,7 +162,7 @@ impl PacketProcessor {
 
         info!(
             logger,
-            "Activate userplane session UE IP {}, local teid {:08} remote {}-{:08}, 5QI={}",
+            "Activate userplane session UE IP {}, local teid {:08}, remote {}-{:08}, 5QI={}",
             session.ue_ip_addr,
             session.uplink_gtp_teid,
             remote_tunnel_info.transport_layer_address,
@@ -232,7 +232,10 @@ impl PacketProcessor {
             warn!(logger, "Error returning UE index {} - {}", idx, e)
         }
 
-        info!(logger, "Deleted userplane session {}", session);
+        info!(
+            logger,
+            "Deleted userplane session UE IP {}", session.ue_ip_addr
+        );
     }
 
     async fn clear_forwarding_entries(&self, idx: u32, logger: &Logger) {

@@ -144,12 +144,13 @@ impl<A: ProcedureBase> UeMessageHandler<A> {
                 Err(anyhow!("Take context"))
             }
             UeMessage::Disconnect => {
-                info!(
+                debug!(
                     &self.logger,
                     "UE disconnected - exit message handler and store context"
                 );
                 *disconnected = true;
-                Err(anyhow!("Disconnected"))
+                self.stop = true;
+                Ok(())
             }
             UeMessage::Ping(sender) => {
                 debug!(self.logger, "Respond to ping");
