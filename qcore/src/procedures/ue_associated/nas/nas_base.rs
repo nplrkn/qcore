@@ -51,4 +51,6 @@ pub trait NasBase {
     fn unexpected_nas_pdu(&mut self, pdu: DecodedNas, expected: &str) -> Result<()>;
 
     async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
+
+    fn disconnect_ue(&mut self);
 }

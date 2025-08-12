@@ -53,4 +53,6 @@ pub trait RanUeBase {
 
     async fn register_new_tmsi(&self, ue_id: u32, logger: &Logger) -> [u8; 4];
     async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
+
+    fn disconnect_ue(&mut self);
 }

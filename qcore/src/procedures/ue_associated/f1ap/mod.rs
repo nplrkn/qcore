@@ -51,7 +51,7 @@ impl<'a, B: RanUeBase> F1apUeProcedure<'a, B> {
                     "DU initiated context release, cause {:?}", r.cause
                 );
                 self.release_cause = r.cause.clone();
-                bail!("Context release");
+                self.api.disconnect_ue();
             }
             pdu => {
                 debug!(self.logger, "Unsupported F1apPdu");
@@ -114,6 +114,7 @@ impl<'a, B: RanUeBase> RrcBase for &mut F1apUeProcedure<'a, B> {
         async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
         fn unexpected_pdu<T:Into<UeMessage>>(&mut self, pdu:T, expected: &str) -> Result<()>;
         fn served_cells(&self) -> &ServedCellsMap;
+        fn disconnect_ue(&mut self);
     }}
 
     fn set_ue_rat_capabilities(&mut self, rat_capabilities: Vec<u8>) {

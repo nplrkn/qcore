@@ -2,6 +2,7 @@
 
 ## In progress
 - Info logging review
+- Regression in release cause propagation from RAN release request as intended - tests should validate
 - Live testing with multiple phones, update readme documenting interop status.
 
 ## Interop

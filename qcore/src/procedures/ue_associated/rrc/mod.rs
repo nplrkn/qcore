@@ -147,6 +147,7 @@ impl<'a, B: RrcBase> NasBase for &mut RrcProcedure<'a, B> {
         async fn register_new_tmsi(&self) -> [u8; 4];
 
         fn ue_tac(&self) -> &[u8; 3];
+        fn disconnect_ue(&mut self);
     }}
 
     async fn ran_session_setup(

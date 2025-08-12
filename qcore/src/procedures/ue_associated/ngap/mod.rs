@@ -52,7 +52,7 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
                     "gNB initiated context release, cause {:?}", r.cause
                 );
                 self.release_cause = r.cause.clone();
-                bail!("Context release");
+                self.api.disconnect_ue();
             }
 
             pdu => {
@@ -123,6 +123,7 @@ impl<'a, B: RanUeBase> NasBase for &mut NgapUeProcedure<'a, B> {
                 [&self.logger],
             );
             async fn register_new_tmsi(&self, [self.ue.local_ran_ue_id], [&self.logger]) -> [u8;4];
+            fn disconnect_ue(&mut self);
     }}
 
     fn ue_tac(&self) -> &[u8; 3] {

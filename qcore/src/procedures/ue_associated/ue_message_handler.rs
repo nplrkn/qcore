@@ -20,6 +20,7 @@ pub struct UeMessageHandler<A: ProcedureBase> {
     logger: Logger,
     queue: VecDeque<UeMessage>,
     give_context: Option<Sender<UeContext5GC>>,
+    stop: bool,
 }
 
 impl<A: ProcedureBase> UeMessageHandler<A> {
@@ -32,9 +33,10 @@ impl<A: ProcedureBase> UeMessageHandler<A> {
                 logger,
                 queue: VecDeque::new(),
                 give_context: None,
+                stop: false,
             };
             if let Err(e) = handler.run(ue_id).await {
-                warn!(handler.logger, "UE message handler exiting: {e}");
+                warn!(handler.logger, "Disconnecting UE: {e}");
             }
         });
         sender
@@ -53,7 +55,7 @@ impl<A: ProcedureBase> UeMessageHandler<A> {
         loop {
             // On success, keep dispatching.  On error, release the RAN context as a final
             // procedure before passing up the error.
-            if result.is_ok() {
+            if result.is_ok() && !self.stop {
                 result = self.dispatch(ue, &mut disconnected).await;
             } else {
                 if disconnected {
@@ -294,5 +296,9 @@ impl<A: ProcedureBase> RanUeBase for &mut UeMessageHandler<A> {
     fn unexpected_pdu<T: Into<UeMessage>>(&mut self, pdu: T, expected: &str) -> Result<()> {
         debug!(self.logger, "Queue PDU (wanted {expected})");
         self.enqueue_message(pdu.into())
+    }
+
+    fn disconnect_ue(&mut self) {
+        self.stop = true;
     }
 }

@@ -36,4 +36,5 @@ pub trait RrcBase {
         &mut self,
         released_session: &PduSession,
     ) -> Result<Option<Vec<u8>>>;
+    fn disconnect_ue(&mut self);
 }
