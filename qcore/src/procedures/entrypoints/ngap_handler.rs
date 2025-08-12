@@ -112,7 +112,7 @@ impl<A: ProcedureBase> EventHandler for NgapHandler<A> {
             TnlaEvent::Established(addr) => {
                 info!(
                     logger,
-                    "NGAP TNLA {} established with gNB {}", tnla_id, addr
+                    "NGAP SCTP association established from gNB {}", addr
                 )
             }
             TnlaEvent::Terminated => {

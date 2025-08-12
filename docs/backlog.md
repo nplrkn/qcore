@@ -2,6 +2,8 @@
 
 ## In progress
 - Live testing with multiple phones, update readme documenting interop status.
+- "NG setup with GNB name" info log - trace of bitvec global gnb ID is ugly 
+
 
 ## Interop
 - Rejection of Registration Request from Security Mode Command if slice asked for is eMBB / SST 1 with "no network slices available"
@@ -53,7 +55,6 @@
   its session setup request (with no intervening delete) after not liking the response.
 
 ## Tidying + refactoring
-- "NG setup with GNB name" - log line - trace of bitvec global gnb ID is ugly 
 - use different forwarding tables for NGAP vs F1AP 
 - test scripts - move to builder pattern (new_with_base() etc)?
 - struct Config should be split into information that is used on startup (which doesn't need to be cloned), and information that is used by procedures (which does need to be cloned) 

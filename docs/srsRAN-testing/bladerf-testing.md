@@ -1,10 +1,10 @@
 # Live UE + BladeRF testing
 
-This uses https://github.com/hypermagik/srsRAN-5G/commit/9081cfc2b0.
+This uses https://github.com/hypermagik/srsRAN-5G/commit/9081cfc2b0 with the BladeRF .deb packages from https://github.com/pvnis/5g-config-files/tree/main/bladerf-deb-jammy (private repository) installed (`su dkbgdpkg -i *.deb`), before calling SRS `cmake ../`.  There are probably other ways to get srsRAN working with bladeRF that just use publically available packages.
 
-It also requires the BladeRF .deb packages from https://github.com/pvnis/5g-config-files/tree/main/bladerf-deb-jammy (private repository) to be installed (`su dkbgdpkg -i *.deb`), before calling `cmake ../`.
+To date, I have not managed to get this setup working in WSL - the USB passthrough (usbipid) seems to be too laggy for the SDR board to function properly.
 
-It assumes a sims.toml file in $HOME.
+The instructions assume there is a sims.toml file in $HOME.
 
 ## Common setup
 ### Copy across config files
@@ -14,17 +14,6 @@ cp ~/qcore/docs/srsRAN-testing/gnb-bladerf.yml ~/srsRAN-5G/build/apps/gnb
 cp ~/qcore/docs/srsRAN-testing/cu.yml ~/srsRAN-5G/build/apps/cu
 cp ~/qcore/docs/srsRAN-testing/du-bladerf.yml ~/srsRAN-5G/build/apps/du
 ```
-
-### WSL - attach USB device 
-In a Windows Cmd prompt
-```
-usbipd list
-usbipd attach --wsl --busid 3-1
-```
-where the busid is set to match that of the bladeRF 2.0 in the device list.
-
-### Check device present
-`lsusb` to check the device has attached correctly - should output a line for the bladeRF device.
 
 ## NGAP mode / single gNB
 

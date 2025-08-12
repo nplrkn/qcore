@@ -16,9 +16,10 @@ impl<'a, A: ProcedureBase> Procedure<'a, A> {
         } else {
             "<none>".to_string()
         };
-        info!(
+        info!(self.logger, "NG setup with GNB:{gnb_name}");
+        debug!(
             self.logger,
-            "NG setup with GNB name:{gnb_name}, id:{:?}", r.global_ran_node_id
+            "GNB global RAN node id:{:?}", r.global_ran_node_id
         );
         let response = crate::ngap::build::ng_setup_response(
             &self.api.config().guami(),
