@@ -31,7 +31,12 @@ type UplinkForwardingTable = Array<MapData, UlForwardingEntry>;
 type DownlinkForwardingTable = Array<MapData, DlForwardingEntry>;
 
 impl PacketProcessor {
-    pub async fn new(ue_subnet: Ipv4Addr, ebpf: &mut Ebpf, logger: &Logger) -> Result<Self> {
+    pub async fn new(
+        ue_subnet: Ipv4Addr,
+        ebpf: &mut Ebpf,
+        userplane_stats: bool,
+        logger: &Logger,
+    ) -> Result<Self> {
         let mut index_pool = IndexPool::new();
         // Take the 0 and 1 slots, so that the first UE gets an IP address ending in .2.
         let _ = index_pool.request_id(0);
@@ -43,7 +48,9 @@ impl PacketProcessor {
         let dl_forwarding_table = Array::try_from(ebpf.take_map("DL_FORWARDING_TABLE").unwrap())?;
 
         // Spawn the stats task
-        let _stats_task = async_std::task::spawn(dump_stats(logger.clone(), counters));
+        if userplane_stats {
+            let _stats_task = async_std::task::spawn(dump_stats(logger.clone(), counters));
+        }
 
         Ok(PacketProcessor {
             index_pool,

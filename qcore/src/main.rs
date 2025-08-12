@@ -74,6 +74,10 @@ struct Args {
     /// Network display name to send to UEs.
     #[arg(long, default_value = "QCore")]
     network_display_name: String,
+
+    /// Output userplane stats.
+    #[arg(long, default_value_t = false)]
+    userplane_stats: bool,
 }
 
 #[async_std::main]
@@ -112,6 +116,7 @@ async fn main() -> Result<()> {
         logger,
         sub_db,
         args.ngap_mode,
+        args.userplane_stats,
     )
     .await?;
 

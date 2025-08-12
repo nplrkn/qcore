@@ -1,11 +1,8 @@
 # Backlog
 
 ## In progress
+- Info logging review
 - Live testing with multiple phones, update readme documenting interop status.
-
-
-## Info Logging
-- make userplane stats optional
 
 ## Interop
 - Rejection of Registration Request from Security Mode Command if slice asked for is eMBB / SST 1 with "no network slices available"

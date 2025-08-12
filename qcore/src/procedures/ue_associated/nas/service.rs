@@ -10,10 +10,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
 
         // Ensure that the UE security context has been retrieved based on the TMSI in the outer message.
         if !self.ue.nas.security_activated() {
-            warn!(
-                self.logger,
-                "Rejecting Service Request with unknown or missing TMSI in outer message"
-            );
+            warn!(self.logger, "Rejecting Nas Service Request - unknown TMSI");
             self.reject(FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED)
                 .await?;
             return Ok(());

@@ -79,6 +79,7 @@ async fn start_qcore(
         logger.new(o!("qcore"=> 1)),
         sub_db,
         ngap_mode,
+        true,
     )
     .await
 }

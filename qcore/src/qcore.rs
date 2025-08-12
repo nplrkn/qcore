@@ -69,6 +69,7 @@ impl QCore {
         logger: Logger,
         sub_db: SubscriberDb,
         ngap_mode: bool,
+        userplane_stats: bool,
     ) -> Result<ProgramHandle> {
         let local_ip = config.ip_addr;
         let mut ebpf = PacketProcessor::install_ebpf(
@@ -85,7 +86,8 @@ impl QCore {
         );
         info!(&logger, "Supported slice SST {}", config.sst);
 
-        let packet_processor = PacketProcessor::new(config.ue_subnet, &mut ebpf, &logger).await?;
+        let packet_processor =
+            PacketProcessor::new(config.ue_subnet, &mut ebpf, userplane_stats, &logger).await?;
 
         let mut qc =
             Box::new(Self::new(config, packet_processor, logger, sub_db, ngap_mode).await?);

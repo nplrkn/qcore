@@ -63,6 +63,6 @@ impl std::fmt::Display for TransportLayerAddress {
 
 impl std::fmt::Display for GtpTeid {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:x?}", u32::from_be_bytes(self.0))
+        write!(f, "{:08x?}", u32::from_be_bytes(self.0))
     }
 }
