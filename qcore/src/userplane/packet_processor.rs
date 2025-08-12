@@ -162,12 +162,12 @@ impl PacketProcessor {
 
         info!(
             logger,
-            "Activate userplane session {}, remote {}-{:08}, 5QI={}, sn-length={}",
-            session,
+            "Activate userplane session UE IP {}, local teid {:08} remote {}-{:08}, 5QI={}",
+            session.ue_ip_addr,
+            session.uplink_gtp_teid,
             remote_tunnel_info.transport_layer_address,
             remote_tunnel_info.gtp_teid,
             session.five_qi,
-            session.pdcp_sn_length
         );
 
         // TODO: Once we implement downlink buffering, could split this into a command that starts buffering downlink packets, and

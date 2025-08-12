@@ -63,6 +63,11 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
             )
             .await?;
 
+        info!(
+            self.logger,
+            "UE service request - reactivate existing session(s)"
+        );
+
         let accept = crate::nas::build::service_accept(active_sessions, reactivation_result);
         self.log_message("<< Nas ServiceAccept");
         self.ran_context_create(accept).await?;

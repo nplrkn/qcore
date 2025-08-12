@@ -24,7 +24,7 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
         // The UE technically isn't CM-Connected until the N2 context is established
         // (TS23.501, figure 5.3.3.2.4-2), but from an info logging point of view, this is the best place to
         // introduce the new UE ID.
-        info!(self.logger, "UE connection");
+        info!(self.logger, "New UE RAN connection");
 
         let stmsi: Option<Vec<u8>> = r.five_g_s_tmsi.map(|x| {
             let mut stmsi = x.amf_set_id.0.clone();

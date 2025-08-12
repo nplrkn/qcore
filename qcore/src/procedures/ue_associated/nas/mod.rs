@@ -225,7 +225,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         if sessions_to_reactivate != 0 {
             warn!(
                 self.logger,
-                "UE asked to reactivate one or more sessions that we don't know about: {:016b}",
+                "UE asked to reactivate session(s) that we don't know about: {:016b}",
                 sessions_to_reactivate
             );
         }
