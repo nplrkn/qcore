@@ -32,6 +32,9 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         self.api
             .ran_session_release(&released_session, pdu_session_release_command)
             .await?;
+        self.api
+            .delete_userplane_session(&released_session.userplane_info)
+            .await;
 
         let _pdu_session_release_complete = self
             .receive_nas_sm(

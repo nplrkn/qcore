@@ -129,6 +129,10 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
                         // If there are any non-cleartext IEs to process, there will be an inner registration request
                         // in the NAS message container.  Switch to that, if it is present, otherwise return the original
                         // request.
+                        info!(
+                            self.logger,
+                            "UE GUTI reregistration reusing existing security context"
+                        );
                         match request.nas_message_container {
                             None => return Ok(request),
                             Some(x) => x,

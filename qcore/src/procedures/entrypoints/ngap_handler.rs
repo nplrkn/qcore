@@ -107,7 +107,7 @@ impl<A: ProcedureBase> RequestProvider<RanConfigurationUpdateProcedure> for Ngap
 
 #[async_trait]
 impl<A: ProcedureBase> EventHandler for NgapHandler<A> {
-    async fn handle_event(&self, event: TnlaEvent, tnla_id: u32, logger: &Logger) {
+    async fn handle_event(&self, event: TnlaEvent, _tnla_id: u32, logger: &Logger) {
         match event {
             TnlaEvent::Established(addr) => {
                 info!(
@@ -118,7 +118,7 @@ impl<A: ProcedureBase> EventHandler for NgapHandler<A> {
             TnlaEvent::Terminated => {
                 // Treat this as equivalent to NG termination.
                 // TODO - in the case of multiple TNLAs or multiple gNBs, this is too broad.
-                info!(logger, "NGAP TNLA {} closed", tnla_id);
+                info!(logger, "NGAP SCTP connection with gNB closed");
                 self.0.disconnect_ues().await;
             }
         };
