@@ -1,7 +1,7 @@
 use anyhow::{Result, bail};
 use aya::maps::{MapData, PerCpuArray};
 use ebpf_common::CounterIndex::{self, *};
-use slog::{Logger, info, warn};
+use slog::{Logger, debug, info, warn};
 use std::fmt::Write;
 use strum::VariantNames;
 
@@ -27,7 +27,7 @@ pub async fn dump_stats(
         bail!("Couldn't get num cpus")
     };
 
-    info!(
+    debug!(
         &logger,
         "Starting userplane stats task, num cpus {}", num_cpus
     );

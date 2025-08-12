@@ -48,6 +48,11 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
             &registration_request.pdu_session_status,
         )
         .await
+        .inspect(|(sessions, _)| {
+            if *sessions != 0 {
+                info!(self.logger, "UE reregistration with existing session(s)")
+            }
+        })
     }
 
     fn build_registration_accept(
@@ -172,7 +177,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         imsi: &str,
         ue_security_capability: &NasUeSecurityCapability,
     ) -> Result<NasMessageContainer, u8> {
-        info!(self.logger, "SUPI registration for imsi-{imsi}");
+        info!(self.logger, "Registering imsi-{imsi}");
         self.authentication(imsi).await?;
         self.activate_nas_security(ue_security_capability)
             .await

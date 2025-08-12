@@ -195,16 +195,8 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
             uplink_data_status,
             pdu_session_status
         );
-        // Warn if the uplink data status does not match the PDU session status.
-        if uplink_data_status != pdu_session_status {
-            warn!(
-                self.logger,
-                "Uplink data status ({:016b}) does not match PDU session status ({:016b}) - QCore always reactivates all known sessions",
-                uplink_data_status,
-                pdu_session_status,
-            )
-        }
 
+        // Currently, we ignore the uplink data status and just work off the PDU session status.
         let mut sessions_to_reactivate: u16 = pdu_session_status;
 
         // Rebuild the UE session list to contain only sessions that the UE knows about.
@@ -233,7 +225,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         if sessions_to_reactivate != 0 {
             warn!(
                 self.logger,
-                "UE asked to reactivate one or more sessions that we don't know about: {:b}",
+                "UE asked to reactivate one or more sessions that we don't know about: {:016b}",
                 sessions_to_reactivate
             );
         }

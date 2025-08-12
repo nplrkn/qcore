@@ -62,7 +62,7 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
             )?;
             warn!(
                 self.logger,
-                "GNB error for session {}: {:?}", item.pdu_session_id.0, xfer.cause
+                "gNB error for session {}: {:?}", item.pdu_session_id.0, xfer.cause
             );
         }
 
@@ -88,6 +88,6 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
                 return Ok(());
             }
         }
-        bail!("GNB did not supply resource setup response")
+        bail!("gNB did not supply resource setup response")
     }
 }

@@ -16,7 +16,7 @@ impl<'a, A: ProcedureBase> Procedure<'a, A> {
         } else {
             "<none>".to_string()
         };
-        info!(self.logger, "NG setup with GNB:{gnb_name}");
+        info!(self.logger, "NGAP setup with gNB: {gnb_name}");
         debug!(
             self.logger,
             "GNB global RAN node id:{:?}", r.global_ran_node_id

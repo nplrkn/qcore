@@ -83,7 +83,7 @@ impl QCore {
             &logger,
             "Serving network name {}", config.serving_network_name
         );
-        info!(&logger, "SST {}", config.sst);
+        info!(&logger, "Supported slice SST {}", config.sst);
 
         let packet_processor = PacketProcessor::new(config.ue_subnet, &mut ebpf, &logger).await?;
 

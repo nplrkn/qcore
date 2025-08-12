@@ -49,7 +49,7 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
                 self.log_message(">> Ngap UeContextReleaseRequest");
                 info!(
                     self.logger,
-                    "GNB initiated context release, cause {:?}", r.cause
+                    "gNB initiated context release, cause {:?}", r.cause
                 );
                 self.release_cause = r.cause.clone();
                 bail!("Context release");

@@ -23,7 +23,7 @@ impl SubscriberDb {
             let Some(imsi) = key.strip_prefix("imsi-") else {
                 bail!("Key {} in {filename} does not start with 'imsi-'", key,)
             };
-            info!(logger, "Loaded creds for IMSI: {imsi} from {filename}");
+            info!(logger, "Loaded creds for imsi-{imsi} from {filename}");
             new_table.insert(
                 imsi.to_string(),
                 Subscriber {

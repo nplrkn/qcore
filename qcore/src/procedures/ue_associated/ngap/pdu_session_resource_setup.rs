@@ -30,7 +30,7 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
                 }
                 ensure!(
                     x.first().pdu_session_id.0 == pdu_session.id,
-                    "GNB setup session ID {}, expected {}",
+                    "gNB setup session ID {}, expected {}",
                     x.first().pdu_session_id.0,
                     pdu_session.id
                 );

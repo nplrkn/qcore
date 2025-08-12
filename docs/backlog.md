@@ -2,8 +2,10 @@
 
 ## In progress
 - Live testing with multiple phones, update readme documenting interop status.
-- "NG setup with GNB name" info log - trace of bitvec global gnb ID is ugly 
 
+
+## Info Logging
+- make userplane stats optional
 
 ## Interop
 - Rejection of Registration Request from Security Mode Command if slice asked for is eMBB / SST 1 with "no network slices available"
@@ -25,28 +27,31 @@
 - SQN
 
 ## Function gaps
-- Deregistration accept
-- Update / Remove a DU's served cells on Du configuration update, F1 Remove, disconnection
+- Proper handling of deregistration from UE, including sending of Deregistration accept
+- Idle / paging
+- Registration timeout and refresh
 - Sessions / IP addresses should not persist forever.  Timeout; flush on TMSI register/service request without session reactivation; flush on IMSI registration? 
 - Large SCTP messages - e.g. unfiltered UE Capability Information
-- Idle / paging
 - UE static IP
-- Registration timeout and refresh
-- PDCP Rx reordering
-- Obey DL DATA DELIVERY STATUS backpressure (desired buffer size)
-- PDCP retransmission for RLC Am
+- CU specific function
+  - RRC uplink integrity validation
+  - RRC ciphering
+  - PDCP Rx reordering
+  - Obey DL DATA DELIVERY STATUS backpressure (desired buffer size)
+  - PDCP retransmission for RLC Am
+  - Processing of UE measurements - detect when UE changes cell
+  - Handling of PDCP control packets
+  - Handling of uplink PDCP sequence number out or order / gaps
+  - RRC Inactive
+  - Update / Remove a DU's served cells on Du configuration update, F1 Remove, disconnection
 - Time out during procedures - e.g. Authentication procedure uses T3560
 - UE AMBR
 - Transport key for SIM creds
 - SUCI
-- NEA2 ciphering
-- Processing of UE measurements - detect when UE changes cell
-- Uplink integrity validation for RRC / NAS
+- NEA2 ciphering for NAS
+- NAS uplink integrity validation for NAS
 - TODOs
-- Handling of PDCP control packets
-- Handling of uplink PDCP sequence number out or order / gaps
 - Negative testing of rejections and protocol errors
-- RRC Inactive
 - >1 PDU session per UE
 - >1 DU
 

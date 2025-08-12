@@ -14,6 +14,6 @@ pub struct UserplaneSession {
 
 impl std::fmt::Display for UserplaneSession {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({},{})", self.uplink_gtp_teid, self.ue_ip_addr)
+        write!(f, "({}-{:08})", self.ue_ip_addr, self.uplink_gtp_teid)
     }
 }
