@@ -29,7 +29,7 @@ sudo sysctl -w net.ipv4.conf.all.rp_filter=0
 sudo sysctl -w net.ipv4.conf.$QCORE_TUN.accept_local=1     
 sudo sysctl -w net.ipv4.conf.$QCORE_TUN.route_localnet=1
 
-# Allow UE packets to flow over eth0 to the outside world.
+# Allow UE packets to flow over the external link to the outside world.
 # Enable NAT on the way out and accept them on the way back in
 sudo iptables -t nat -A POSTROUTING -o $EXTERNAL_LINK -s $UE_SUBNET -j MASQUERADE
 sudo iptables -A FORWARD -i $EXTERNAL_LINK -j ACCEPT -d $UE_SUBNET

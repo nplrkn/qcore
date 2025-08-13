@@ -2,98 +2,121 @@
  <img src="docs/images/monolith.jpg" alt="drawing" width="200"/><br>QCore
 </h1> 
 
-QCore is an ultra-compact 5G Core, designed to minimise compute and power cost.  Its goal is to cater for small, data-only 5G networks in remote locations where weight and power are critical factors: 5G in a backpack / on a drone / in space.
+QCore is an ultra-compact private 5G Core, designed to minimise compute and power cost.  Its goal is to cater for small, data-only 5G networks in remote locations where weight and power are critical factors: 5G in a backpack / on a drone / in space.
 
-To use it, you need to connect it to a gNB-DU / RU (gNodeB distributed unit and radio unit).
+QCore is simple, free, and outperforms other 5G cores at the low end.  Whereas most 5G cores consist of many different services, QCore is a single Linux executable, making it easy to orchestrate.
 
-This project is at proof of concept stage, and I am looking for collaborators (with test kit!) to help improve and mature it.  Please do not hesitate to contact me via a GitHub issue or on LinkedIn if you are interested.
+It has been tested and works well with several Android phones but remains at an early stage of maturity.  
+
+I would welcome collaborators to help improve and mature it.  Please contact me via a GitHub issue or on LinkedIn if you are interested.
+
 
 ## Architecture overview
 
-QCore is an all-in-one gNB-CU and 5G Core, running as a single Linux process.  It is designed as a monolith, without the standard network function decomposition of a 5G Core.  It has no internal protocol interfaces (no SBI), and a single UE context.  If you go looking in the source code for, say, an AMF, or a gNB-CU-UP... you won't find one.
-
 The three external interfaces of QCore are:
--  the F1-C SCTP interface with the DU
--  the F1-U GTP interface with the DU
+-  the N2 (NG-C) SCTP interface with the gNodeB
+-  the N3 (NG-U) GTP interface with the gNodeB
 -  the N6 IP interface that connects UEs to the outside world.
 
-The motivation for the monolithic approach is to minimize control plane and userplane processing cost.  QCore avoids a lot of the usual network hops, context switches, database accesses and (de)serialization.  As well as performance, its minimalist design also has side benefits in the areas of ease of orchestration, security, and simplicity / speed of development. 
+QCore is designed as a monolith, without the standard network function decomposition of a 5G Core.  It has no internal protocol interfaces (no SBI), and a single UE context.  
+
+The motivation for the monolithic approach is to minimize control plane processing cost.  QCore avoids a lot of the usual network hops, context switches, database accesses and (de)serialization.  As well as performance, its minimalist design also has side benefits in the areas of ease of orchestration, security, and simplicity / speed of development. 
 
 QCore is written in Rust, and has an eBPF userplane. 
 
+
+## F1 mode
+
+QCore supports "F1 mode", in which it takes on the role of a gNB-CU in addition to the 5G Core.  The idea is to allow an organization with an existing gNB-DU appliance to extend their solution to offer a complete private 5G in a box by running QCore on the same node.
+
+When running in F1 mode, QCore exposes the F1-C and F1-U interfaces, instead of N2 and N3.
+
+
 ## Quickstart
 
-The quickest way to see QCore in action is to run its mainline test.
+The quickest way to see QCore in action is to [run its mainline test](#run-the-mainline-test) and look at the packet capture.
 
-### Set up environment
-Install Rust.
+You might also want to try the [srsRAN demo](./docs/srsRAN-testing/README.md).
+
+### Run the mainline test
+
+#### Set up environment
+Before you start, install Rust and read the [section below on the routing setup](#about-the-routing-setup).
 
 ```sh
+# Install build dependencies
 cargo install bpf-linker
 rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
-```
 
-### Configure routing + network interfaces
-For safety please read the [section below](#about-the-routing-setup) first.
-```sh
+# Configure QCore routing setup 
 sudo apt install iptables
 sudo ./setup-routing
 ```
 
-### Run attach test
-```sh
-RUST_LOG=info cargo test --test attach -- --nocapture
-```
-
-To packet capture, run the following in parallel.
+#### Packet capture
 ```sh
 sudo tcpdump -w qcore.pcap -i any sctp or port 2152 or host 10.255.0.2
 ```
 
+#### Run attach test
+In a separate terminal from the packet capture, in the `qcore` directory.
+```sh
+RUST_LOG=info cargo test --test ngap-attach -- --nocapture
+```
+
 Once the test has finished, hit Ctrl-C to exit tcpdump, then open `qcore.pcap` in Wireshark.  In Wireshark, select Edit--Preferences--Protocols--NAS-5GS--"Try to detect and decode 5G-EA0 ciphered messages".
 
-## OpenAirInterface and srsRAN demos
-
-QCore interoperates with OpenAirInterface and srsRAN.  Each of these two open source projects provides a gNB-DU and UE simulator.  
-
-See the [OpenAirInterface demo walkthrough](./docs/OpenAirInterface-testing/README.md) and the [srsRAN demo walkthrough](./docs/srsRAN-testing/README.md).
 
 ## Configuring and running QCore
 
-Before you embark on running QCore in some other context, the key thing to bear in mind is this: it's not going to work first time and is likely to need a code change :-).  
-
-Right now, QCore is very much incomplete, with plenty of hard-coded protocol fields, missing features, and other limitations, any of which could throw up interop problems.
-
-The good news is that QCore is quick to enhance and I want to make it useful to you, with your help.  Please share the problems you run into as a Github issues, and make sure to get a packet capture.
-
-### Command-line configuration
-
-Run with the `--help` argument to see the command-line configuration options.
-
 ### sims.toml
 
-QCore reads SIM credentials from a file.  By default it uses `sims.toml` in the current working directory - see the sample file in the root of this project.  
+QCore reads SIM credentials from a file.  By default it uses `sims.toml` in the current working directory - see the [sample file](./sims.toml) in the root of this project.  
 
 Pass `--sim-cred-file` to read from a different file location.
 
+### Command-line configuration
+
+The command line options `local-ip` and `ran-interface-name` govern the connection with the RAN. By default, QCore assumes the gNB / DU will connect over `eth0`.  
+
+```sh
+# By default QCore communicates with gNB over eth0.  
+# In this case the gNB AMF address config should be set to the IP address of eth0. 
+qcore --mcc 001 --mnc 06   
+
+# For the case where the gNB is running in the same machine and network namespace as QCore.
+# In this case, the gNB AMF address config should be set to 127.0.0.1.
+qcore --mcc 001 --mnc 06 --local-ip 127.0.0.1 --ran-interface-name lo
+```
+
+Run with the `--help` argument to see all the command-line configuration options.
+
+### Selection of external DN interface
+
+QCore itself is not aware of the interface used to reach the outside world (that is, the Data Network, in 5G terms).  It injects all UE packets into Linux routing over `qcoretun`, and Linux routing then forwards each packet.  This includes UE-to-UE packets.
+
+The `setup-routing` script sets up NAT connectivity over `eth0` by default (with an assumption that the default gateway is connected on this interface).  You can pass a different device name, for example:
+```sh
+./setup-routing enp113s0  # Set up iptables NAT for a default route via device enp113s0
+```
+
+### Linux Permissions
+
+QCore installs an eBPF program on startup and needs the relevant Linux permissions to do so.  The easiest way to 
+achieve this is to run it as root.
+
+QCore routing setup also requires elevated permissions. 
+
+
 ## About the routing setup
 
-The `setup-routing` script makes several Linux routing changes with root permissions.  Please check that it is not going to interfere with your routing setup.
+The [`setup-routing`](./setup-routing) script makes several Linux routing changes with root permissions.  Please check that it is not going to interfere with your routing setup.
 
-The purpose of these changes are to 
+The purpose of these changes is to 
 -  Create a separate private IP subnet for 5G UEs.  The script enables forwarding to/from this subnet over the 'ue' tun interface, including NAT for packets leaving out of eth0.
 -  Enable the QCore eBPF code to flexibly inject packets into Linux routing.  
 
-### UE-to-UE routing
-
-QCore hairpins UE-to-UE packets through the Linux kernel IP stack, which means you can use iptables to block some/all UE-to-UE routing paths.  
-
-By default, Linux routing generates ICMP Redirect in the case of UE-to-UE packet hairpinning - correctly so, but not what we want in our case.  The script therefore disables transmission of ICMP Redirect over our tun device. 
-
-### veth pair
-
-By default, QCore receives downlink packets towards UE over a veth pair.  This is to ensure that the full Linux packet forwarding process
-(including NAT and policy) completes before the packet gets intercepted by the QCore eBPF code.   
+For mode details, see [routing.md](./docs/routing.md).
 
 ## Licence
 
@@ -105,5 +128,5 @@ The eBPF program code is licensed under the GPL.
 
 ## Contributions
 
-Contributions to this project are welcome.  You'll need to sign our Contributor License Agreement.
+Contributions to this project are welcome.  You'll need to sign a Contributor License Agreement.
 

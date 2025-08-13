@@ -1,8 +1,8 @@
 # Backlog
 
 ## In progress
-- Info logging review
 - Regression in release cause propagation from RAN release request as intended - tests should validate
+- NGAP mode by default
 - Live testing with multiple phones, update readme documenting interop status.
 
 ## Interop
@@ -17,12 +17,17 @@
 
 ## Performance
 - iperf framework
+- push to 1000 UEs
 - Release build perf profiling + tuning
 - Reduce memcpy
 
 ## Persistence
 - Paging continuity
 - SQN
+
+## Usability
+- Reduce number of mandatory command line arguments (e.g. derive IP address from interface, derive MNC/MCC from sims.toml)
+- ngap mode as default
 
 ## Function gaps
 - Proper handling of deregistration from UE, including sending of Deregistration accept

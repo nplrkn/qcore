@@ -1,6 +1,6 @@
 # srsRAN demo
 
-In this demo, we are going to ping a public IPv4 address from a simulated UE, running through the srsRAN DU, and QCore.  Below is a complete walkthrough.
+In this demo, we are going to ping a public IPv4 address from a simulated UE, running through the srsRAN DU, and QCore, on a single machine.  QCore in is F1 mode, meaning that it acting as an all-in-one gNB CU and 5G Core.
 
 Thank you to the team at srsRAN for their project!
 

@@ -16,9 +16,9 @@ use std::net::{IpAddr, Ipv4Addr};
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// Local IPv4 address of QCore.  QCore binds SCTP port 38472 (for F1-C)
-    /// and UDP port 2152 (for F1-U) on this address.  Defaults to
-    /// the first non-loopback address (e.g. of eth0).
+    /// Local IPv4 address of QCore.  Defaults to the first non-loopback address (e.g. of eth0).
+    /// QCore binds SCTP port 38412 (for N2) and UDP port 2152 (for GTP-U) to this address.
+    /// In F1 mode, it instead uses SCTP port 38472 (for F1-C).
     #[arg(long, default_value_t = local_ip_address::local_ip().unwrap())]
     local_ip: IpAddr,
 
@@ -33,7 +33,7 @@ struct Args {
     mnc: String,
 
     /// Name of the Linux Ethernet device on which uplink packets from UEs will arrive via the DU or gNB.  
-    /// If you are running the DU / gNB locally, this should be set to "lo".
+    /// If you are running the gNB /DU locally, this should be set to "lo".
     #[arg(long, default_value = "eth0")]
     ran_interface_name: String,
 
@@ -54,7 +54,7 @@ struct Args {
     #[arg(long, default_value = "./sims.toml")]
     sim_cred_file: String,
 
-    /// Slice SST to support.  (SD is always set to 0.)  This is signalled as the allowed SST on NAS registration accept
+    /// Slice SST to support.  (SD is always set to 0.)  This is signalled as the allowed SST on NAS Registration Accept
     /// and Nssai on PDU session establishment accept.
     #[arg(long, default_value_t = 1)]
     sst: u8,
@@ -64,6 +64,7 @@ struct Args {
     five_qi: u8,
 
     /// PDCP sequence number length: 18-bit (false) or 12-bit (true).
+    /// Only meaningful in F1 mode.
     #[arg(long, default_value_t = false)]
     pdcp_12bit_sn: bool,
 
@@ -71,7 +72,7 @@ struct Args {
     #[arg(long, default_value_t = false)]
     ngap_mode: bool,
 
-    /// Network display name to send to UEs.
+    /// Network display name to send to UEs in NAS Configuration Update Command.
     #[arg(long, default_value = "QCore")]
     network_display_name: String,
 
