@@ -1,6 +1,6 @@
 # OpenAirInterface demo
 
-In this demo, we are going to ping a public IPv4 address from a simulated UE, running through the OAI DU, and QCore.  Below is a complete walkthrough.
+In this demo, we are going to ping a public IPv4 address from a simulated UE, running through the OAI DU, and QCore in F1 mode.  Below is a complete walkthrough.
 
 Thank you to the team at the OpenAirInterface 5G RAN project group for their project!
 
@@ -41,7 +41,7 @@ sudo tcpdump -w oai_test.pcap -i any sctp or port 2152 or host 10.255.0.2
 
 ```sh
 cd ~/qcore
-RUST_LOG=debug cargo run -- --mcc 208 --mnc 99 --local-ip 127.0.0.1 --ran-interface-name lo --sim-cred-file docs/OpenAirInterface-testing/oai-sim.toml
+RUST_LOG=debug cargo run -- --f1-mode --mcc 208 --mnc 99 --local-ip 127.0.0.1 --ran-interface-name lo --sim-cred-file docs/OpenAirInterface-testing/oai-sim.toml
 ```
 
 #### Terminal 3 - OAI DU

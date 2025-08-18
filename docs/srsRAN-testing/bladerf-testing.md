@@ -31,7 +31,7 @@ The QCore invocation assumes the MCC/MNC of the SIMs are 001/06.  The SRS config
 ```sh
 cd ~/qcore
 ./setup-routing enp113s0 # one off after reboot
-RUST_LOG=debug cargo run -- --mcc 001 --mnc 06 --local-ip 127.0.0.1 --ran-interface-name lo --sim-cred-file ~/sims.toml --ngap-mode
+RUST_LOG=debug cargo run -- --mcc 001 --mnc 06 --local-ip 127.0.0.1 --ran-interface-name lo --sim-cred-file ~/sims.toml
 ```
 
 ### Terminal 3 - gNB
@@ -42,7 +42,7 @@ cd ~/srsRAN-5G/build/apps/gnb && sudo ./gnb -c gnb-bladerf.yml
 
 Type `t ue`on the console to check radio strength.
 
-## F1AP mode / SRS DU
+## F1 mode / SRS DU
 ### Terminal 1 - tcpdump
 
 ```sh
@@ -53,7 +53,7 @@ cd && sudo tcpdump -w srsran_test.pcap -i any sctp or port 2152 or host 10.255.0
 
 ```sh
 cd ~/qcore
-RUST_LOG=debug cargo run -- --mcc 001 --mnc 06 --local-ip 127.0.0.1 --ran-interface-name lo --sim-cred-file ~/sims.toml
+RUST_LOG=debug cargo run -- --mcc 001 --mnc 06 --local-ip 127.0.0.1 --ran-interface-name lo --sim-cred-file ~/sims.toml --f1-mode
 ```
 
 ### Terminal 3 - DU
@@ -75,7 +75,7 @@ cd && sudo tcpdump -w srsran_test.pcap -i any sctp or port 2152 or host 10.255.0
 
 ```sh
 cd ~/qcore
-RUST_LOG=debug cargo run -- --mcc 001 --mnc 06 --local-ip 127.0.0.3 --ran-interface-name lo --sim-cred-file ~/sims.toml --ngap-mode
+RUST_LOG=debug cargo run -- --mcc 001 --mnc 06 --local-ip 127.0.0.3 --ran-interface-name lo --sim-cred-file ~/sims.toml
 ```
 
 ### Terminal 3 - CU

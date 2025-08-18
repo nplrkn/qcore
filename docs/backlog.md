@@ -1,16 +1,14 @@
 # Backlog
 
 ## In progress
-- Regression in release cause propagation from RAN release request as intended - tests should validate
-- NGAP mode by default
 - Live testing with multiple phones, update readme documenting interop status.
 
 ## Interop
-- Rejection of Registration Request from Security Mode Command if slice asked for is eMBB / SST 1 with "no network slices available"
-  -  causes OnePlus phone to reregister with MIoT SST 3 / SD 0.
--  Unhandled RrcReestablishmentRequest
+- OnePlus: Rejection of Registration Request from Security Mode Command if slice asked for is eMBB / SST 1 with "no network slices available" -  causes OnePlus phone to reregister with MIoT SST 3 / SD 0.
+- Unhandled RrcReestablishmentRequest
 
 ## Bugs
+- Release cause propagation from RAN release request - tests should validate
 - Poor download speed in F1ap mode possibly caused by out of order seq nos 
 - PDU session release command should flow on SRB 2, not SRB 1  
 - OAI test broken - simulated UE doesn't send Configuration Update Complete

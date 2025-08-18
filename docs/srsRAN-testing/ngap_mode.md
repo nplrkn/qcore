@@ -28,7 +28,7 @@ cp ~/qcore/docs/srsRAN-testing/ue.conf ~/srsRAN_4G/build/srsue/src
 
 ```sh
 cd ~/qcore
-RUST_LOG=debug cargo run -- --mcc 001 --mnc 01 --local-ip 127.0.0.1  --ran-interface-name lo --sim-cred-file docs/srsRAN-testing/srs-sim.toml --ngap-mode
+RUST_LOG=debug cargo run -- --mcc 001 --mnc 01 --local-ip 127.0.0.1  --ran-interface-name lo --sim-cred-file docs/srsRAN-testing/srs-sim.toml
 ```
 
 ### Terminal 3 - gNB
@@ -72,7 +72,7 @@ cd && sudo tcpdump -w srsran_test_ngap_cu_du.pcap -i any sctp or port 2152 or ho
 
 ```sh
 cd ~/qcore
-RUST_LOG=debug cargo run -- --mcc 001 --mnc 01 --local-ip 127.0.0.3  --ran-interface-name lo --sim-cred-file docs/srsRAN-testing/srs-sim.toml --ngap-mode
+RUST_LOG=debug cargo run -- --mcc 001 --mnc 01 --local-ip 127.0.0.3  --ran-interface-name lo --sim-cred-file docs/srsRAN-testing/srs-sim.toml
 ```
 
 ### Terminal 3 - CU

@@ -68,9 +68,9 @@ struct Args {
     #[arg(long, default_value_t = false)]
     pdcp_12bit_sn: bool,
 
-    /// NGAP mode - act as a 5G Core (rather than a combined 5G Core / CU).
+    /// F1 mode - act as a combined 5G Core / gNB-CU and connect to a gNB-DU on the F1 reference point.
     #[arg(long, default_value_t = false)]
-    ngap_mode: bool,
+    f1_mode: bool,
 
     /// Network display name to send to UEs in NAS Configuration Update Command.
     #[arg(long, default_value = "QCore")]
@@ -116,7 +116,7 @@ async fn main() -> Result<()> {
         },
         logger,
         sub_db,
-        args.ngap_mode,
+        !args.f1_mode,
         args.userplane_stats,
     )
     .await?;
