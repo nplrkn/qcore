@@ -76,7 +76,7 @@ tail -f /tmp/gnb.log | grep [E]
 sudo sysctl -w kernel.yama.ptrace_scope=0
 sudo sysctl -w kernel.kptr_restrict=0
 cargo test --profile bench --test load_test  # note the name of the test binary
-su sudo
+sudo su
 source /opt/intel/oneapi/vtune/latest/env/vars.sh
 # substitue name of test binary in the below
 vtune -collect hotspots -result-dir vtune`date '+%F-%H-%M-%S'` target/release/deps/load_test-311eec0112284af3

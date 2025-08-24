@@ -28,27 +28,40 @@ async fn load_test() -> anyhow::Result<()> {
 
     gnb.perform_ng_setup(qc.ip_addr()).await?;
 
-    for ue_id in 1..=UE_COUNT {
-        println!("UE {ue_id}");
-        let mut ue = MockUeNgap::new_with_session(
-            nth_imsi(ue_id - 1, &sims),
-            ue_id as u32,
-            &gnb,
-            qc.ip_addr(),
-            &logger,
-        )
-        .await?;
-        gnb.send_ue_context_release_request(ue.gnb_ue_context())
+    const RUN_COUNT: usize = 10;
+
+    for run in 0..RUN_COUNT {
+        println!("Run {run} for {UE_COUNT} UEs");
+        for ue_id in 1..=UE_COUNT {
+            //println!("UE {ue_id}");
+            let mut ue = MockUeNgap::new_with_session(
+                nth_imsi(ue_id - 1, &sims),
+                ue_id as u32,
+                &gnb,
+                qc.ip_addr(),
+                &logger,
+            )
             .await?;
-        gnb.handle_ue_context_release(ue.gnb_ue_context()).await?;
-        let _old_ue_context = gnb
-            .reset_ue_context(ue.gnb_ue_context(), qc.ip_addr())
-            .await?;
-        ue.send_nas_service_request().await?;
-        gnb.handle_initial_context_setup_with_session(ue.gnb_ue_context())
-            .await?;
-        ue.receive_nas_service_accept().await?;
-        ue.handle_nas_configuration_update().await?;
+            gnb.send_ue_context_release_request(ue.gnb_ue_context())
+                .await?;
+            gnb.handle_ue_context_release(ue.gnb_ue_context()).await?;
+            let _old_ue_context = gnb
+                .reset_ue_context(ue.gnb_ue_context(), qc.ip_addr())
+                .await?;
+            ue.send_nas_service_request().await?;
+            gnb.handle_initial_context_setup_with_session(ue.gnb_ue_context())
+                .await?;
+            ue.receive_nas_service_accept().await?;
+            ue.handle_nas_configuration_update().await?;
+            ue.send_nas_pdu_session_release_request().await?;
+
+            gnb.handle_pdu_session_resource_release(ue.gnb_ue_context())
+                .await?;
+            ue.handle_nas_session_release().await?;
+            ue.send_nas_deregistration_request().await?;
+            gnb.handle_ue_context_release(ue.gnb_ue_context()).await?;
+            qc.wait_until_idle().await;
+        }
     }
 
     Ok(())
