@@ -28,12 +28,16 @@ async fn load_test() -> anyhow::Result<()> {
 
     gnb.perform_ng_setup(qc.ip_addr()).await?;
 
-    const RUN_COUNT: usize = 10;
+    const RUN_DURATION_SECS: usize = 10;
+    let now = std::time::Instant::now();
+    let mut run_id = 0;
 
-    for run in 0..RUN_COUNT {
-        println!("Run {run} for {UE_COUNT} UEs");
+    loop {
+        println!(
+            "Run {run_id} starting after {}ms",
+            now.elapsed().as_millis()
+        );
         for ue_id in 1..=UE_COUNT {
-            //println!("UE {ue_id}");
             let mut ue = MockUeNgap::new_with_session(
                 nth_imsi(ue_id - 1, &sims),
                 ue_id as u32,
@@ -61,6 +65,15 @@ async fn load_test() -> anyhow::Result<()> {
             ue.send_nas_deregistration_request().await?;
             gnb.handle_ue_context_release(ue.gnb_ue_context()).await?;
             qc.wait_until_idle().await;
+        }
+        run_id += 1;
+        if now.elapsed().as_secs() > RUN_DURATION_SECS as u64 {
+            let average_time_per_call_flow_ms =
+                now.elapsed().as_millis() as f64 / (run_id * UE_COUNT) as f64;
+            println!(
+                "Completed {run_id} runs of {UE_COUNT} UEs in ~{RUN_DURATION_SECS}s, average time to execute single UE call flow {average_time_per_call_flow_ms}ms"
+            );
+            break;
         }
     }
 
