@@ -32,3 +32,6 @@ opt-level = 1
 [profile.release.package.ebpf-userplane]
 debug = 2
 codegen-units = 1
+
+[profile.bench]
+debug = true

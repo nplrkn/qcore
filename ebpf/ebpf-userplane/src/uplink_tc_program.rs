@@ -21,7 +21,7 @@ static mut UL_FORWARDING_TABLE: Array<UlForwardingEntry> =
 
 const GTP_TEID_OFFSET: usize = EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + 4;
 
-/// This classifier is attached to the lo interface and handles incoming Ethernet packets
+/// This classifier is attached to the interface connected to the RAN and handles incoming Ethernet packets
 /// directed to QCore's F1-U GTP port.
 #[classifier]
 pub fn tc_uplink_f1u(ctx: TcContext) -> i32 {
@@ -31,6 +31,8 @@ pub fn tc_uplink_f1u(ctx: TcContext) -> i32 {
     }
 }
 
+/// This classifier is attached to the interface connected to the RAN and handles incoming Ethernet packets
+/// directed to QCore's N3 GTP port.
 #[classifier]
 pub fn tc_uplink_n3(ctx: TcContext) -> i32 {
     match try_uplink_n3(ctx) {

@@ -25,7 +25,6 @@
 
 ## Usability
 - Reduce number of mandatory command line arguments (e.g. derive IP address from interface, derive MNC/MCC from sims.toml)
-- ngap mode as default
 
 ## Function gaps
 - Proper handling of deregistration from UE, including sending of Deregistration accept

@@ -116,7 +116,7 @@ The purpose of these changes is to
 -  Create a separate private IP subnet for 5G UEs.  The script enables forwarding to/from this subnet over the 'ue' tun interface, including NAT for packets leaving out of eth0.
 -  Enable the QCore eBPF code to flexibly inject packets into Linux routing.  
 
-For mode details, see [routing.md](./docs/routing.md).
+For more details, see [routing.md](./docs/routing.md).
 
 ## Licence
 

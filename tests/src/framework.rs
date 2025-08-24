@@ -24,6 +24,15 @@ pub async fn init_ngap() -> Result<(MockGnb, ProgramHandle, DataNetwork, Subscri
     init_common(gnb, true, logger).await
 }
 
+pub async fn init_ngap_with_subdb(
+    sub_db: SubscriberDb,
+) -> Result<(MockGnb, ProgramHandle, DataNetwork, SubscriberDb, Logger)> {
+    let logger = init_logging();
+    let gnb_ip = "127.0.0.2";
+    let gnb = MockGnb::new(gnb_ip, &logger).await?;
+    init_common_with_subdb(gnb, true, sub_db, logger).await
+}
+
 async fn init_common<T>(
     du_or_gnb: T,
     ngap_mode: bool,
@@ -35,6 +44,19 @@ async fn init_common<T>(
     let subs = SubscriberDb::new_from_sim_file("test_sims.toml", &logger)?;
     let qc = start_qcore(qc_ip, subs.clone(), &logger, ngap_mode).await?;
     Ok((du_or_gnb, qc, dn, subs, logger))
+}
+
+async fn init_common_with_subdb<T>(
+    du_or_gnb: T,
+    ngap_mode: bool,
+    sub_db: SubscriberDb,
+    logger: Logger,
+) -> Result<(T, ProgramHandle, DataNetwork, SubscriberDb, Logger)> {
+    exit_on_panic();
+    let qc_ip = "127.0.0.1";
+    let dn = DataNetwork::new(&logger).await;
+    let qc = start_qcore(qc_ip, sub_db.clone(), &logger, ngap_mode).await?;
+    Ok((du_or_gnb, qc, dn, sub_db, logger))
 }
 
 fn exit_on_panic() {

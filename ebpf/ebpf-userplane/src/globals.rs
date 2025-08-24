@@ -11,7 +11,7 @@ pub unsafe fn read_local_ipv4() -> [u8; 4] {
 }
 
 /// TUN_IF_INDEX - must be set by the loader to the Linux if_index of the tunnel interface.
-/// The tunnel interface is used both to receive downlink packets and inject all transmitted packets.  
+/// The tunnel interface is used to inject all transmitted packets in both directions.  
 #[no_mangle]
 static TUN_IF_INDEX: u32 = 0u32;
 

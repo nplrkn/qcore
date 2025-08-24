@@ -18,7 +18,6 @@ pub unsafe fn add(stat_id: CounterIndex, amount: u64) {
     }
 }
 
-// Variant which return Err
 macro_rules! ensure {
     ($cond:expr, $stat:ident) => {
         if !$cond {
