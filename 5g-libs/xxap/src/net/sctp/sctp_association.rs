@@ -12,8 +12,10 @@ use async_stream::try_stream;
 use futures_core::stream::Stream;
 use futures_lite::future::FutureExt;
 use io::Error;
-use libc::bind;
-use libc::{AF_INET, IPPROTO_SCTP, SOCK_STREAM, connect, getpeername, read, socket, socklen_t};
+use libc::{
+    AF_INET, IPPROTO_SCTP, SCTP_NODELAY, SOCK_STREAM, bind, connect, getpeername, read, socket,
+    socklen_t,
+};
 use os_socketaddr::OsSocketAddr;
 use slog::{Logger, warn};
 use std::net::SocketAddr;
@@ -107,11 +109,11 @@ impl SctpAssociation {
         sock_opt::enable_sctp_heartbeat(fd, 1000).unwrap_or_else(|e| {
             warn!(logger, "Carrying on without heartbeat - {}", e);
         });
-        // It's not clear if this socket option definitely achieves anything - RFC6458 is
-        // very vague.
-        // sock_opt::enable_sock_opt(fd, SCTP_NODELAY as _).unwrap_or_else(|e| {
-        //     warn!(logger, "Carrying on without NODELAY - {}", e);
-        // });
+
+        // This socket option makes a significant difference to packet processing latency.
+        sock_opt::enable_sock_opt(fd, SCTP_NODELAY as _).unwrap_or_else(|e| {
+            warn!(logger, "Carrying on without NODELAY - {}", e);
+        });
         sock_opt::enable_sock_opt(fd, SCTP_RECVRCVINFO as _)?;
         Ok(())
     }
