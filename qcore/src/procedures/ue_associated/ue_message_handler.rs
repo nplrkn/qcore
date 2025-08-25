@@ -163,17 +163,6 @@ impl<A: ProcedureBase> UeMessageHandler<A> {
     async fn cleanup(&mut self, mut ue_context: Box<UeContext>) {
         debug!(self.logger, "Clean up UE context");
 
-        // Remove the channel to this UE and drop all messages in it.
-        self.api
-            .delete_ue_channel(ue_context.ran.local_ran_ue_id)
-            .await;
-        debug!(self.logger, "Deleted UE channel");
-        self.receiver.close();
-        while !self.receiver.is_empty() {
-            debug!(self.logger, "Receive and discard pending message");
-            let _ = self.receiver.recv().await;
-        }
-
         // Deactivate sessions.
         for session in ue_context.core.pdu_sessions.iter() {
             self.api
@@ -200,6 +189,19 @@ impl<A: ProcedureBase> UeMessageHandler<A> {
                     )
                     .await;
             }
+        }
+
+        // Remove the channel to this UE and drop all messages in it.
+        // This must happen after we have stored the core context - see the note on the timing
+        // window in take_core_context().
+        self.api
+            .delete_ue_channel(ue_context.ran.local_ran_ue_id)
+            .await;
+        debug!(self.logger, "Deleted UE channel");
+        self.receiver.close();
+        while !self.receiver.is_empty() {
+            debug!(self.logger, "Receive and discard pending message");
+            let _ = self.receiver.recv().await;
         }
     }
 

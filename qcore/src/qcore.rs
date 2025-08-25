@@ -252,21 +252,34 @@ impl ProcedureBase for QCore {
     }
 
     async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC> {
-        let entry = self.tmsis.lock().await.remove(tmsi)?;
+        loop {
+            let entry = self.tmsis.lock().await.remove(tmsi)?;
 
-        match entry {
-            CoreContextLocator::Stored(c) => Some(c),
-            CoreContextLocator::OwnedByUeTask(ue_id) => {
-                let (sender, receiver) = channel::bounded(1);
-                if self
-                    .dispatch_ue_message(ue_id, UeMessage::TakeContext(sender))
-                    .await
-                    .is_err()
-                {
-                    return None;
+            match entry {
+                CoreContextLocator::Stored(c) => return Some(c),
+
+                CoreContextLocator::OwnedByUeTask(ue_id) => {
+                    let (sender, receiver) = channel::bounded(1);
+                    if self
+                        .dispatch_ue_message(ue_id, UeMessage::TakeContext(sender))
+                        .await
+                        .is_ok()
+                    {
+                        if let Ok(nas_context) = receiver.recv().await {
+                            return Some(nas_context);
+                        }
+                    }
+
+                    // Continue loop to retry
+                    // There is a timing window where, if a UE message handler is simultaneously shutting down,
+                    // we can remove the TMSI entry from the tmsis map, just before the
+                    // UE message handler puts its context back into the map as a new Stored entry.
+                    // Therefore, if the TakeContext message fails, we should retry.
+
+                    // This requires the UE message handler to convert the TMSI entry to Stored
+                    // before it closes down its channel.  That guarantees that if the channel operation fails
+                    // the TMSI entry will be back in the map on the next iteration.
                 }
-                let nas_context = receiver.recv().await;
-                nas_context.ok()
             }
         }
     }
