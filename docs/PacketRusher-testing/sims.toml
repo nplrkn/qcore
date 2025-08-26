@@ -1,0 +1,4 @@
+# This is the default SIM from PacketRusher's config.yml. 
+[imsi-208930000000120]
+ki = "00112233445566778899AABBCCDDEEFF"
+opc = "00112233445566778899AABBCCDDEEFF"
