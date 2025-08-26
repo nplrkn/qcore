@@ -6,6 +6,8 @@ use qcore::{SimCreds, Sqn, Subscriber, SubscriberDb};
 /// For 250 UEs.
 use qcore_tests::{MockUeNgap, framework::*};
 
+// To run this: `cargo test --test load_test --ignored`
+#[ignore = "to speed up normal test runs"]
 #[async_std::test]
 async fn load_test() -> anyhow::Result<()> {
     const UE_COUNT: usize = 200;
