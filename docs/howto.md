@@ -75,7 +75,7 @@ tail -f /tmp/gnb.log | grep [E]
 ```sh
 sudo sysctl -w kernel.yama.ptrace_scope=0
 sudo sysctl -w kernel.kptr_restrict=0
-cargo test --profile bench --test load_test -- --nocapture # note the name of the test binary
+cargo test --profile bench --test load_test -- --ignored --nocapture # note the name of the test binary
 sudo su
 source /opt/intel/oneapi/vtune/latest/env/vars.sh
 # substitue name of test binary in the below
