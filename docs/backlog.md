@@ -16,8 +16,7 @@
 ## Performance
 - iperf framework
 - push to 1000 UEs
-- Release build perf profiling + tuning
-- Reduce memcpy
+- Reduce memcpy?
 
 ## Persistence
 - Paging continuity
