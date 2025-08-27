@@ -1,16 +1,12 @@
 # Backlog
 
 ## In progress
--  SCTP disconnect should queue jump pending NAS requests
 - PacketRusher interop
-  - Cope with case where PacketRusher ignores Nas PduSessionReleaseCommand on Ngap PduSessionResourceReleaseCommand
-  - In particular, Disconnect should not be queued "Queue message (wanted Uplink Nas Transport) got Disconnect"
 - Live testing with multiple phones, update readme documenting interop status.
-- When a procedure is aborted by another message, we should not fail the entire message handler.  Use "stop" to 
-  govern whether it is really fatal.
-- In message handler combine self.stop self.disconnected and self.give_context into a single field?
-- Test script should always time out when doing wait_for_idle, not just in latest test
-- "Procedure failure: SCTP disconnection" should say which procedure failed
+- Tidying
+  - In message handler combine self.stop self.disconnected and self.give_context into a single field?
+  - Test script should always time out when doing wait_for_idle, not just in latest test
+  - "Procedure failure: SCTP disconnection" should say which procedure failed
 
 
 ## Interop

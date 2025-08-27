@@ -364,7 +364,7 @@ impl<T: Transport> MockUe<T> {
         self.send_nas(nas_session_release_request).await
     }
 
-    pub async fn handle_nas_session_release(&mut self) -> Result<()> {
+    pub async fn receive_nas_session_release_command(&mut self) -> Result<()> {
         let nas = self.receive_nas().await?;
         let message = decode_security_protected_sm(nas)?;
         let Nas5gsmMessage::PduSessionReleaseCommand(NasPduSessionReleaseCommand { .. }) = message
@@ -372,6 +372,11 @@ impl<T: Transport> MockUe<T> {
             bail!("Expected NasPduSessionReleaseCommand, got {message:?}");
         };
         info!(&self.logger, "Nas PduSessionReleaseCommand <<");
+        Ok(())
+    }
+
+    pub async fn handle_nas_session_release(&mut self) -> Result<()> {
+        self.receive_nas_session_release_command().await?;
         let nas_session_release_complete = build_nas::pdu_session_release_complete()?;
         info!(&self.logger, "Nas PduSessionReleaseComplete >>");
         self.send_nas(nas_session_release_complete).await

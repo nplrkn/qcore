@@ -16,7 +16,7 @@ use crate::{
     data::UeContext5GC,
     protocols::nas::{ABORT_PROCEDURE, FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED, Tmsi, parse},
 };
-use anyhow::{Result, ensure};
+use anyhow::{Result, anyhow, ensure};
 use nas::DecodedNas;
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gsMessage, Nas5gsmMessage, NasFGsMobileIdentity, NasPduSessionStatus,
@@ -84,9 +84,24 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
                 }
             }
 
-            // This is not the message we are looking for.  Park the top level NAS PDU.  This is rather inefficient
-            // since it means we will decode the inner message again later.
+            // This is not the message we are looking for.  Is it a message that should abort the current procedure?
+            let result = match *nas.0 {
+                // We consider that if we receive a deregistration request, we should drop whatever we are doing and
+                // immmediately tear down the UE context.  If the UE does in fact respond to whatever is the current
+                // procedure, its response will be queued and then discarded by the context cleanup process.
+                // See testcase deregistration_during_nas_request()
+                Nas5gsMessage::Gmm(_, Nas5gmmMessage::DeregistrationRequestFromUe(_)) => {
+                    Err(anyhow!("UE deregistering"))
+                }
+                _ => Ok(()),
+            };
+
+            // Park the top level NAS PDU.  This is rather inefficient since it means we will decode the inner message
+            // again later.
             self.api.unexpected_nas_pdu(nas, expected)?;
+
+            // Continue waiting or abort as appropriate.
+            result?
         }
     }
 
