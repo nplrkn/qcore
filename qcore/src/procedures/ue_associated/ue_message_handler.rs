@@ -217,6 +217,12 @@ impl<A: ProcedureBase> UeMessageHandler<A> {
             _ => (),
         }
 
+        // In the case of an abort message, we clear the queue of all other messages so
+        // we immediately process the abort message in the next round of the dispatch loop.
+        if result.is_err() {
+            self.queue.clear();
+        }
+
         self.queue.push_back(message);
         result
     }

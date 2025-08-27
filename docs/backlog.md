@@ -10,6 +10,7 @@
   govern whether it is really fatal.
 - In message handler combine self.stop self.disconnected and self.give_context into a single field?
 - Test script should always time out when doing wait_for_idle, not just in latest test
+- "Procedure failure: SCTP disconnection" should say which procedure failed
 
 
 ## Interop
