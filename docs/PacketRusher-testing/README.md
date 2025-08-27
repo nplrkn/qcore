@@ -21,6 +21,19 @@ sudo tcpdump -w qcore.pcap -i any sctp
 
 ## Comparative perf testing between Open5GS and QCore
 
+### Switching between QCore and Open5GS
+
+In these instructions we are going to run Open5GS AMF and QCore on the same NGAP port
+in the default namespace.  Since AMF runs as a service, you need to stop it to switch to 
+QCore.
+
+```
+# Stop Open5GS AMF to free up the NGAP port
+sudo systemctl stop open5gs-amfd
+# Start it again
+sudo systemctl start open5gs-amfd
+```
+
 ### Methodology 
 #### Multi-CPU test
 -  We run Open5GS and QCore on bare metal, on the same machine.
