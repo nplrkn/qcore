@@ -1,6 +1,9 @@
 # Backlog
 
 ## In progress
+- PacketRusher interop
+  - Cope with case where PacketRusher ignores Nas PduSessionReleaseCommand on Ngap PduSessionResourceReleaseCommand
+  - In particular, Disconnect should not be queued "Queue message (wanted Uplink Nas Transport) got Disconnect"
 - Live testing with multiple phones, update readme documenting interop status.
 
 ## Interop

@@ -20,7 +20,7 @@ gnodeb:
   # gNodeB's Supported Slices
   slicesupportlist:
     sst: "01"
-    sd: "000001" # optional, can be removed if not used
+    #sd: "000001" # optional, can be removed if not used
 
 # PacketRusher Simulated UE Configuration
 ue:
@@ -63,7 +63,7 @@ ue:
   # in the following slice
   snssai:
     sst: "01"
-    sd: "000001" # optional, can be removed if not used
+    #sd: "000001" # optional, can be removed if not used
 
   # The UE's security capabilities that will be advertised to the AMF
   integrity:

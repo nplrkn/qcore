@@ -42,7 +42,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
                     Nas5gsmMessage::PduSessionReleaseComplete(x) => Some(x),
                     _ => None,
                 },
-                "Pdu session release complete",
+                "Nas PduSessionReleaseComplete",
             )
             .await?;
         self.log_message(">> Nas PduSessionReleaseComplete");
