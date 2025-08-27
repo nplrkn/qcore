@@ -14,7 +14,7 @@ use crate::{
 use asn1_per::SerDes;
 use nas::DecodedNas;
 use ngap::{
-    AmfUeNgapId, Cause, NgapPdu, PduSessionResourceSetupResponseTransfer,
+    AmfUeNgapId, Cause, CauseNas, NgapPdu, PduSessionResourceSetupResponseTransfer,
     UpTransportLayerInformation,
 };
 use slog::{Logger, debug, info};
@@ -123,8 +123,14 @@ impl<'a, B: RanUeBase> NasBase for &mut NgapUeProcedure<'a, B> {
                 [&self.logger],
             );
             async fn register_new_tmsi(&self, [self.ue.local_ran_ue_id], [&self.logger]) -> [u8;4];
-            fn disconnect_ue(&mut self);
     }}
+
+    fn disconnect_ue(&mut self) {
+        // Currently this can only be called in the case of a UE deregistration
+        // so there is no need for the cause to be a parameter.
+        self.release_cause = ngap::Cause::Nas(CauseNas::Deregister);
+        self.api.disconnect_ue();
+    }
 
     fn ue_tac(&self) -> &[u8; 3] {
         &self.ue.tac
