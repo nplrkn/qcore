@@ -1,12 +1,13 @@
 # Backlog
 
 ## In progress
+- Deadly embrace of configuration update and session establishment procedures  
 - PacketRusher Open5SG comparison
 - Live testing with multiple phones, update readme documenting interop status.
 
 
 ## Interop
-- OnePlus: Rejection of Registration Request from Security Mode Command if slice asked for is eMBB / SST 1 with "no network slices available" -  causes OnePlus phone to reregister with MIoT SST 3 / SD 0.
+- OnePlus: Rejection of Registration Request from Security Mode Command if slice asked for is eMBB / SST 1 with "no network slices available" - causes OnePlus phone to reregister with MIoT SST 3 / SD 0.
 - Unhandled RrcReestablishmentRequest
 
 ## Bugs
@@ -28,9 +29,10 @@
 - Reduce number of mandatory command line arguments (e.g. derive IP address from interface, derive MNC/MCC from sims.toml)
 
 ## Function gaps
-- Proper handling of deregistration from UE, including sending of Deregistration accept
+- Implement and test NAS procedure interaction table
+- Registration timeout and refresh (+ update parallelization table)
+- Proper handling of deregistration from UE, including sending of Deregistration accept (+ update parallelization table)
 - Idle / paging
-- Registration timeout and refresh
 - Sessions / IP addresses should not persist forever.  Timeout; flush on TMSI register/service request without session reactivation; flush on IMSI registration? 
 - Large SCTP messages - e.g. unfiltered UE Capability Information
 - UE static IP

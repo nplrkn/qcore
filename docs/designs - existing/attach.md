@@ -43,6 +43,10 @@ sequenceDiagram
   CU->>DU: Nas Registration Accept
   DU->>CU: Nas Registration Complete
   CU->>Core: Nas Registration Complete
+  Core->>CU: Nas Configuration Update
+  CU->>DU: Nas Configuration Update
+  DU->>CU: Nas Configuration Update Complete
+  CU->>Core: Nas Configuration Update Complete
   Note over DU,Core: Session Establishment
   DU->>CU: Nas Pdu Session Establishment Request
   CU->>Core: Nas Pdu Session Establishment Request
