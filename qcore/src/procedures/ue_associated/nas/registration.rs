@@ -19,9 +19,15 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
                 let guti = self.allocate_guti().await;
                 let accept =
                     self.build_registration_accept(guti, reactivation_result, current_sessions);
-                self.ran_context_create(accept).await?;
-                self.receive_registration_complete().await?;
-                self.perform_configuration_update(None).await
+                self.ran_context_create(accept)
+                    .await
+                    .context("context creation")?;
+                self.receive_registration_complete()
+                    .await
+                    .context("awaiting registration complete")?;
+                self.perform_configuration_update(None)
+                    .await
+                    .context("configuration update")
             }
             Err(NasProcedureError::Fail(cause, err)) => {
                 warn!(self.logger, "Reject registration: {:#}", err);
