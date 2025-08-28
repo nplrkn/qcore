@@ -128,6 +128,13 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
                     }
                 }
             }
+            Nas5gmmMessage::ConfigurationUpdateComplete(_) => {
+                // Normally we shouldn't handle a response here, but see 'ue serialization' design doc,
+                // this is a short term hack to allow parallel processing of ConfigurationUpdate and
+                // SessionEstablishment.
+                self.log_message(">> Nas ConfigurationUpdateComplete");
+            }
+
             m => {
                 warn!(self.logger, "Unimplemented NAS UL message {:?}", m);
             }
