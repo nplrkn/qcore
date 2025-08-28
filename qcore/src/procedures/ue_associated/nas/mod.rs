@@ -12,11 +12,9 @@ pub mod uplink_nas;
 
 pub use nas_base::NasBase;
 
-use crate::{
-    data::UeContext5GC,
-    protocols::nas::{ABORT_PROCEDURE, FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED, Tmsi, parse},
-};
-use anyhow::{Result, anyhow, ensure};
+use crate::data::UeContext5GC;
+use crate::nas::{Tmsi, parse};
+use anyhow::{Result, anyhow, bail, ensure};
 use nas::DecodedNas;
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gsMessage, Nas5gsmMessage, NasFGsMobileIdentity, NasPduSessionStatus,
@@ -138,7 +136,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         amf_region: Option<u8>,
         amf_set_and_pointer: &[u8],
         tmsi: &[u8],
-    ) -> Result<bool, u8> {
+    ) -> Result<bool> {
         let guami_matches = amf_set_and_pointer == &self.api.config().amf_ids.0[1..3]
             && amf_region
                 .map(|x| x == self.api.config().amf_ids.0[0])
@@ -158,8 +156,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
             if existing_tmsi.0 == tmsi && guami_matches {
                 return Ok(false);
             } else {
-                warn!(self.logger, "UE not using GUTI it was given");
-                return Err(FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED);
+                bail!("UE not using GUTI it was given");
             }
         }
 
@@ -168,7 +165,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
             match self.api.take_core_context(tmsi).await {
                 Some(c) => {
                     *self.ue = c;
-                    self.ue.tmsi = Some(Tmsi(tmsi.try_into().map_err(|_| ABORT_PROCEDURE)?));
+                    self.ue.tmsi = Some(Tmsi(tmsi.try_into()?));
                     return Ok(false);
                 }
                 None => {
@@ -269,20 +266,13 @@ pub enum NasProcedureError {
 mod prelude {
     pub use super::super::prelude::*;
     pub use super::{NasBase, NasProcedure, NasProcedureError};
-    pub use crate::{nas_abort, nas_fail, nas_filter, nas_request_filter};
+    pub use crate::{nas_filter, nas_request_filter};
 }
 
 #[macro_export]
 macro_rules! nas_fail {
     ($c:expr, $e:expr) => {
         Err(NasProcedureError::Fail($c, $e))
-    };
-}
-
-#[macro_export]
-macro_rules! nas_abort {
-    ($e:expr) => {
-        Err(NasProcedureError::Abort($e))
     };
 }
 

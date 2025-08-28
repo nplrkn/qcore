@@ -101,12 +101,12 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
             // TS24.501 5.5.1.3.5
             // "The UE shall enter the state 5GMM-DEREGISTERED.NORMAL-SERVICE. The UE shall delete any mapped 5G NAS
             // security context or partial native 5G NAS security context."
-            return nas_fail!(
+            return Err(NasProcedureError::Fail(
                 FGMM_CAUSE_IMPLICITLY_DEREGISTERED,
                 anyhow!(
                     "Reject security protected registration update with unknown or missing TMSI in outer message"
-                )
-            );
+                ),
+            ));
         };
 
         // The UE is authenticated based on cleartext IEs in the outer message.  Any non-cleartext IEs (such as those
@@ -148,8 +148,8 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
 
         // Decode (but do not admit) the registration request in the NAS message container.
         let value = nas_message_container.value;
-        let nas = Box::new(decode_nas_5gs_message(&value).or_else(|e| {
-            nas_abort!(anyhow!(
+        let nas = Box::new(decode_nas_5gs_message(&value).map_err(|e| {
+            NasProcedureError::Abort(anyhow!(
                 "NAS decode error - {e} - message bytes: {:?}",
                 value
             ))
@@ -159,17 +159,17 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         {
             Ok(Box::new(registration_request))
         } else {
-            nas_abort!(anyhow!(
+            Err(NasProcedureError::Abort(anyhow!(
                 "Nas message container contained non-registration Nas message {:?}",
                 nas
-            ))
+            )))
         }
     }
 
     async fn query_ue_identity(&mut self) -> Result<Imsi, NasProcedureError> {
         self.identity()
             .await
-            .or_else(|e| nas_fail!(FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED, e))
+            .map_err(|e| NasProcedureError::Fail(FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED, e))
     }
 
     async fn supi_registration(
@@ -181,7 +181,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         self.authentication(imsi).await?;
         self.activate_nas_security(ue_security_capability)
             .await
-            .or_else(|e| nas_abort!(e.context("activating NAS security")))
+            .map_err(|e| NasProcedureError::Abort(e.context("activating NAS security")))
     }
 
     async fn activate_nas_security(
@@ -203,15 +203,15 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
     ) -> Result<(RegistrationType, NasUeSecurityCapability), NasProcedureError> {
         let Some(ue_security_capability) = registration_request.ue_security_capability.clone()
         else {
-            return nas_fail!(
+            return Err(NasProcedureError::Fail(
                 FGMM_CAUSE_IE_NONEXISTENT_OR_NOT_IMPLEMENTED,
-                anyhow!("UE security capability missing from Registration Request")
-            );
+                anyhow!("UE security capability missing from Registration Request"),
+            ));
         };
 
         let (plmn, ret) =
             match crate::nas::parse::fgs_mobile_identity(&registration_request.fgs_mobile_identity)
-                .or_else(|e| nas_fail!(FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED, e))?
+                .map_err(|e| NasProcedureError::Fail(FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED, e))?
             {
                 MobileIdentity::Guti(Guti(plmn, _amf_ids, _tmsi)) => {
                     (plmn, (RegistrationType::Guti, ue_security_capability))
@@ -220,26 +220,26 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
                     (plmn, (RegistrationType::Supi(imsi), ue_security_capability))
                 }
                 x => {
-                    return nas_fail!(
+                    return Err(NasProcedureError::Fail(
                         FGMM_CAUSE_UE_IDENTITY_CANNOT_BE_DERIVED,
                         anyhow!(
                             "Expected Guti or Supi identity on a registration request, got {x:?}"
-                        )
-                    );
+                        ),
+                    ));
                 }
             };
 
         if plmn != self.api.config().plmn {
             // This will cause authentication to fail, because the UE will form its
             // serving network name using its MCC/MNC, and we form ours using our MCC/MNC.
-            return nas_fail!(
+            return Err(NasProcedureError::Fail(
                 FGMM_CAUSE_PLMN_NOT_ALLOWED,
                 anyhow!(
                     "UE PLMN {:?} doesn't match ours {:?}",
                     &plmn,
                     self.api.config().plmn
-                )
-            );
+                ),
+            ));
         }
 
         Ok(ret)
