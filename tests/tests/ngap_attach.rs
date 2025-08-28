@@ -25,7 +25,7 @@ async fn ngap_attach() -> anyhow::Result<()> {
     gnb.handle_pdu_session_resource_setup(ue.gnb_ue_context())
         .await?;
     ue.receive_nas_session_accept().await?;
-    qc.wait_until_idle().await;
+    wait_until_idle(&qc).await?;
 
     pass_through_uplink_ipv4(&ue, &dn).await?;
     pass_through_downlink_ipv4(&dn, &ue).await

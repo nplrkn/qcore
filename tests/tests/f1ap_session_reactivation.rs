@@ -7,7 +7,7 @@ async fn f1ap_session_reactivation() -> anyhow::Result<()> {
     du.perform_f1_setup(qc.ip_addr()).await?;
     let ue =
         MockUeF1ap::new_with_session(nth_imsi(0, &sims), 1, &du, qc.ip_addr(), &logger).await?;
-    qc.wait_until_idle().await;
+    wait_until_idle(&qc).await?;
 
     let ue_data = ue.into();
 

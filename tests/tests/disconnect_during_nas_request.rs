@@ -14,9 +14,5 @@ async fn disconnect_during_nas_request() -> anyhow::Result<()> {
     gnb.disconnect().await;
 
     // Confirm QCore is not still hanging on the pending request.
-    async_std::future::timeout(std::time::Duration::from_millis(500), qc.wait_until_idle())
-        .await
-        .expect("Timeout waiting for UE ping");
-
-    Ok(())
+    wait_until_idle(&qc).await
 }

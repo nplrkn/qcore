@@ -298,10 +298,10 @@ impl ProcedureBase for QCore {
 
     async fn register_new_tmsi(&self, ue_id: u32, logger: &Logger) -> [u8; 4] {
         let tmsi: [u8; 4] = rand::random(); // TODO: 0xffffffff is not a valid TMSI (TS23.003, 2.4))
-        debug!(self.logger, "Assigned {:?}", tmsi);
+        debug!(self.logger, "Assigned TMSI {:?}", tmsi);
 
         self.put_tmsi(
-            tmsi.clone(),
+            tmsi,
             CoreContextLocator::OwnedByUeTask(ue_id),
             "register",
             ue_id,

@@ -12,7 +12,7 @@ use oxirush_nas::{
 impl<'a, B: NasBase> NasProcedure<'a, B> {
     pub async fn uplink_nas(&mut self, nas: Vec<u8>) -> Result<()> {
         let nas = self.nas_decode(&nas)?;
-        self.dispatch(nas).await
+        self.dispatch(nas).await.context("uplink nas")
     }
 
     // Called for the first NAS message from the UE on a new RAN context.
@@ -76,13 +76,17 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
 
         match mm_message {
             Nas5gmmMessage::RegistrationRequest(r) => {
-                self.registration(Box::new(r), security_header).await?;
+                self.registration(Box::new(r), security_header)
+                    .await
+                    .context("registration")?;
             }
             Nas5gmmMessage::ServiceRequest(r) => {
-                self.service(Box::new(r)).await?;
+                self.service(Box::new(r)).await.context("service request")?;
             }
             Nas5gmmMessage::DeregistrationRequestFromUe(r) => {
-                self.deregistration_from_ue(r).await?;
+                self.deregistration_from_ue(r)
+                    .await
+                    .context("deregistration from UE")?;
             }
             Nas5gmmMessage::UlNasTransport(NasUlNasTransport {
                 payload_container,
@@ -106,11 +110,15 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
                         header,
                         Nas5gsmMessage::PduSessionEstablishmentRequest(ref r),
                     ) => {
-                        self.session_establishment(header, r, dnn).await?;
+                        self.session_establishment(header, r, dnn)
+                            .await
+                            .context("session establishment")?;
                     }
                     // TODO: PduSessionModificationRequest(NasPduSessionModificationRequest)
                     Nas5gsMessage::Gsm(header, Nas5gsmMessage::PduSessionReleaseRequest(ref r)) => {
-                        self.ue_requested_session_release(header, r).await?;
+                        self.ue_requested_session_release(header, r)
+                            .await
+                            .context("session release")?;
                     }
                     m => {
                         warn!(

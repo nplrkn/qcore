@@ -91,7 +91,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
                 // procedure, its response will be queued and then discarded by the context cleanup process.
                 // See testcase deregistration_during_nas_request()
                 Nas5gsMessage::Gmm(_, Nas5gmmMessage::DeregistrationRequestFromUe(_)) => {
-                    Err(anyhow!("UE deregistering"))
+                    Err(anyhow!("UE deregister - abort current procedure"))
                 }
                 _ => Ok(()),
             };
@@ -256,10 +256,34 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
     }
 }
 
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum NasProcedureError {
+    #[error("Abort {0}")]
+    Abort(anyhow::Error),
+    #[error("Fail with code {0} {1}")]
+    Fail(u8, anyhow::Error),
+}
+
 mod prelude {
     pub use super::super::prelude::*;
-    pub use super::{NasBase, NasProcedure};
-    pub use crate::{nas_filter, nas_request_filter};
+    pub use super::{NasBase, NasProcedure, NasProcedureError};
+    pub use crate::{nas_abort, nas_fail, nas_filter, nas_request_filter};
+}
+
+#[macro_export]
+macro_rules! nas_fail {
+    ($c:expr, $e:expr) => {
+        Err(NasProcedureError::Fail($c, $e))
+    };
+}
+
+#[macro_export]
+macro_rules! nas_abort {
+    ($e:expr) => {
+        Err(NasProcedureError::Abort($e))
+    };
 }
 
 #[macro_export]

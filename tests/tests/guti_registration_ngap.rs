@@ -7,7 +7,7 @@ async fn guti_registration_ngap() -> anyhow::Result<()> {
     gnb.perform_ng_setup(qc.ip_addr()).await?;
     let mut ue =
         MockUeNgap::new_registered(nth_imsi(0, &sims), 1, &gnb, qc.ip_addr(), &logger).await?;
-    qc.wait_until_idle().await;
+    wait_until_idle(&qc).await?;
 
     // UE reconnects
     let old_ue_context = gnb
@@ -21,7 +21,5 @@ async fn guti_registration_ngap() -> anyhow::Result<()> {
     gnb.handle_initial_context_setup(ue.gnb_ue_context())
         .await?;
     ue.handle_nas_registration_accept().await?;
-    ue.handle_nas_configuration_update().await?;
-
-    Ok(())
+    ue.handle_nas_configuration_update().await
 }

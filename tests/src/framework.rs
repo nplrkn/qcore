@@ -59,6 +59,11 @@ async fn init_common_with_subdb<T>(
     Ok((du_or_gnb, qc, dn, sub_db, logger))
 }
 
+pub async fn wait_until_idle(qc: &QCore) -> Result<()> {
+    async_std::future::timeout(std::time::Duration::from_millis(500), qc.wait_until_idle()).await?;
+    Ok(())
+}
+
 fn exit_on_panic() {
     let orig_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic_info| {

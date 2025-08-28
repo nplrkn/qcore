@@ -12,7 +12,7 @@ enum NasAuthOutcome {
 }
 
 impl<'a, B: NasBase> NasProcedure<'a, B> {
-    pub async fn authentication(&mut self, imsi: &str) -> Result<(), u8> {
+    pub async fn authentication(&mut self, imsi: &str) -> Result<(), NasProcedureError> {
         let mut ksi_retry_done = false;
         let mut resync_retry_done = false;
         loop {
@@ -29,27 +29,26 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
                     self.api
                         .resync_subscriber_sqn(imsi, sqn)
                         .await
-                        .map_err(|e| {
-                            warn!(self.logger, "Resync signature failure - {e}");
-                            ABORT_PROCEDURE
-                        })?;
+                        .or_else(|e| nas_abort!(anyhow!(e).context("Resync signature failure")))?;
                     resync_retry_done = true;
                     debug!(self.logger, "Resynchronized SQN to UE {:02x?}", sqn);
                     continue;
                 }
                 x => {
-                    warn!(self.logger, "Successive auth failures {:?}", x);
-                    return Err(ABORT_PROCEDURE);
+                    return nas_abort!(anyhow!("Successive auth failures {:?}", x));
                 }
             }
         }
     }
 
-    async fn perform_nas_authentication(&mut self, imsi: &str) -> Result<NasAuthOutcome, u8> {
-        let (challenge, auth_params) = self.generate_challenge(imsi).await.map_err(|e| {
-            warn!(self.logger, "While generating challenge - {e}");
-            FGMM_CAUSE_ILLEGAL_UE
-        })?;
+    async fn perform_nas_authentication(
+        &mut self,
+        imsi: &str,
+    ) -> Result<NasAuthOutcome, NasProcedureError> {
+        let (challenge, auth_params) = self
+            .generate_challenge(imsi)
+            .await
+            .or_else(|e| nas_fail!(FGMM_CAUSE_ILLEGAL_UE, e.context("generating challenge")))?;
         let req = crate::nas::build::authentication_request(
             &challenge.rand,
             &challenge.autn,
@@ -64,20 +63,12 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
                 "Authentication result",
             )
             .await
-            .map_err(|e| {
-                warn!(
-                    self.logger,
-                    "While waiting for authentication response - {e}"
-                );
-                ABORT_PROCEDURE
-            })? {
+            .or_else(|e| nas_abort!(anyhow!(e).context("waiting for authentication response")))?
+        {
             Ok(rsp) => {
                 self.log_message(">> Nas AuthenticationResponse");
                 self.check_authentication_response(&rsp, &challenge)
-                    .map_err(|e| {
-                        warn!(self.logger, "Bad authentication respnse - {e}");
-                        ABORT_PROCEDURE
-                    })?;
+                    .or_else(|e| nas_abort!(anyhow!(e.context("Bad authentication response"))))?;
                 Ok(NasAuthOutcome::Kseaf(challenge.kseaf))
             }
             Err(m) => self.authentication_failure(&m, &auth_params, &challenge.rand),
@@ -89,7 +80,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         auth_failure: &NasAuthenticationFailure,
         auth_params: &SubscriberAuthParams,
         rand: &[u8; 16],
-    ) -> Result<NasAuthOutcome, u8> {
+    ) -> Result<NasAuthOutcome, NasProcedureError> {
         self.log_message(">> Nas AuthenticationFailure");
         match auth_failure.fgmm_cause.value {
             FGMM_CAUSE_SYNCH_FAILURE => {
@@ -104,7 +95,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
                             );
                             Ok(NasAuthOutcome::ResyncSqn(auth_params.sqn.0))
                         } else {
-                            Err(ABORT_PROCEDURE)
+                            nas_abort!(e)
                         }
                     }
                 }
@@ -114,8 +105,10 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
                 Ok(NasAuthOutcome::RetryWithNewKSI)
             }
             cause => {
-                warn!(self.logger, "UE failed authentication with cause {cause}");
-                Err(cause)
+                nas_fail!(
+                    cause,
+                    anyhow!("Received authentication failure from UE cause {cause}")
+                )
             }
         }
     }

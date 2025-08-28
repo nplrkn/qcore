@@ -48,7 +48,7 @@ async fn deregistration_during_nas_request() -> anyhow::Result<()> {
 
         // Either way, QCore immediately terminates the UE context.
         gnb.handle_ue_context_release(ue.gnb_ue_context()).await?;
-        qc.wait_until_idle().await;
+        wait_until_idle(&qc).await?;
 
         // Reuse the same UE for the next iteration.
         gnb.reset_ue_context(ue.gnb_ue_context(), qc.ip_addr())

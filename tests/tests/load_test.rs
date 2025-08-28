@@ -66,7 +66,7 @@ async fn load_test() -> anyhow::Result<()> {
             ue.handle_nas_session_release().await?;
             ue.send_nas_deregistration_request().await?;
             gnb.handle_ue_context_release(ue.gnb_ue_context()).await?;
-            qc.wait_until_idle().await;
+            wait_until_idle(&qc).await?;
         }
         run_id += 1;
         if now.elapsed().as_secs() > RUN_DURATION_SECS as u64 {

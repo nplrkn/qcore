@@ -25,6 +25,5 @@ async fn ngap_session_release() -> anyhow::Result<()> {
         .await?;
     ue.handle_nas_session_release().await?;
 
-    qc.wait_until_idle().await;
-    Ok(())
+    wait_until_idle(&qc).await
 }

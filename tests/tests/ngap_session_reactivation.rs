@@ -7,7 +7,7 @@ async fn ngap_session_reactivation() -> anyhow::Result<()> {
     gnb.perform_ng_setup(qc.ip_addr()).await?;
     let ue =
         MockUeNgap::new_with_session(nth_imsi(0, &sims), 1, &gnb, qc.ip_addr(), &logger).await?;
-    qc.wait_until_idle().await;
+    wait_until_idle(&qc).await?;
 
     let mock_ue = ue.into();
 
