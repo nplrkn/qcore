@@ -1,7 +1,7 @@
 # Backlog
 
 ## In progress
-- Deadly embrace of configuration update and session establishment procedures  
+- Figure out a way of getting a perf readout frmo Open5GS + PacketRusher.  (With 200 UEs?)
 - PacketRusher Open5SG comparison
 - Live testing with multiple phones, update readme documenting interop status.
 
@@ -63,6 +63,7 @@
   its session setup request (with no intervening delete) after not liking the response.
 
 ## Tidying + refactoring
+- uplink information transfer in separate module for F1AP?
 - use different forwarding tables for NGAP vs F1AP 
 - test scripts - move to builder pattern (new_with_base() etc)?
 - struct Config should be split into information that is used on startup (which doesn't need to be cloned), and information that is used by procedures (which does need to be cloned) 
