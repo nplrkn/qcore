@@ -236,7 +236,7 @@ impl MockGnb {
                 },
                 tai: Tai {
                     plmn_identity: self.plmn(),
-                    tac: Tac([0, 0, 0]),
+                    tac: Tac([0, 0, 1]),
                 },
                 time_stamp: None,
                 ps_cell_information: None,
