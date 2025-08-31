@@ -25,7 +25,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         )?;
 
         self.log_message("<< Nas PduSessionEstablishmentAccept");
-        let accept = self.ue.nas.encode(accept)?;
+        let accept = self.ue.nas.encode_dl(accept)?;
         self.api.ran_session_setup(&mut session, accept).await?;
         self.ue.pdu_sessions.push(session);
 

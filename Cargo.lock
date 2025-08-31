@@ -1781,6 +1781,7 @@ dependencies = [
  "f1ap",
  "hex",
  "local-ip-address",
+ "nas",
  "ngap",
  "oxirush-nas",
  "pdcp",

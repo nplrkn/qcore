@@ -30,7 +30,7 @@ pub struct NasProcedure<'a, B: NasBase> {
 
 impl<'a, B: NasBase> NasProcedure<'a, B> {
     async fn send_nas(&mut self, nas: Box<Nas5gsMessage>) -> Result<()> {
-        let nas_bytes = self.ue.nas.encode(nas)?;
+        let nas_bytes = self.ue.nas.encode_dl(nas)?;
         self.api.send_nas(nas_bytes).await
     }
 
@@ -114,13 +114,13 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
     }
 
     async fn ran_context_create(&mut self, nas: Box<Nas5gsMessage>) -> Result<()> {
-        let nas = self.ue.nas.encode(nas)?;
+        let nas = self.ue.nas.encode_dl(nas)?;
         debug!(
             self.logger,
             "UL NAS COUNT for kGNB derivation {}",
-            self.ue.nas.ul_nas_count()
+            self.ue.nas.rx_nas_count()
         );
-        let kgnb = security::derive_kgnb(&self.ue.kamf, self.ue.nas.ul_nas_count());
+        let kgnb = security::derive_kgnb(&self.ue.kamf, self.ue.nas.rx_nas_count());
         self.api
             .ran_context_create(
                 &kgnb,

@@ -14,6 +14,7 @@ local-ip-address = "0.6.3"
 f1ap = { path = "../5g-libs/f1ap" }
 ngap = { path = "../5g-libs/ngap" }
 xxap = { path = "../5g-libs/xxap" }
+nas = { path = "../5g-libs/nas" }
 rrc = { path = "../5g-libs/rrc" }
 pdcp = { path = "../5g-libs/pdcp" }
 security = { path = "../5g-libs/security" }

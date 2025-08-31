@@ -1,6 +1,6 @@
-use std::net::Ipv4Addr;
-
+use nas::NasContext;
 use qcore::SubscriberAuthParams;
+use std::net::Ipv4Addr;
 
 pub struct MockUe5GCData {
     pub imsi: String,
@@ -8,6 +8,7 @@ pub struct MockUe5GCData {
     pub guti: Option<[u8; 10]>,
     pub ipv4_addr: Ipv4Addr,
     pub dnn: Option<&'static [u8]>,
+    pub nas_context: NasContext,
 }
 
 impl MockUe5GCData {
@@ -18,6 +19,7 @@ impl MockUe5GCData {
             guti: None,
             ipv4_addr: Ipv4Addr::UNSPECIFIED,
             dnn: None,
+            nas_context: NasContext::default(),
         }
     }
 }

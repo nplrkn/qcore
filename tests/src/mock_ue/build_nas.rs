@@ -1,5 +1,6 @@
 #![allow(clippy::unusual_byte_groupings)]
 use anyhow::Result;
+use nas::NasContext;
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gmmMessageType, Nas5gsMessage, Nas5gsSecurityHeaderType, Nas5gsmMessage,
     Nas5gsmMessageType, NasAuthenticationFailureParameter, NasAuthenticationResponseParameter,
@@ -333,7 +334,10 @@ pub fn identity_response(imsi: &str) -> Result<Vec<u8>> {
     Ok(encode_nas_5gs_message(&message)?)
 }
 
-pub fn security_mode_complete(register_request: Vec<u8>) -> Result<Vec<u8>> {
+pub fn security_mode_complete(
+    register_request: Vec<u8>,
+    nas_ctxt: &mut NasContext,
+) -> Result<Vec<u8>> {
     let message = Nas5gsMessage::Gmm(
         Nas5gmmHeader {
             extended_protocol_discriminator: ExtendedProtocolDiscriminator::FIVEGMM,
@@ -345,7 +349,7 @@ pub fn security_mode_complete(register_request: Vec<u8>) -> Result<Vec<u8>> {
             ..NasSecurityModeComplete::new()
         }),
     );
-    Ok(encode_nas_5gs_message(&message)?)
+    nas_ctxt.encode_ul_with_integrity(Box::new(message))
 }
 
 pub fn registration_complete() -> Result<Vec<u8>> {

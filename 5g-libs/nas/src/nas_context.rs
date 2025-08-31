@@ -9,8 +9,8 @@ use security::nia2::calculate_nia2_mac;
 pub struct NasContext {
     security_activated: bool,
     ik: [u8; 16],
-    dl_count: u32,
-    pub ul_count: u32,
+    tx_count: u32,
+    pub rx_count: u32,
 }
 
 pub type DecodedNas = (Box<Nas5gsMessage>, Option<Nas5gsSecurityHeader>);
@@ -20,8 +20,8 @@ impl NasContext {
         self.security_activated
     }
 
-    pub fn ul_nas_count(&self) -> u32 {
-        self.ul_count
+    pub fn rx_nas_count(&self) -> u32 {
+        self.rx_count
     }
 
     pub fn admit_message(
@@ -41,11 +41,11 @@ impl NasContext {
             // -  GUTI registration should be Integrity Protected
 
             // Replay protection and UL NAS COUNT calculation.
-            let last_rcvd_seq_num = (self.ul_count & 0xff) as u8;
+            let last_rcvd_seq_num = (self.rx_count & 0xff) as u8;
             if last_rcvd_seq_num > 0xf0 && security_header.sequence_number < 0x10 {
                 // u8 overflow of sequence number past of NAS COUNT - see TS33.501, 6.4.3.1.
-                self.ul_count += 0x00000100;
-            } else if security_header.sequence_number <= last_rcvd_seq_num && self.ul_count != 0 {
+                self.rx_count += 0x00000100;
+            } else if security_header.sequence_number <= last_rcvd_seq_num && self.rx_count != 0 {
                 // TS33.501, 6.4.3.2: "Replay protection shall ensure that the receiver only accepts each incoming NAS COUNT
                 // value once using the same NAS security context."
 
@@ -61,7 +61,7 @@ impl NasContext {
                 // );
             }
 
-            self.ul_count = (self.ul_count & 0x00ffff00) | security_header.sequence_number as u32;
+            self.rx_count = (self.rx_count & 0x00ffff00) | security_header.sequence_number as u32;
         } else {
             // TODO: Do not allow plain messages (without security header) except for specific cases
             //bail!("Non security protected NAS message");
@@ -70,36 +70,43 @@ impl NasContext {
         Ok(())
     }
 
-    pub fn encode_with_integrity(&mut self, nas: Box<Nas5gsMessage>) -> Result<Vec<u8>> {
-        let security_header_type = if self.dl_count == 0 {
+    // TS33.501, 6.4.3.1
+    // -  The DIRECTION bit shall be set to 0 for uplink and 1 for downlink.
+    pub fn encode_dl_with_integrity(&mut self, nas: Box<Nas5gsMessage>) -> Result<Vec<u8>> {
+        self.encode_with_integrity(nas, 1)
+    }
+    pub fn encode_ul_with_integrity(&mut self, nas: Box<Nas5gsMessage>) -> Result<Vec<u8>> {
+        self.encode_with_integrity(nas, 0)
+    }
+
+    fn encode_with_integrity(&mut self, nas: Box<Nas5gsMessage>, direction: u8) -> Result<Vec<u8>> {
+        let security_header_type = if self.tx_count == 0 {
             Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext
         } else {
             Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered
         };
 
         let nas =
-            Nas5gsMessage::protect(*nas, security_header_type, 0, (self.dl_count & 0xff) as u8);
+            Nas5gsMessage::protect(*nas, security_header_type, 0, (self.tx_count & 0xff) as u8);
         let mut nas_bytes = encode_nas_5gs_message(&nas)?;
 
         // Run the MAC calculation over the inner message, which starts at byte 6.
 
         // TS33.501, 6.4.3.1
         // -  The BEARER input shall be equal to the NAS connection identifier.
-        // -  The DIRECTION bit shall be set to 0 for uplink and 1 for downlink.
         const BEARER: u8 = 1;
-        const DIRECTION: u8 = 0b1;
 
         let mac = calculate_nia2_mac(
             &self.ik,
-            self.dl_count.to_be_bytes(),
+            self.tx_count.to_be_bytes(),
             BEARER,
-            DIRECTION,
+            direction,
             &nas_bytes[6..],
         );
 
         nas_bytes[2..6].copy_from_slice(&mac);
 
-        self.dl_count = (self.dl_count + 1) & 0xffffff;
+        self.tx_count = (self.tx_count + 1) & 0xffffff;
         Ok(nas_bytes)
     }
 
@@ -124,13 +131,13 @@ impl NasContext {
     pub fn enable_security(&mut self, knasint: [u8; 16]) {
         self.security_activated = true;
         self.ik = knasint;
-        self.ul_count = 0;
-        self.dl_count = 0;
+        self.rx_count = 0;
+        self.tx_count = 0;
     }
 
-    pub fn encode(&mut self, nas: Box<Nas5gsMessage>) -> Result<Vec<u8>> {
+    pub fn encode_dl(&mut self, nas: Box<Nas5gsMessage>) -> Result<Vec<u8>> {
         let nas = if self.security_activated {
-            self.encode_with_integrity(nas)?
+            self.encode_dl_with_integrity(nas)?
         } else {
             encode_nas_5gs_message(&nas)?
         };

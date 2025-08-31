@@ -199,7 +199,7 @@ impl<T: Transport> MockUe<T> {
             bail!("AUTN wrong length");
         };
 
-        let (xres_star, _kseaf) = security::respond_to_challenge(
+        let (xres_star, kseaf) = security::respond_to_challenge(
             &self.data.sub_auth_params.sim_creds.ki,
             &self.data.sub_auth_params.sim_creds.opc,
             "5G:mnc001.mcc001.3gppnetwork.org".as_bytes(),
@@ -209,14 +209,23 @@ impl<T: Transport> MockUe<T> {
         );
         let nas_authentication_response = build_nas::authentication_response(&xres_star)?;
         info!(&self.logger, "Nas AuthenticationResponse <<");
-        self.send_nas(nas_authentication_response).await
+        self.send_nas(nas_authentication_response).await?;
+
+        // This should actually be done on receipt of SecurityModeCommand as we are about to
+        // send SecurityModeComplete.
+        let kamf = security::derive_kamf(&kseaf, self.data.imsi.as_bytes());
+        let knasint = security::derive_knasint(&kamf);
+        self.data.nas_context.enable_security(knasint);
+
+        Ok(())
     }
 
     pub async fn handle_nas_security_mode(&mut self) -> Result<()> {
         ensure_nas!(SecurityModeCommand, self.receive_nas().await?);
         info!(&self.logger, "Nas SecurityModeCommand <<");
         let register_request = self.build_register_request_for_nas_security_mode()?;
-        let nas_security_mode_complete = build_nas::security_mode_complete(register_request)?;
+        let nas_security_mode_complete =
+            build_nas::security_mode_complete(register_request, &mut self.data.nas_context)?;
         info!(&self.logger, "Nas SecurityModeComplete >>");
         self.send_nas(nas_security_mode_complete).await
     }
