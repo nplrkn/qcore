@@ -261,7 +261,7 @@ pub fn service_request(
         paging_restriction: None,
     });
 
-    let outer_message = Nas5gsMessage::Gmm(
+    let message = Nas5gsMessage::Gmm(
         Nas5gmmHeader {
             extended_protocol_discriminator: ExtendedProtocolDiscriminator::FIVEGMM,
             security_header_type: SecurityHeaderType::PLAIN_5GS_NAS_MESSAGE_NOT_SECURITY_PROTECTED,
@@ -270,12 +270,6 @@ pub fn service_request(
         outer_message,
     );
 
-    let message = Nas5gsMessage::protect(
-        outer_message,
-        Nas5gsSecurityHeaderType::IntegrityProtected,
-        0,
-        5,
-    );
     nas_ctxt.encode_ul_with_integrity(Box::new(message))
 }
 
