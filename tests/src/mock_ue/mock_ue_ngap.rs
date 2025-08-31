@@ -132,10 +132,10 @@ impl<'a> MockUeNgap<'a> {
         ue.handle_nas_registration_accept().await?;
         ue.handle_nas_configuration_update().await?;
 
-        gnb.handle_initial_context_setup(ue.gnb_ue_context())
-            .await?;
-        gnb.send_ue_radio_capability_info(ue.gnb_ue_context())
-            .await?;
+        // gnb.handle_initial_context_setup(ue.gnb_ue_context())
+        //     .await?;
+        // gnb.send_ue_radio_capability_info(ue.gnb_ue_context())
+        //     .await?;
 
         // gnb.handle_initial_context_setup(ue.gnb_ue_context())
         //     .await?;
