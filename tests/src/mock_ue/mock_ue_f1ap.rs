@@ -5,6 +5,7 @@ use crate::{
 };
 use anyhow::{Result, anyhow, bail};
 use async_trait::async_trait;
+use qcore::SubscriberAuthParams;
 use rrc::*;
 use slog::{Logger, info};
 use std::{
@@ -120,7 +121,7 @@ impl<'a> Transport for UeF1apMode<'a> {
 
 impl<'a> MockUeF1ap<'a> {
     pub async fn new(
-        imsi: String,
+        (imsi, sub_auth_params): (String, SubscriberAuthParams),
         ue_id: u32,
         du: &'a MockDu,
         cu_ip_addr: &IpAddr,
@@ -132,7 +133,7 @@ impl<'a> MockUeF1ap<'a> {
             nas: None,
         };
         Ok(MockUeF1ap {
-            base: MockUe::new(imsi, ue_id, transport, logger),
+            base: MockUe::new(imsi, sub_auth_params, ue_id, transport, logger),
         })
     }
 
@@ -154,13 +155,13 @@ impl<'a> MockUeF1ap<'a> {
     }
 
     pub async fn new_with_session(
-        imsi: String,
+        (imsi, sub_auth_params): (String, SubscriberAuthParams),
         ue_id: u32,
         du: &'a MockDu,
         cu_ip_addr: &IpAddr,
         logger: &Logger,
     ) -> Result<Self> {
-        let mut ue = Self::new(imsi, ue_id, du, cu_ip_addr, logger).await?;
+        let mut ue = Self::new((imsi, sub_auth_params), ue_id, du, cu_ip_addr, logger).await?;
         ue.perform_rrc_setup().await?;
         ue.handle_nas_authentication().await?;
         ue.handle_nas_security_mode().await?;

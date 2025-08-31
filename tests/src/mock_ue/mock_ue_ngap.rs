@@ -1,5 +1,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
+use qcore::SubscriberAuthParams;
 use slog::Logger;
 use std::{
     net::{IpAddr, Ipv4Addr},
@@ -100,7 +101,7 @@ impl<'a> MockUeNgap<'a> {
     }
 
     pub async fn new(
-        imsi: String,
+        (imsi, sub_auth_params): (String, SubscriberAuthParams),
         ue_id: u32,
         gnb: &'a MockGnb,
         amf_ip_addr: &IpAddr,
@@ -111,18 +112,19 @@ impl<'a> MockUeNgap<'a> {
             gnb_ue_context: gnb.new_ue_context(ue_id, amf_ip_addr).await?,
         };
         Ok(MockUeNgap {
-            base: MockUe::new(imsi, ue_id, transport, logger),
+            base: MockUe::new(imsi, sub_auth_params, ue_id, transport, logger),
         })
     }
 
     pub async fn new_registered(
-        imsi: String,
+        (imsi, sub_auth_params): (String, SubscriberAuthParams),
         ue_id: u32,
         gnb: &'a MockGnb,
-        cu_ip_addr: &IpAddr,
+        amf_ip_addr: &IpAddr,
         logger: &Logger,
     ) -> Result<Self> {
-        let mut ue = MockUeNgap::new(imsi, ue_id, gnb, cu_ip_addr, logger).await?;
+        let mut ue =
+            MockUeNgap::new((imsi, sub_auth_params), ue_id, gnb, amf_ip_addr, logger).await?;
         ue.send_nas_register_request().await?;
         ue.handle_nas_authentication().await?;
         ue.handle_nas_security_mode().await?;
@@ -136,13 +138,15 @@ impl<'a> MockUeNgap<'a> {
     }
 
     pub async fn new_with_session(
-        imsi: String,
+        (imsi, sub_auth_params): (String, SubscriberAuthParams),
         ue_id: u32,
         gnb: &'a MockGnb,
-        cu_ip_addr: &IpAddr,
+        amf_ip_addr: &IpAddr,
         logger: &Logger,
     ) -> Result<Self> {
-        let mut ue = MockUeNgap::new_registered(imsi, ue_id, gnb, cu_ip_addr, logger).await?;
+        let mut ue =
+            MockUeNgap::new_registered((imsi, sub_auth_params), ue_id, gnb, amf_ip_addr, logger)
+                .await?;
 
         // UE establishes PDU session
         ue.send_nas_pdu_session_establishment_request().await?;

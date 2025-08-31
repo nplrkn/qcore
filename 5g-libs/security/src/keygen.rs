@@ -13,6 +13,69 @@ pub struct Challenge {
 }
 type HmacSha256 = Hmac<Sha256>;
 
+// TODO: doesn't check AUTN
+pub fn respond_to_challenge(
+    k: &[u8; 16],
+    opc: &[u8; 16],
+    serving_network_name: &[u8],
+    sqn: &[u8; 6],
+    rand: &[u8; 16],
+    autn: &[u8; 16],
+) -> ([u8; 16], [u8; 32]) {
+    // Serving network name length as a two byte KDF input parameter.
+    let serving_network_name_len_for_kdf = (serving_network_name.len() as u16).to_be_bytes();
+
+    // MAC, XRES, CK, IK, AK
+    let mut m = Milenage::new_with_opc(*k, *opc);
+    let mac = m.f1(&rand, sqn, &AMF);
+    let (xres, ck, ik, ak) = m.f2345(&rand);
+
+    // AMF (authentication and key management field)
+    const AMF: [u8; 2] = [0x80, 0x00];
+
+    // KAUSF* - TS33.501, Annex A.2, using key definition function from TS33.220, B.2.0.
+    let mut kausf = HmacSha256::new_from_slice(&[ck, ik].concat()).expect("Can't fail");
+    kausf.update(&[0x6A]); // FC
+    kausf.update(serving_network_name); // P0 = serving network name
+    kausf.update(&serving_network_name_len_for_kdf); // L0
+    kausf.update(&autn[0..6]); // P1 = SQN ^ AK
+    kausf.update(&[0x00, 0x06]); // L1
+    let kausf: [u8; 32] = kausf.finalize().into_bytes().into();
+
+    // KSEAF - TS33.501, Annex A.6, using key definition function from TS33.220, B.2.0.
+    let mut kseaf = HmacSha256::new_from_slice(&kausf).expect("Can't fail");
+    kseaf.update(&[0x6C]);
+    kseaf.update(serving_network_name); // P0 = serving network name
+    kseaf.update(&serving_network_name_len_for_kdf); // L0
+    let kseaf: [u8; 32] = kseaf.finalize().into_bytes().into();
+
+    // XRES* - TS33.501, Annex A.4, using key definition function from TS33.220, B.2.0.
+    let mut xres_star = HmacSha256::new_from_slice(&[ck, ik].concat()).expect("Can't fail");
+    xres_star.update(&[0x6B]); // FC
+    xres_star.update(serving_network_name); // P0 = serving network name
+    xres_star.update(&serving_network_name_len_for_kdf); // L0
+    xres_star.update(rand); // P1 = RAND
+    xres_star.update(&[0x00, 0x10]); // L1
+    xres_star.update(&xres); // P2 = XRES
+    xres_star.update(&[0x00, 0x08]); // L2
+
+    let xres_star: [u8; 16] = xres_star.finalize().into_bytes()[16..]
+        .try_into()
+        .expect("Can't fail");
+
+    // println!("Challenge response parameters:");
+    // println!("SQN:      {:02x?}", sqn);
+    // println!("K:        {:02x?}", k);
+    // println!("OPC:      {:02x?}", opc);
+    // println!("serving network name: {:02x?}", serving_network_name);
+    // println!("rand:     {:02x?}", rand);
+    // println!("autn:     {:02x?}", autn);
+    // println!("xresstar: {:02x?}", xres_star);
+    // println!("kseaf:    {:02x?}", kseaf);
+
+    (xres_star, kseaf)
+}
+
 pub fn generate_challenge(
     k: &[u8; 16],
     opc: &[u8; 16],

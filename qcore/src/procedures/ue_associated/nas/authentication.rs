@@ -162,6 +162,10 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         // println!("SQN:      {:02x?}", auth_params.sqn);
         // println!("K:        {:02x?}", auth_params.sim_creds.ki);
         // println!("OPC:      {:02x?}", auth_params.sim_creds.opc);
+        // println!(
+        //     "serving network name: {:02x?}",
+        //     self.api.config().serving_network_name.as_bytes()
+        // );
         // println!("rand:     {:02x?}", challenge.rand);
         // println!("autn:     {:02x?}", challenge.autn);
         // println!("xresstar: {:02x?}", challenge.xres_star);

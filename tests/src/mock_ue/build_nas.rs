@@ -276,9 +276,11 @@ pub fn service_request(fg_s_tmsi: NasFGsMobileIdentity) -> Result<Vec<u8>> {
     Ok(encode_nas_5gs_message(&message)?)
 }
 
-pub fn authentication_response() -> Result<Vec<u8>> {
+pub fn authentication_response(xres_star: &[u8; 16]) -> Result<Vec<u8>> {
     let message = Nas5gmmMessage::AuthenticationResponse(NasAuthenticationResponse {
-        authentication_response_parameter: Some(NasAuthenticationResponseParameter::new(vec![])),
+        authentication_response_parameter: Some(NasAuthenticationResponseParameter::new(
+            xres_star.to_vec(),
+        )),
         eap_message: None,
     });
 

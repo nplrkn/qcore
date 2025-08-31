@@ -69,3 +69,19 @@ Best place to start is the AMF logs:
 ```sh
 tail -f /var/log/open5gs/amf.log
 ```
+
+## Restrict to a single CPU
+Suppose we want to restrict qcore to CPU 7 and Open5GS to CPU 8.
+For qcore, this can be done with taskset.
+```
+taskset --cpu-list 7 cargo test --test load_test -- --ignored --nocapture
+``` 
+
+For Open5GS this can be done by adding "AllowedCPUs=" to the systemctl entries.
+```
+sudo systemctl edit <service>
+``` 
+
+## PacketRusher multi-UE
+
+sudo ./packetrusher --config ~/qcore/docs/PacketRusher-testing/config.yml ue

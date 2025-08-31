@@ -4,7 +4,7 @@ use super::{DataNetwork, MockDu, MockUe};
 use anyhow::{Result, bail};
 use qcore::{
     AmfIds, Config, NetworkDisplayName, PdcpSequenceNumberLength, ProgramHandle, QCore,
-    SubscriberDb,
+    SubscriberAuthParams, SubscriberDb,
 };
 use slog::{Drain, Logger, o};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -72,7 +72,7 @@ fn exit_on_panic() {
     }));
 }
 
-fn init_logging() -> Logger {
+pub fn init_logging() -> Logger {
     let decorator = slog_term::TermDecorator::new().build();
     let drain = slog_term::CompactFormat::new(decorator).build();
     let drain = std::sync::Mutex::new(drain).fuse();
@@ -80,7 +80,7 @@ fn init_logging() -> Logger {
     slog::Logger::root(drain, o!())
 }
 
-async fn start_qcore(
+pub async fn start_qcore(
     addr: &str,
     sub_db: SubscriberDb,
     logger: &Logger,
@@ -92,8 +92,8 @@ async fn start_qcore(
             plmn: PlmnIdentity([0x00, 0xf1, 0x10]),
             amf_ids: AmfIds([0x01, 0x01, 0x00]),
             name: Some("QCore".to_string()),
-            serving_network_name: "5G:mnc001.mcc01.3gppnetwork.org".to_string(),
-            skip_ue_authentication_check: true, // saves us having to implement milenage etc in test framework
+            serving_network_name: "5G:mnc001.mcc001.3gppnetwork.org".to_string(),
+            skip_ue_authentication_check: false, // saves us having to implement milenage etc in test framework
             sst: 1,
             ran_interface_name: "lo".to_string(),
             n6_interface_name: "veth1".to_string(),
@@ -151,6 +151,11 @@ pub async fn pass_through_ue_to_ue_ipv4<T: Transport>(
     Ok(())
 }
 
-pub fn nth_imsi(n: usize, sub_db: &SubscriberDb) -> String {
-    sub_db.0.keys().nth(n).unwrap().clone()
+pub fn nth_imsi(n: usize, sub_db: &SubscriberDb) -> (String, SubscriberAuthParams) {
+    sub_db
+        .0
+        .iter()
+        .nth(n)
+        .map(|(x, y)| (x.clone(), y.clone()))
+        .unwrap()
 }

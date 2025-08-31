@@ -11,6 +11,7 @@ use oxirush_nas::{
         NasPduSessionReleaseCommand,
     },
 };
+use qcore::SubscriberAuthParams;
 use slog::{Logger, info, o};
 use std::net::Ipv4Addr;
 
@@ -61,9 +62,15 @@ pub struct MockUe<T: Transport> {
 }
 
 impl<T: Transport> MockUe<T> {
-    pub fn new(imsi: String, ue_id: u32, transport: T, logger: &Logger) -> Self {
+    pub fn new(
+        imsi: String,
+        sub_auth_params: SubscriberAuthParams,
+        ue_id: u32,
+        transport: T,
+        logger: &Logger,
+    ) -> Self {
         MockUe {
-            data: MockUe5GCData::new(imsi),
+            data: MockUe5GCData::new(imsi, sub_auth_params),
             transport,
             logger: logger.new(o!("ue" => ue_id)),
             use_wrong_imsi: false,
@@ -177,8 +184,30 @@ impl<T: Transport> MockUe<T> {
     }
 
     pub async fn handle_nas_authentication(&mut self) -> Result<()> {
-        let _ = self.receive_nas_authentication_request().await?;
-        let nas_authentication_response = build_nas::authentication_response()?;
+        let NasAuthenticationRequest {
+            authentication_parameter_rand: Some(rand),
+            authentication_parameter_autn: Some(autn),
+            ..
+        } = self.receive_nas_authentication_request().await?
+        else {
+            bail!("Missing RAND or AUTN in AuthenticationRequest");
+        };
+        let Ok(rand) = rand.value.try_into() else {
+            bail!("RAND wrong length");
+        };
+        let Ok(autn) = autn.value.try_into() else {
+            bail!("AUTN wrong length");
+        };
+
+        let (xres_star, _kseaf) = security::respond_to_challenge(
+            &self.data.sub_auth_params.sim_creds.ki,
+            &self.data.sub_auth_params.sim_creds.opc,
+            "5G:mnc001.mcc001.3gppnetwork.org".as_bytes(),
+            &self.data.sub_auth_params.sqn.0,
+            &rand,
+            &autn,
+        );
+        let nas_authentication_response = build_nas::authentication_response(&xres_star)?;
         info!(&self.logger, "Nas AuthenticationResponse <<");
         self.send_nas(nas_authentication_response).await
     }

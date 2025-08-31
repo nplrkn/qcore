@@ -11,6 +11,9 @@ use protocols::*;
 
 pub use crate::nas::AmfIds;
 pub use ::xxap::PlmnIdentity;
-pub use data::{Config, NetworkDisplayName, PdcpSequenceNumberLength, SimCreds, Sqn, Subscriber};
+pub use data::{
+    Config, NetworkDisplayName, PdcpSequenceNumberLength, SimCreds, Sqn, Subscriber,
+    SubscriberAuthParams,
+};
 pub use qcore::{ProgramHandle, QCore};
 pub use subscriber_db::SubscriberDb;

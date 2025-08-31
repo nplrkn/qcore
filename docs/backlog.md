@@ -1,8 +1,14 @@
 # Backlog
 
 ## In progress
-- Figure out a way of getting a perf readout frmo Open5GS + PacketRusher.  (With 200 UEs?)
-- PacketRusher Open5SG comparison
+- Get load test executable that can run against QCore based on existing load_test
+  - fix authentication
+  - prove we can push QCore release to 100% on CPU 7 using top
+- Get it running against Open5GS.
+  -  script to populate Open5GS SIMs from sims.toml 
+     -  make sure we set SQN to 0
+  - fix integrity
+- Open5SG comparison
 - Live testing with multiple phones, update readme documenting interop status.
 
 
@@ -64,6 +70,7 @@
 
 ## Tidying + refactoring
 - uplink information transfer in separate module for F1AP?
+- tests are slow to link
 - use different forwarding tables for NGAP vs F1AP 
 - test scripts - move to builder pattern (new_with_base() etc)?
 - struct Config should be split into information that is used on startup (which doesn't need to be cloned), and information that is used by procedures (which does need to be cloned) 
