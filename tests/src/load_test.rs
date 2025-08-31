@@ -56,9 +56,9 @@ pub async fn load_test(amf_ip: &IpAddr, sims: &SubscriberDb, logger: &Logger) ->
             gnb.handle_initial_context_setup_with_session(ue.gnb_ue_context())
                 .await?;
             ue.receive_nas_service_accept().await?;
-            ue.handle_nas_configuration_update().await?;
-            ue.send_nas_pdu_session_release_request().await?;
+            //ue.handle_nas_configuration_update().await?;
 
+            ue.send_nas_pdu_session_release_request().await?;
             gnb.handle_pdu_session_resource_release(ue.gnb_ue_context())
                 .await?;
             ue.handle_nas_session_release().await?;
