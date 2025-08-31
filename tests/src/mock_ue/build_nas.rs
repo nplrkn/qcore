@@ -417,7 +417,6 @@ pub fn pdu_session_establishment_request(
     });
     let ul_nas_transport = NasUlNasTransport {
         dnn,
-        pdu_session_id: Some(NasPduSessionIdentity2::new(1)),
         ..wrap_in_ul_nas_transport(inner_message)
     };
 
@@ -476,7 +475,7 @@ fn wrap_in_ul_nas_transport(inner_message: Vec<u8>) -> NasUlNasTransport {
     NasUlNasTransport {
         payload_container_type: NasPayloadContainerType::new(0b0001), // 5GSM
         payload_container: NasPayloadContainer::new(inner_message),
-        pdu_session_id: None,
+        pdu_session_id: Some(NasPduSessionIdentity2::new(1)),
         old_pdu_session_id: None,
         request_type: None,
         s_nssai: None,
