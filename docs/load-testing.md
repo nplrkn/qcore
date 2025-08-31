@@ -4,8 +4,14 @@
 -  Follow the instructions at https://open5gs.org/open5gs/docs/guide/01-quickstart/ to install MongoDB and Open5GS.
 -  In /etc/open5gs/nrf.yaml, set mcc to 001 and mnc to 01 
 -  In /etc/open5gs/amf.yaml, set mcc and mnc as above in multiple places, plus set the NGAP address to 127.0.0.1. 
--  Confine Open5GS to a CPU of your choice - in this example, CPU 8.
-   - @@@@ 
+-  Confine Open5GS to a CPU of your choice
+   - sudo vi system/multi-user.target.wants/open5gs-*.service
+     -  for each udr,pcf,scp,amf,udm,smf,ausf,bsf,upf,
+     -  add AllowedCPUs=<x> to the [Service] section, where x is the CPU to confine Open5GS to.
+   - same for system/multi-user.target.wants/mongod.service 
+   - sudo systemctl daemon-reload
+   - sudo systemctl restart all of the above services
+   - in top, enter f then use the cursor keys select P, <space>, <esc>
 -  Restart all Open5GS services.
 
 #### Open5GS debugging if needed

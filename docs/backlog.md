@@ -2,14 +2,9 @@
 
 ## In progress
 - Get load test executable that can run against QCore based on existing load_test
-  - fix authentication
-  - prove we can push QCore release to 100% on CPU 7 using top
 - Get it running against Open5GS.
-  -  script to populate Open5GS SIMs from sims.toml 
-     -  make sure we set SQN to 0
-  - fix integrity
-- Open5SG comparison
-- Clean up (compiler warnings, AUTN + naming confusion)
+- Open5SG comparison, with CPU measurements
+- Clean up (readmes, compiler warnings, AUTN + naming confusion)
 - Live testing with multiple phones, update readme documenting interop status.
 
 
