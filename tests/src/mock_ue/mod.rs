@@ -330,12 +330,23 @@ impl<T: Transport> MockUe<T> {
         self.send_nas(nas_session_establishment_request).await
     }
 
+    pub async fn perform_nas_deregistration(&mut self) -> Result<()> {
+        self.send_nas_deregistration_request().await?;
+        self.receive_nas_deregistration_accept().await
+    }
+
     pub async fn send_nas_deregistration_request(&mut self) -> Result<()> {
         let nas_deregistration_request =
             build_nas::deregistration_request(&mut self.data.nas_context)?;
         self.data.guti = None;
         info!(&self.logger, "Nas DeregistrationRequest >>");
         self.send_nas(nas_deregistration_request).await
+    }
+
+    pub async fn receive_nas_deregistration_accept(&mut self) -> Result<()> {
+        ensure_nas!(DeregistrationAcceptFromUe, self.receive_nas().await?);
+        info!(&self.logger, "Nas DeregistrationAccept <<");
+        Ok(())
     }
 
     pub async fn send_nas_service_request(&mut self) -> Result<()> {
