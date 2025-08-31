@@ -146,12 +146,13 @@ impl<T: Transport> MockUe<T> {
         )
     }
 
-    fn build_register_request(&self) -> Result<Vec<u8>> {
+    fn build_register_request(&mut self) -> Result<Vec<u8>> {
         let include_session_1 = self.data.ipv4_addr != Ipv4Addr::UNSPECIFIED;
         if let Some(guti) = self.data.guti {
             if include_session_1 {
                 build_nas::guti_registration_request_with_inner_session_activation(
                     build_nas::mobile_identity_guti(&guti),
+                    &mut self.data.nas_context,
                 )
             } else {
                 build_nas::registration_request(build_nas::mobile_identity_guti(&guti), false)
@@ -164,9 +165,12 @@ impl<T: Transport> MockUe<T> {
         }
     }
 
-    fn build_service_request(&self) -> Result<Vec<u8>> {
+    fn build_service_request(&mut self) -> Result<Vec<u8>> {
         if let Some(guti) = self.data.guti {
-            build_nas::service_request(build_nas::mobile_identity_stmsi(&guti))
+            build_nas::service_request(
+                build_nas::mobile_identity_stmsi(&guti),
+                &mut self.data.nas_context,
+            )
         } else {
             bail!("GUTI missing")
         }
@@ -174,7 +178,8 @@ impl<T: Transport> MockUe<T> {
 
     // Register outside of an RRC Setup Complete on an existing RRC channel
     pub async fn reregister(&mut self) -> Result<()> {
-        self.send_nas(self.build_register_request()?).await
+        let nas_bytes = self.build_register_request()?;
+        self.send_nas(nas_bytes).await
     }
 
     pub async fn receive_nas_authentication_request(&mut self) -> Result<NasAuthenticationRequest> {
@@ -305,7 +310,8 @@ impl<T: Transport> MockUe<T> {
     }
 
     pub async fn send_nas_configuration_update_complete(&mut self) -> Result<()> {
-        let configuration_update_complete = build_nas::configuration_update_complete()?;
+        let configuration_update_complete =
+            build_nas::configuration_update_complete(&mut self.data.nas_context)?;
         info!(&self.logger, "Nas ConfigurationUpdateComplete >>");
         self.send_nas(configuration_update_complete).await
     }
@@ -316,14 +322,17 @@ impl<T: Transport> MockUe<T> {
     }
 
     pub async fn send_nas_pdu_session_establishment_request(&mut self) -> Result<()> {
-        let nas_session_establishment_request =
-            build_nas::pdu_session_establishment_request(self.data.dnn)?;
+        let nas_session_establishment_request = build_nas::pdu_session_establishment_request(
+            self.data.dnn,
+            &mut self.data.nas_context,
+        )?;
         info!(&self.logger, "Nas PduSessionEstablishmentRequest >>");
         self.send_nas(nas_session_establishment_request).await
     }
 
     pub async fn send_nas_deregistration_request(&mut self) -> Result<()> {
-        let nas_deregistration_request = build_nas::deregistration_request()?;
+        let nas_deregistration_request =
+            build_nas::deregistration_request(&mut self.data.nas_context)?;
         self.data.guti = None;
         info!(&self.logger, "Nas DeregistrationRequest >>");
         self.send_nas(nas_deregistration_request).await
@@ -406,7 +415,8 @@ impl<T: Transport> MockUe<T> {
     }
 
     pub async fn send_nas_pdu_session_release_request(&mut self) -> Result<()> {
-        let nas_session_release_request = build_nas::pdu_session_release_request()?;
+        let nas_session_release_request =
+            build_nas::pdu_session_release_request(&mut self.data.nas_context)?;
         info!(&self.logger, "Nas PduSessionReleaseRequest >>");
         self.send_nas(nas_session_release_request).await
     }
@@ -424,7 +434,8 @@ impl<T: Transport> MockUe<T> {
 
     pub async fn handle_nas_session_release(&mut self) -> Result<()> {
         self.receive_nas_session_release_command().await?;
-        let nas_session_release_complete = build_nas::pdu_session_release_complete()?;
+        let nas_session_release_complete =
+            build_nas::pdu_session_release_complete(&mut self.data.nas_context)?;
         info!(&self.logger, "Nas PduSessionReleaseComplete >>");
         self.send_nas(nas_session_release_complete).await
     }
