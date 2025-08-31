@@ -6,9 +6,9 @@ use oxirush_nas::{
     Nas5gsmMessageType, NasAuthenticationFailureParameter, NasAuthenticationResponseParameter,
     NasDeRegistrationType, NasDnn, NasFGmmCause, NasFGsMobileIdentity, NasFGsRegistrationType,
     NasFGsmCapability, NasFGsmCause, NasIntegrityProtectionMaximumDataRate, NasKeySetIdentifier,
-    NasMessageContainer, NasPayloadContainer, NasPayloadContainerType, NasPduSessionStatus,
-    NasPduSessionType, NasSscMode, NasUeSecurityCapability, NasUplinkDataStatus,
-    encode_nas_5gs_message,
+    NasMessageContainer, NasPayloadContainer, NasPayloadContainerType, NasPduSessionIdentity2,
+    NasPduSessionStatus, NasPduSessionType, NasSscMode, NasUeSecurityCapability,
+    NasUplinkDataStatus, encode_nas_5gs_message,
     messages::{
         Nas5gmmHeader, Nas5gsmHeader, NasAuthenticationFailure, NasAuthenticationResponse,
         NasConfigurationUpdateComplete, NasDeregistrationRequestFromUe, NasIdentityResponse,
@@ -423,6 +423,7 @@ pub fn pdu_session_establishment_request(
     });
     let ul_nas_transport = NasUlNasTransport {
         dnn,
+        pdu_session_id: Some(NasPduSessionIdentity2::new(1)),
         ..wrap_in_ul_nas_transport(inner_message)
     };
 
