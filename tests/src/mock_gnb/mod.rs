@@ -65,7 +65,7 @@ impl MockGnb {
     }
 
     pub fn plmn(&self) -> PlmnIdentity {
-        PlmnIdentity([0, 0, 0])
+        PlmnIdentity([0x00, 0xf1, 0x10])
     }
 
     pub async fn disconnect(&mut self) {

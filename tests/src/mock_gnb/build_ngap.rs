@@ -7,14 +7,14 @@ pub fn ng_setup_request() -> Box<NgapPdu> {
     Box::new(NgapPdu::InitiatingMessage(
         InitiatingMessage::NgSetupRequest(NgSetupRequest {
             global_ran_node_id: GlobalRanNodeId::GlobalGnbId(GlobalGnbId {
-                plmn_identity: PlmnIdentity([0, 0, 1]),
+                plmn_identity: PlmnIdentity([0x00, 0xf1, 0x10]),
                 gnb_id: GnbId::GnbId(bitvec![u8,Msb0; 1; 22]),
             }),
             ran_node_name: None,
             supported_ta_list: SupportedTaList(nonempty![SupportedTaItem {
                 tac: Tac([0, 0, 1]),
                 broadcast_plmn_list: BroadcastPlmnList(nonempty![BroadcastPlmnItem {
-                    plmn_identity: PlmnIdentity([0, 0, 1]),
+                    plmn_identity: PlmnIdentity([0x00, 0xf1, 0x10]),
                     tai_slice_support_list: SliceSupportList(nonempty![
                         SliceSupportItem {
                             snssai: Snssai(1, None).into(),

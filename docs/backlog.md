@@ -9,6 +9,7 @@
      -  make sure we set SQN to 0
   - fix integrity
 - Open5SG comparison
+- Clean up (compiler warnings, AUTN + naming confusion)
 - Live testing with multiple phones, update readme documenting interop status.
 
 

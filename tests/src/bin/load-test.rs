@@ -22,6 +22,9 @@ struct Args {
 //     sudo ./target/release/qcore --mcc 001 --mnc 01 --local-ip 127.0.0.1 --ran-interface-name lo --sim-cred-file load_test_sims.toml
 //     RUST_LOG=warn ./target/release/load-test
 
+// With QCore on CPU 7:
+//     taskset --cpu-list 7 sudo ./target/release/qcore --mcc 001 --mnc 01 --local-ip 127.0.0.1 --ran-interface-name lo --sim-cred-file load_test_sims.toml > qcore.log 2>&1
+
 // To run against Open5GS:
 //     cargo build --release
 //     ./target/release/generate-load-test-sims > load_test_sims.toml
