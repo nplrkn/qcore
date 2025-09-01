@@ -128,19 +128,12 @@ impl<'a> MockUeNgap<'a> {
         ue.send_nas_register_request().await?;
         ue.handle_nas_authentication().await?;
         ue.handle_nas_security_mode().await?;
-
+        gnb.handle_initial_context_setup(ue.gnb_ue_context())
+            .await?;
+        gnb.send_ue_radio_capability_info(ue.gnb_ue_context())
+            .await?;
         ue.handle_nas_registration_accept().await?;
         ue.handle_nas_configuration_update().await?;
-
-        // gnb.handle_initial_context_setup(ue.gnb_ue_context())
-        //     .await?;
-
-        // gnb.handle_initial_context_setup(ue.gnb_ue_context())
-        //     .await?;
-        // gnb.send_ue_radio_capability_info(ue.gnb_ue_context())
-        //     .await?;
-        // ue.handle_nas_registration_accept().await?;
-        // ue.handle_nas_configuration_update().await?;
         Ok(ue)
     }
 
@@ -157,7 +150,7 @@ impl<'a> MockUeNgap<'a> {
 
         // UE establishes PDU session
         ue.send_nas_pdu_session_establishment_request().await?;
-        gnb.handle_initial_context_setup_with_session(ue.gnb_ue_context())
+        gnb.handle_pdu_session_resource_setup(ue.gnb_ue_context())
             .await?;
         ue.receive_nas_session_accept().await?;
         gnb.send_ue_radio_capability_info(ue.gnb_ue_context())

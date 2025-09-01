@@ -79,7 +79,7 @@ pub fn initial_ue_message(
             rrc_establishment_cause: RrcEstablishmentCause::MtAccess,
             five_g_s_tmsi,
             amf_set_id: None,
-            ue_context_request: None,
+            ue_context_request: Some(UeContextRequest::Requested),
             allowed_nssai: None,
             source_to_target_amf_information_reroute: None,
             selected_plmn_identity: None,
