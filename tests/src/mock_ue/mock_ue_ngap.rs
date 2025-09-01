@@ -134,8 +134,6 @@ impl<'a> MockUeNgap<'a> {
 
         // gnb.handle_initial_context_setup(ue.gnb_ue_context())
         //     .await?;
-        // gnb.send_ue_radio_capability_info(ue.gnb_ue_context())
-        //     .await?;
 
         // gnb.handle_initial_context_setup(ue.gnb_ue_context())
         //     .await?;
@@ -162,6 +160,8 @@ impl<'a> MockUeNgap<'a> {
         gnb.handle_initial_context_setup_with_session(ue.gnb_ue_context())
             .await?;
         ue.receive_nas_session_accept().await?;
+        gnb.send_ue_radio_capability_info(ue.gnb_ue_context())
+            .await?;
         Ok(ue)
     }
 

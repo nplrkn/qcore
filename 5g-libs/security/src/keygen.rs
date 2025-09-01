@@ -13,15 +13,20 @@ pub struct Challenge {
 }
 type HmacSha256 = Hmac<Sha256>;
 
+pub struct AkaAuthParams {
+    pub autn: [u8; 16],
+    pub xres_star: [u8; 16],
+    pub kseaf: [u8; 32],
+}
+
 // TODO: doesn't check AUTN
-pub fn respond_to_challenge(
+pub fn run_5g_auth(
     k: &[u8; 16],
     opc: &[u8; 16],
     serving_network_name: &[u8],
     sqn: &[u8; 6],
     rand: &[u8; 16],
-    autn: &[u8; 16],
-) -> ([u8; 16], [u8; 32]) {
+) -> AkaAuthParams {
     // Serving network name length as a two byte KDF input parameter.
     let serving_network_name_len_for_kdf = (serving_network_name.len() as u16).to_be_bytes();
 
@@ -32,6 +37,18 @@ pub fn respond_to_challenge(
 
     // AMF (authentication and key management field)
     const AMF: [u8; 2] = [0x80, 0x00];
+
+    // AUTN = SQN ^ AK || AMF || MAC
+    let mut autn = [0u8; 16];
+    autn[0] = sqn[0] ^ ak[0];
+    autn[1] = sqn[1] ^ ak[1];
+    autn[2] = sqn[2] ^ ak[2];
+    autn[3] = sqn[3] ^ ak[3];
+    autn[4] = sqn[4] ^ ak[4];
+    autn[5] = sqn[5] ^ ak[5];
+
+    autn[6..8].copy_from_slice(&AMF);
+    autn[8..16].copy_from_slice(&mac);
 
     // KAUSF* - TS33.501, Annex A.2, using key definition function from TS33.220, B.2.0.
     let mut kausf = HmacSha256::new_from_slice(&[ck, ik].concat()).expect("Can't fail");
@@ -73,7 +90,11 @@ pub fn respond_to_challenge(
     // println!("xresstar: {:02x?}", xres_star);
     // println!("kseaf:    {:02x?}", kseaf);
 
-    (xres_star, kseaf)
+    AkaAuthParams {
+        autn,
+        xres_star,
+        kseaf,
+    }
 }
 
 pub fn generate_challenge(
@@ -88,65 +109,39 @@ pub fn generate_challenge(
     let mut rand = [0u8; 16];
     rand::rng().fill_bytes(&mut rand);
 
-    // Serving network name length as a two byte KDF input parameter.
-    let serving_network_name_len_for_kdf = (serving_network_name.len() as u16).to_be_bytes();
-
-    // MAC, XRES, CK, IK, AK
-    let mut m = Milenage::new_with_opc(*k, *opc);
-    let mac = m.f1(&rand, sqn, &AMF);
-    let (xres, ck, ik, ak) = m.f2345(&rand);
-
-    // AMF (authentication and key management field)
-    const AMF: [u8; 2] = [0x80, 0x00];
-
-    // AUTN = SQN ^ AK || AMF || MAC
-    let mut autn = [0u8; 16];
-    autn[0] = sqn[0] ^ ak[0];
-    autn[1] = sqn[1] ^ ak[1];
-    autn[2] = sqn[2] ^ ak[2];
-    autn[3] = sqn[3] ^ ak[3];
-    autn[4] = sqn[4] ^ ak[4];
-    autn[5] = sqn[5] ^ ak[5];
-
-    autn[6..8].copy_from_slice(&AMF);
-    autn[8..16].copy_from_slice(&mac);
-
-    // Derive KAUSF (as per Annex A.2) and calculate XRES* (as per Annex A.4).
-
-    // KAUSF* - TS33.501, Annex A.2, using key definition function from TS33.220, B.2.0.
-    let mut kausf = HmacSha256::new_from_slice(&[ck, ik].concat()).expect("Can't fail");
-    kausf.update(&[0x6A]); // FC
-    kausf.update(serving_network_name); // P0 = serving network name
-    kausf.update(&serving_network_name_len_for_kdf); // L0
-    kausf.update(&autn[0..6]); // P1 = SQN ^ AK
-    kausf.update(&[0x00, 0x06]); // L1
-    let kausf: [u8; 32] = kausf.finalize().into_bytes().into();
-
-    // KSEAF - TS33.501, Annex A.6, using key definition function from TS33.220, B.2.0.
-    let mut kseaf = HmacSha256::new_from_slice(&kausf).expect("Can't fail");
-    kseaf.update(&[0x6C]);
-    kseaf.update(serving_network_name); // P0 = serving network name
-    kseaf.update(&serving_network_name_len_for_kdf); // L0
-    let kseaf: [u8; 32] = kseaf.finalize().into_bytes().into();
-
-    // XRES* - TS33.501, Annex A.4, using key definition function from TS33.220, B.2.0.
-    let mut xres_star = HmacSha256::new_from_slice(&[ck, ik].concat()).expect("Can't fail");
-    xres_star.update(&[0x6B]); // FC
-    xres_star.update(serving_network_name); // P0 = serving network name
-    xres_star.update(&serving_network_name_len_for_kdf); // L0
-    xres_star.update(&rand); // P1 = RAND
-    xres_star.update(&[0x00, 0x10]); // L1
-    xres_star.update(&xres); // P2 = XRES
-    xres_star.update(&[0x00, 0x08]); // L2
-    let xres_star: [u8; 16] = xres_star.finalize().into_bytes()[16..]
-        .try_into()
-        .expect("Can't fail");
+    let AkaAuthParams {
+        autn,
+        xres_star,
+        kseaf,
+    } = run_5g_auth(k, opc, serving_network_name, sqn, &rand);
 
     Challenge {
         rand,
         autn,
         xres_star,
         kseaf,
+    }
+}
+
+// Returns None if AUTN check fails, otherwise Some((XRES*, KSEAF))
+pub fn respond_to_challenge(
+    k: &[u8; 16],
+    opc: &[u8; 16],
+    serving_network_name: &[u8],
+    sqn: &[u8; 6],
+    rand: &[u8; 16],
+    network_autn: &[u8; 16],
+) -> Option<([u8; 16], [u8; 32])> {
+    let AkaAuthParams {
+        autn,
+        xres_star,
+        kseaf,
+    } = run_5g_auth(k, opc, serving_network_name, sqn, &rand);
+
+    if autn == *network_autn {
+        Some((xres_star, kseaf))
+    } else {
+        None
     }
 }
 

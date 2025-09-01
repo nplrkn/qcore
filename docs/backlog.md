@@ -1,10 +1,10 @@
 # Backlog
 
 ## In progress
-- Get load test executable that can run against QCore based on existing load_test
-- Get it running against Open5GS.
+- Defer NGAP initial context setup until session is created 
 - Open5SG comparison, with CPU measurements
 - Clean up (readmes, compiler warnings, AUTN + naming confusion)
+- Retest readmes and live
 - Live testing with multiple phones, update readme documenting interop status.
 
 
