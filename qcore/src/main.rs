@@ -100,7 +100,7 @@ async fn main() -> Result<()> {
             amf_ids: AmfIds([0x01, 0x00, 0x80]),
             name: Some("QCore".to_string()),
             serving_network_name,
-            skip_ue_authentication_check: false,
+            skip_ue_auts_check: false,
             sst: args.sst,
             ran_interface_name: args.ran_interface_name,
             n6_interface_name: args.n6_interface_name,

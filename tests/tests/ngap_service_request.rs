@@ -25,7 +25,7 @@ async fn ngap_service_request() -> anyhow::Result<()> {
     gnb.handle_initial_context_setup_with_session(ue.gnb_ue_context())
         .await?;
     ue.receive_nas_service_accept().await?;
-    ue.handle_nas_configuration_update().await?;
+    wait_until_idle(&qc).await?;
 
     pass_through_uplink_ipv4(&ue, &dn).await?;
     pass_through_downlink_ipv4(&dn, &ue).await

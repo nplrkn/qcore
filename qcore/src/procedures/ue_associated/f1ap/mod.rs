@@ -9,11 +9,11 @@ use crate::{
     data::{SubscriberAuthParams, UeContextRan, UserplaneSession},
     procedures::{
         UeMessage,
-        ue_associated::{RrcBase, RrcProcedure},
+        ue_associated::{RrcBase, RrcProcedure, ran_ue_base::ReleaseCause},
     },
     qcore::ServedCellsMap,
 };
-use f1ap::{Cause, DlRrcMessageTransferProcedure, F1apPdu, RrcContainer};
+use f1ap::{DlRrcMessageTransferProcedure, F1apPdu, RrcContainer};
 use nas::DecodedNas;
 use rrc::UlDcchMessage;
 use slog::debug;
@@ -23,7 +23,6 @@ pub struct F1apUeProcedure<'a, B: RanUeBase> {
     pub ue: &'a mut UeContextRan,
     pub logger: Logger,
     pub api: B,
-    pub release_cause: Cause,
 }
 
 impl<'a, B: RanUeBase> F1apUeProcedure<'a, B> {
@@ -50,8 +49,7 @@ impl<'a, B: RanUeBase> F1apUeProcedure<'a, B> {
                     self.logger,
                     "DU initiated context release, cause {:?}", r.cause
                 );
-                self.release_cause = r.cause.clone();
-                self.api.disconnect_ue();
+                self.api.disconnect_ue(ReleaseCause::F1ap(r.cause));
             }
             pdu => {
                 debug!(self.logger, "Unsupported F1apPdu");
@@ -111,11 +109,20 @@ impl<'a, B: RanUeBase> RrcBase for &mut F1apUeProcedure<'a, B> {
         async fn lookup_subscriber_creds_and_inc_sqn(&self, imsi: &str) -> Option<SubscriberAuthParams>;
         async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
         async fn register_new_tmsi(&self, [self.ue.local_ran_ue_id], [&self.logger]) -> [u8;4];
+        async fn delete_tmsi(&self, tmsi: [u8; 4]);
         async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
         fn unexpected_pdu<T:Into<UeMessage>>(&mut self, pdu:T, expected: &str) -> Result<()>;
         fn served_cells(&self) -> &ServedCellsMap;
-        fn disconnect_ue(&mut self);
     }}
+
+    fn disconnect_ue(&mut self) {
+        // Currently this can only be called in the case of a UE deregistration
+        // so there is no need for the cause to be a parameter.
+        self.api
+            .disconnect_ue(ReleaseCause::F1ap(f1ap::Cause::RadioNetwork(
+                f1ap::CauseRadioNetwork::NormalRelease,
+            )));
+    }
 
     fn set_ue_rat_capabilities(&mut self, rat_capabilities: Vec<u8>) {
         self.ue.rat_capabilities = Some(rat_capabilities);

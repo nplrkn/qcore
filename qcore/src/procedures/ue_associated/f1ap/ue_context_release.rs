@@ -2,15 +2,15 @@ use super::prelude::*;
 use f1ap::UeContextReleaseComplete;
 
 impl<'a, B: RanUeBase> F1apUeProcedure<'a, B> {
-    pub async fn ue_context_release(&mut self) {
-        if let Err(e) = self.ue_context_release_inner().await {
+    pub async fn ue_context_release(&mut self, cause: f1ap::Cause) {
+        if let Err(e) = self.ue_context_release_inner(cause).await {
             warn!(self.logger, "Failed to release RAN context: {e}");
         }
     }
 
-    async fn ue_context_release_inner(&mut self) -> Result<()> {
+    async fn ue_context_release_inner(&mut self, cause: f1ap::Cause) -> Result<()> {
         let ue_context_release_command =
-            crate::f1ap::build::ue_context_release_command(self.ue, self.release_cause.clone());
+            crate::f1ap::build::ue_context_release_command(self.ue, cause);
         self.log_message("<< F1ap UeContextReleaseCommand");
         let rsp = self
             .api

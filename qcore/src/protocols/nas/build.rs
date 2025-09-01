@@ -13,10 +13,10 @@ use oxirush_nas::{
     NasQosFlowDescriptions, NasQosRules, NasSNssai, NasSecurityAlgorithms, NasSessionAmbr,
     NasUeSecurityCapability, encode_nas_5gs_message,
     messages::{
-        NasAuthenticationRequest, NasConfigurationUpdateCommand, NasDlNasTransport, NasFGmmStatus,
-        NasIdentityRequest, NasPduSessionEstablishmentAccept, NasPduSessionReleaseCommand,
-        NasRegistrationAccept, NasRegistrationReject, NasSecurityModeCommand, NasServiceAccept,
-        NasServiceReject,
+        NasAuthenticationRequest, NasConfigurationUpdateCommand, NasDeregistrationAcceptFromUe,
+        NasDlNasTransport, NasFGmmStatus, NasIdentityRequest, NasPduSessionEstablishmentAccept,
+        NasPduSessionReleaseCommand, NasRegistrationAccept, NasRegistrationReject,
+        NasSecurityModeCommand, NasServiceAccept, NasServiceReject,
     },
 };
 use security::NAS_ABBA;
@@ -409,5 +409,12 @@ pub fn configuration_update_command(
             fg_guti,
             ..NasConfigurationUpdateCommand::new()
         }),
+    ))
+}
+
+pub fn deregistration_accept_from_ue() -> Box<Nas5gsMessage> {
+    Box::new(Nas5gsMessage::new_5gmm(
+        Nas5gmmMessageType::DeregistrationAcceptFromUe,
+        Nas5gmmMessage::DeregistrationAcceptFromUe(NasDeregistrationAcceptFromUe),
     ))
 }

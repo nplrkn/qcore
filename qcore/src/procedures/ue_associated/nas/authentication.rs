@@ -93,7 +93,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
                 match self.try_sqn_resynchronization(auth_failure, &auth_params.sim_creds, rand) {
                     Ok(sqn) => Ok(NasAuthOutcome::ResyncSqn(sqn)),
                     Err(e) => {
-                        if self.api.config().skip_ue_authentication_check {
+                        if self.api.config().skip_ue_auts_check {
                             warn!(
                                 &self.logger,
                                 "Skipping authentication failure for testability - {e}"
@@ -185,12 +185,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
             bail!("Missing authentication response parameter on NasAuthenticationResponse")
         };
 
-        if self.api.config().skip_ue_authentication_check {
-            warn!(
-                self.logger,
-                "Skipping authentication checks for testability reasons"
-            );
-        } else if authentication_response_parameter.value != challenge.xres_star {
+        if authentication_response_parameter.value != challenge.xres_star {
             bail!("Ue responded incorrectly to challenge")
         }
 

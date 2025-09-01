@@ -13,19 +13,18 @@ pub struct Challenge {
 }
 type HmacSha256 = Hmac<Sha256>;
 
-pub struct AkaAuthParams {
-    pub autn: [u8; 16],
-    pub xres_star: [u8; 16],
-    pub kseaf: [u8; 32],
-}
-
-pub fn run_5g_auth(
+pub fn generate_challenge(
     k: &[u8; 16],
     opc: &[u8; 16],
     serving_network_name: &[u8],
     sqn: &[u8; 6],
-    rand: &[u8; 16],
-) -> AkaAuthParams {
+) -> Challenge {
+    // TS33.501, section 6.1.3.2.0
+
+    // RAND
+    let mut rand = [0u8; 16];
+    rand::rng().fill_bytes(&mut rand);
+
     // Serving network name length as a two byte KDF input parameter.
     let serving_network_name_len_for_kdf = (serving_network_name.len() as u16).to_be_bytes();
 
@@ -70,7 +69,7 @@ pub fn run_5g_auth(
     xres_star.update(&[0x6B]); // FC
     xres_star.update(serving_network_name); // P0 = serving network name
     xres_star.update(&serving_network_name_len_for_kdf); // L0
-    xres_star.update(rand); // P1 = RAND
+    xres_star.update(&rand); // P1 = RAND
     xres_star.update(&[0x00, 0x10]); // L1
     xres_star.update(&xres); // P2 = XRES
     xres_star.update(&[0x00, 0x08]); // L2
@@ -89,31 +88,6 @@ pub fn run_5g_auth(
     // println!("xresstar: {:02x?}", xres_star);
     // println!("kseaf:    {:02x?}", kseaf);
 
-    AkaAuthParams {
-        autn,
-        xres_star,
-        kseaf,
-    }
-}
-
-pub fn generate_challenge(
-    k: &[u8; 16],
-    opc: &[u8; 16],
-    serving_network_name: &[u8],
-    sqn: &[u8; 6],
-) -> Challenge {
-    // TS33.501, section 6.1.3.2.0
-
-    // RAND
-    let mut rand = [0u8; 16];
-    rand::rng().fill_bytes(&mut rand);
-
-    let AkaAuthParams {
-        autn,
-        xres_star,
-        kseaf,
-    } = run_5g_auth(k, opc, serving_network_name, sqn, &rand);
-
     Challenge {
         rand,
         autn,
@@ -122,31 +96,10 @@ pub fn generate_challenge(
     }
 }
 
-// Returns None if AUTN check fails, otherwise Some((XRES*, KSEAF))
-// pub fn respond_to_challenge(
-//     k: &[u8; 16],
-//     opc: &[u8; 16],
-//     serving_network_name: &[u8],
-//     sqn: &[u8; 6],
-//     rand: &[u8; 16],
-//     network_autn: &[u8; 16],
-// ) -> Option<([u8; 16], [u8; 32])> {
-//     let AkaAuthParams {
-//         autn,
-//         xres_star,
-//         kseaf,
-//     } = run_5g_auth(k, opc, serving_network_name, sqn, &rand);
-
-//     if autn == *network_autn {
-//         Some((xres_star, kseaf))
-//     } else {
-//         None
-//     }
-// }
-
-// Insecure version that does not authenticate network.
-// Used for load testing where we don't want to trigger SQN resync.
-// Uses the network AUTN without checking it for validity.
+// Insecure version that does not authenticate network
+// and uses the AUTN supplied by the network without checking it for validity.
+// Used for load testing where we don't want to trigger SQN resync
+// and instead want to use whatever SQN the network is tracking.
 pub fn respond_to_challenge_insecure(
     k: &[u8; 16],
     opc: &[u8; 16],

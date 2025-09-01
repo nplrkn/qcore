@@ -9,12 +9,12 @@ use super::prelude::*;
 use crate::{
     Config,
     data::{PduSession, SubscriberAuthParams, UeContext5GC, UeContextRan, UserplaneSession},
-    procedures::ue_associated::{NasBase, NasProcedure},
+    procedures::ue_associated::{NasBase, NasProcedure, ran_ue_base::ReleaseCause},
 };
 use asn1_per::SerDes;
 use nas::DecodedNas;
 use ngap::{
-    AmfUeNgapId, Cause, CauseNas, NgapPdu, PduSessionResourceSetupResponseTransfer,
+    AmfUeNgapId, CauseNas, NgapPdu, PduSessionResourceSetupResponseTransfer,
     UpTransportLayerInformation,
 };
 use slog::{Logger, debug, info};
@@ -23,7 +23,6 @@ pub struct NgapUeProcedure<'a, B: RanUeBase> {
     pub ue: &'a mut UeContextRan,
     pub logger: Logger,
     pub api: B,
-    pub release_cause: Cause,
 }
 
 impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
@@ -51,8 +50,7 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
                     self.logger,
                     "gNB initiated context release, cause {:?}", r.cause
                 );
-                self.release_cause = r.cause.clone();
-                self.api.disconnect_ue();
+                self.api.disconnect_ue(ReleaseCause::Ngap(r.cause));
             }
 
             pdu => {
@@ -123,13 +121,14 @@ impl<'a, B: RanUeBase> NasBase for &mut NgapUeProcedure<'a, B> {
                 [&self.logger],
             );
             async fn register_new_tmsi(&self, [self.ue.local_ran_ue_id], [&self.logger]) -> [u8;4];
+            async fn delete_tmsi(&self, tmsi: [u8; 4]);
     }}
 
     fn disconnect_ue(&mut self) {
         // Currently this can only be called in the case of a UE deregistration
         // so there is no need for the cause to be a parameter.
-        self.release_cause = ngap::Cause::Nas(CauseNas::Deregister);
-        self.api.disconnect_ue();
+        self.api
+            .disconnect_ue(ReleaseCause::Ngap(ngap::Cause::Nas(CauseNas::Deregister)));
     }
 
     fn ue_tac(&self) -> &[u8; 3] {

@@ -23,6 +23,7 @@ pub trait ProcedureBase: Send + Sync + Clone + 'static {
     async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
 
     async fn register_new_tmsi(&self, ue_id: u32, logger: &Logger) -> [u8; 4];
+    async fn delete_tmsi(&self, tmsi: [u8; 4]);
     async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
     async fn put_core_context(
         &self,

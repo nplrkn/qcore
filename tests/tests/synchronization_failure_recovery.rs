@@ -26,10 +26,8 @@ async fn synchronization_failure_recovery() -> anyhow::Result<()> {
 
     // And if the UE reregisters during the lifetime of QCore, it gets the SQN right this time, and there
     // is no need for another synchronization.
-    ue.send_nas_deregistration_request().await?;
+    ue.perform_nas_deregistration().await?;
     du.handle_ue_context_release(ue.du_ue_context()).await?;
-
-    // TODO receive deregistration response
 
     ue.perform_rrc_setup().await?;
     ue.handle_nas_authentication().await?;

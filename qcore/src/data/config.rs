@@ -27,7 +27,7 @@ pub struct Config {
     pub sst: u8,
 
     // Test flags
-    pub skip_ue_authentication_check: bool,
+    pub skip_ue_auts_check: bool,
 
     // AMF IDs (AMF region / AMF set / AMF pointer)
     pub amf_ids: AmfIds,

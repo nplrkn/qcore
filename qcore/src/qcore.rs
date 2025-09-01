@@ -311,6 +311,10 @@ impl ProcedureBase for QCore {
         tmsi
     }
 
+    async fn delete_tmsi(&self, tmsi: [u8; 4]) {
+        self.tmsis.lock().await.remove(&tmsi);
+    }
+
     async fn spawn_ue_message_handler(&self) -> u32 {
         let mut ue_id = rand::random::<u32>();
 

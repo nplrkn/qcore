@@ -3,7 +3,7 @@ use crate::{
     data::{UeContext5GC, UeContextRan, UserplaneSession},
     procedures::{
         UeMessage,
-        ue_associated::{F1apUeProcedure, NgapUeProcedure, RanUeBase},
+        ue_associated::{F1apUeProcedure, NgapUeProcedure, RanUeBase, ran_ue_base::ReleaseCause},
     },
     qcore::ServedCellsMap,
 };
@@ -20,6 +20,7 @@ pub struct UeMessageHandler<A: ProcedureBase> {
     logger: Logger,
     queue: VecDeque<UeMessage>,
     dispatch_status: DispatchStatus,
+    release_cause: ReleaseCause,
 }
 
 impl<A: ProcedureBase> UeMessageHandler<A> {
@@ -32,6 +33,7 @@ impl<A: ProcedureBase> UeMessageHandler<A> {
                 logger,
                 queue: VecDeque::new(),
                 dispatch_status: DispatchStatus::Continue,
+                release_cause: ReleaseCause::None,
             }
             .run(ue_id)
             .await;
@@ -65,12 +67,22 @@ impl<A: ProcedureBase> UeMessageHandler<A> {
         if let DispatchStatus::Disconnected = self.dispatch_status {
             debug!(self.logger, "UE disconnected - skip RAN release");
         } else if self.api.ngap_mode() {
+            let cause = if let ReleaseCause::Ngap(ref cause) = self.release_cause {
+                cause.clone()
+            } else {
+                ngap::Cause::Nas(ngap::CauseNas::NormalRelease)
+            };
             self.ngap_ue_procedure(&mut ue.ran)
-                .ue_context_release()
+                .ue_context_release(cause)
                 .await
         } else {
+            let cause = if let ReleaseCause::F1ap(ref cause) = self.release_cause {
+                cause.clone()
+            } else {
+                f1ap::Cause::RadioNetwork(f1ap::CauseRadioNetwork::NormalRelease)
+            };
             self.f1ap_ue_procedure(&mut ue.ran)
-                .ue_context_release()
+                .ue_context_release(cause)
                 .await
         }
     }
@@ -125,7 +137,6 @@ impl<A: ProcedureBase> UeMessageHandler<A> {
             ue,
             logger: self.logger.clone(),
             api: self,
-            release_cause: ngap::Cause::Nas(ngap::CauseNas::NormalRelease),
         }
     }
 
@@ -137,7 +148,6 @@ impl<A: ProcedureBase> UeMessageHandler<A> {
             ue,
             logger: self.logger.clone(),
             api: self,
-            release_cause: f1ap::Cause::RadioNetwork(f1ap::CauseRadioNetwork::NormalRelease),
         }
     }
 
@@ -277,6 +287,7 @@ impl<A: ProcedureBase> RanUeBase for &mut UeMessageHandler<A> {
             ue_id: u32,
             logger: &Logger,
         ) -> [u8;4];
+        async fn delete_tmsi(&self, tmsi: [u8; 4]);
         async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
     }}
 
@@ -307,8 +318,9 @@ impl<A: ProcedureBase> RanUeBase for &mut UeMessageHandler<A> {
         self.enqueue_message(pdu.into())
     }
 
-    fn disconnect_ue(&mut self) {
+    fn disconnect_ue(&mut self, cause: ReleaseCause) {
         self.dispatch_status = DispatchStatus::Release;
+        self.release_cause = cause;
     }
 }
 

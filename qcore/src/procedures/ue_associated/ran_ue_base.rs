@@ -53,6 +53,13 @@ pub trait RanUeBase {
 
     async fn register_new_tmsi(&self, ue_id: u32, logger: &Logger) -> [u8; 4];
     async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
+    async fn delete_tmsi(&self, tmsi: [u8; 4]);
 
-    fn disconnect_ue(&mut self);
+    fn disconnect_ue(&mut self, cause: ReleaseCause);
+}
+
+pub enum ReleaseCause {
+    None,
+    Ngap(ngap::Cause),
+    F1ap(f1ap::Cause),
 }

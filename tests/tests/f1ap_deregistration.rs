@@ -1,7 +1,7 @@
 use qcore_tests::{MockUeF1ap, framework::*};
 
 #[async_std::test]
-async fn deregistration() -> anyhow::Result<()> {
+async fn f1ap_deregistration() -> anyhow::Result<()> {
     let (mut du, qc, _dn, sims, logger) = init_f1ap().await?;
 
     // Given an established UE context at the DU
@@ -11,12 +11,10 @@ async fn deregistration() -> anyhow::Result<()> {
 
     // When a UE deregisters
     ue.send_nas_deregistration_request().await?;
+    ue.receive_nas_deregistration_accept().await?;
 
     // Then QCore should release the context and accept the deregistration.
     du.handle_ue_context_release(ue.du_ue_context()).await?;
-
-    // TODO - QCore doesn't actually send a deregistration accept yet.
-    //ue.receive_nas_deregistration_accept().await?;
 
     Ok(())
 }

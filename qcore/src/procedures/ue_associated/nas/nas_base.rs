@@ -11,6 +11,7 @@ pub trait NasBase {
 
     async fn register_new_tmsi(&self) -> [u8; 4];
     async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
+    async fn delete_tmsi(&self, tmsi: [u8; 4]);
 
     async fn allocate_userplane_session(&self) -> Result<UserplaneSession>;
     async fn delete_userplane_session(&self, session: &UserplaneSession);

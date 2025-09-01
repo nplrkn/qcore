@@ -62,6 +62,7 @@ pub async fn load_test(amf_ip: &IpAddr, sims: &SubscriberDb, logger: &Logger) ->
             gnb.handle_pdu_session_resource_release(ue.gnb_ue_context())
                 .await?;
             ue.handle_nas_session_release().await?;
+
             ue.perform_nas_deregistration().await?;
             gnb.handle_ue_context_release(ue.gnb_ue_context()).await?;
         }

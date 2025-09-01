@@ -46,7 +46,8 @@ async fn deregistration_during_nas_request() -> anyhow::Result<()> {
             ue.handle_nas_session_release().await?;
         }
 
-        // Either way, QCore immediately terminates the UE context.
+        // Either way, QCore immediately accepts the deregistration and terminates the UE context.
+        ue.receive_nas_deregistration_accept().await?;
         gnb.handle_ue_context_release(ue.gnb_ue_context()).await?;
         wait_until_idle(&qc).await?;
 

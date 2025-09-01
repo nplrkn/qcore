@@ -93,7 +93,7 @@ pub async fn start_qcore(
             amf_ids: AmfIds([0x01, 0x01, 0x00]),
             name: Some("QCore".to_string()),
             serving_network_name: "5G:mnc001.mcc001.3gppnetwork.org".to_string(),
-            skip_ue_authentication_check: false, // saves us having to implement milenage etc in test framework
+            skip_ue_auts_check: true, // saves us having to implement AUTS signature in test framework
             sst: 1,
             ran_interface_name: "lo".to_string(),
             n6_interface_name: "veth1".to_string(),

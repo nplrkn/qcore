@@ -1,10 +1,8 @@
 # Backlog
 
 ## In progress
-- Defer NGAP initial context setup until session is created 
 - Open5SG comparison, with CPU measurements
-- Clean up (readmes, compiler warnings, AUTN + naming confusion)
-- Retest readmes and live
+- Clean up (readmes)
 - Live testing with multiple phones, update readme documenting interop status.
 
 
@@ -13,7 +11,6 @@
 - Unhandled RrcReestablishmentRequest
 
 ## Bugs
-- Release cause propagation from RAN release request - tests should validate
 - Poor download speed in F1ap mode possibly caused by out of order seq nos 
 - PDU session release command should flow on SRB 2, not SRB 1  
 - OAI test broken - simulated UE doesn't send Configuration Update Complete

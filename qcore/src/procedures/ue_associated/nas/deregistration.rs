@@ -10,12 +10,16 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
 
         info!(self.logger, "UE deregistration");
 
-        // TODO - send NAS deregistration accept (UE originating de-registration).
-        // Is this piggy-backed in the RRC Container on the F1 Context Release Command?
+        let response = crate::nas::build::deregistration_accept_from_ue();
+        self.log_message("<< Nas DeregistrationAcceptFromUe");
+        self.send_nas(response).await?;
 
-        // TODO - should we release the RAN context, or is that up to the lower layers?
-        // TODO - we should destroy the UE's 5GC state at this point, whereas in fact we
-        // will currently store it off against the TMSI.
+        // Clear the TMSI - meaning that the 5GC context will not be persisted.
+        match self.ue.tmsi.take() {
+            Some(tmsi) => self.api.delete_tmsi(tmsi.0).await,
+            None => warn!(self.logger, "No TMSI to delete"),
+        }
+
         self.api.disconnect_ue();
         Ok(())
     }

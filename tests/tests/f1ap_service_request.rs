@@ -23,7 +23,6 @@ async fn f1ap_service_request() -> anyhow::Result<()> {
     du.handle_f1_ue_context_setup(ue.du_ue_context()).await?;
     ue.handle_rrc_reconfiguration_with_added_session().await?;
     ue.receive_nas_service_accept().await?;
-    ue.handle_nas_configuration_update().await?;
 
     pass_through_uplink_ipv4(&ue, &dn).await?;
     pass_through_downlink_ipv4(&dn, &ue).await

@@ -145,7 +145,7 @@ impl<'a, B: RrcBase> NasBase for &mut RrcProcedure<'a, B> {
         #[call(unexpected_pdu)]
         fn unexpected_nas_pdu(&mut self, pdu: DecodedNas, expected: &str) -> Result<()>;
         async fn register_new_tmsi(&self) -> [u8; 4];
-
+        async fn delete_tmsi(&self, tmsi: [u8; 4]);
         fn ue_tac(&self) -> &[u8; 3];
         fn disconnect_ue(&mut self);
     }}
