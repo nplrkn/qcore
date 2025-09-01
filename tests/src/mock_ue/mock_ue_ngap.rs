@@ -153,8 +153,6 @@ impl<'a> MockUeNgap<'a> {
         gnb.handle_pdu_session_resource_setup(ue.gnb_ue_context())
             .await?;
         ue.receive_nas_session_accept().await?;
-        gnb.send_ue_radio_capability_info(ue.gnb_ue_context())
-            .await?;
         Ok(ue)
     }
 
