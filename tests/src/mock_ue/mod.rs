@@ -204,16 +204,13 @@ impl<T: Transport> MockUe<T> {
             bail!("AUTN wrong length");
         };
 
-        let Some((xres_star, kseaf)) = security::respond_to_challenge(
+        let (xres_star, kseaf) = security::respond_to_challenge_insecure(
             &self.data.sub_auth_params.sim_creds.ki,
             &self.data.sub_auth_params.sim_creds.opc,
             "5G:mnc001.mcc001.3gppnetwork.org".as_bytes(),
-            &self.data.sub_auth_params.sqn.0,
             &rand,
             &autn,
-        ) else {
-            bail!("AUTN check failed");
-        };
+        );
         let nas_authentication_response = build_nas::authentication_response(&xres_star)?;
         info!(&self.logger, "Nas AuthenticationResponse <<");
         self.send_nas(nas_authentication_response).await?;

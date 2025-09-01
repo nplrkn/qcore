@@ -16,7 +16,7 @@
 #### Open5GS debugging if needed
 Best place to start is the AMF logs:
 ```sh
-tail -f /var/log/open5gs/amf.log
+sudo tail -f /var/log/open5gs/amf.log
 ```
 
 ## Setup
@@ -36,3 +36,5 @@ chmod +x open5gs-dbctl
 ./target/release/provision-open5gs > provision-open5gs
 sh provision-open5gs  # takes a while
 
+# 
+./target/release/load-test
