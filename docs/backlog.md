@@ -1,7 +1,7 @@
 # Backlog
 
 ## In progress
-- Open5SG comparison, with CPU measurements
+- Re-measure, and try a different CPU for Open5GS than CPU 8.
 - Clean up (readmes)
 - Live testing with multiple phones, update readme documenting interop status.
 

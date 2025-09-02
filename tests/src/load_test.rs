@@ -40,6 +40,7 @@ pub async fn load_test(amf_ip: &IpAddr, sims: &SubscriberDb, logger: &Logger) ->
             now.elapsed().as_millis()
         );
         for ue_id in 1..=ue_count {
+            // Registration + session establishment = 13 messages
             let mut ue = MockUeNgap::new_with_session(
                 nth_imsi(ue_id - 1, &sims),
                 ue_id as u32,
@@ -48,21 +49,28 @@ pub async fn load_test(amf_ip: &IpAddr, sims: &SubscriberDb, logger: &Logger) ->
                 &logger,
             )
             .await?;
+
+            // Context release = 3 messages.
             gnb.send_ue_context_release_request(ue.gnb_ue_context())
                 .await?;
             gnb.handle_ue_context_release(ue.gnb_ue_context()).await?;
+
             let _old_ue_context = gnb.reset_ue_context(ue.gnb_ue_context(), amf_ip).await?;
+
+            // Service procedure = 3 messages.
+            // (The NAS service accept is piggybacked on the initial context setup.)
             ue.send_nas_service_request().await?;
             gnb.handle_initial_context_setup_with_session(ue.gnb_ue_context())
                 .await?;
             ue.receive_nas_service_accept().await?;
-            //ue.handle_nas_configuration_update().await?;
 
+            // Session release = 4 messages.
             ue.send_nas_pdu_session_release_request().await?;
             gnb.handle_pdu_session_resource_release(ue.gnb_ue_context())
                 .await?;
             ue.handle_nas_session_release().await?;
 
+            // Deregistration = 4 messages.
             ue.perform_nas_deregistration().await?;
             gnb.handle_ue_context_release(ue.gnb_ue_context()).await?;
         }

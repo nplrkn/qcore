@@ -15,8 +15,8 @@ sequenceDiagram
   participant DN
   Note over DU,Core: Setup
   CU->>Core: SCTP connection
-  CU->>Core: NG Setup Request
-  Core->>CU: NG Setup Response
+  CU->>Core: Ngap Setup Request
+  Core->>CU: Ngap Setup Response
   DU->>CU: SCTP connection
   DU->>CU: F1 Setup Request
   CU->>DU: F1 Setup Response
@@ -24,7 +24,7 @@ sequenceDiagram
   DU->>CU: Rrc SetupRequest / F1 InitialUlRrcMessageTransfer 
   CU->>DU: Rrc Setup Response 
   DU->>CU: Nas Registration Request / Rrc Setup Complete 
-  CU->>Core: NG Initial UE Message + Nas Registration Request
+  CU->>Core: Nas Registration Request/ Ngap Initial UE Message 
   Core->>CU: Nas Authentication Request 
   CU->>DU: Nas Authentication Request 
   DU->>CU: Nas Authentication Response
@@ -33,13 +33,12 @@ sequenceDiagram
   CU->>DU: Nas Security Mode Command
   DU->>CU: Nas Security Mode Complete
   CU->>Core: Nas Security Mode Complete
-  Core->>CU: Ngap Initial Context Setup Request
+  Core->>CU: Nas Registration Accept / Ngap Initial Context Setup Request 
   CU->>DU: Rrc Security Mode Command 
   DU->>CU: Rrc Security Mode Complete
   CU->>DU: Rrc Ue Capability Enquiry 
   DU->>CU: Rrc Ue Capability Information
   CU->>Core: Ngap Initial Context Setup Response
-  Core->>CU: Nas Registration Accept
   CU->>DU: Nas Registration Accept
   DU->>CU: Nas Registration Complete
   CU->>Core: Nas Registration Complete

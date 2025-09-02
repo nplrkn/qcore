@@ -1780,6 +1780,7 @@ dependencies = [
  "clap",
  "f1ap",
  "hex",
+ "hex-literal 1.0.0",
  "local-ip-address",
  "nas",
  "ngap",
