@@ -12,25 +12,9 @@ struct Args {
     amf_ip: Ipv4Addr,
 }
 
-// Whereas tests/load_test.rs runs a single process load test with QCore as a subtask, this
+// Whereas tests/tests/load_test.rs runs a single process load test with QCore as a subtask, this
 // executable allows the load test to be run against a separate 5G core, which could be QCore
 // or another core such as Open5GS.
-//
-// To run against QCore:
-//     cargo build --release
-//     ./target/release/generate-load-test-sims > load_test_sims.toml
-//     sudo ./target/release/qcore --mcc 001 --mnc 01 --local-ip 127.0.0.1 --ran-interface-name lo --sim-cred-file load_test_sims.toml
-//     RUST_LOG=warn ./target/release/load-test
-
-// With QCore on CPU 7:
-//     taskset --cpu-list 7 sudo ./target/release/qcore --mcc 001 --mnc 01 --local-ip 127.0.0.1 --ran-interface-name lo --sim-cred-file load_test_sims.toml > qcore.log 2>&1
-
-// To run against Open5GS:
-//     cargo build --release
-//     ./target/release/generate-load-test-sims > load_test_sims.toml
-//     ./target/release/provision-open5gs
-//     sudo ./target/release/qcore --mcc 001 --mnc 01 --local-ip 127.0.0.1 --ran-interface-name lo --sim-cred-file load_test_sims.toml
-//     RUST_LOG=warn ./target/release/load-test
 
 #[async_std::main]
 async fn main() -> Result<()> {

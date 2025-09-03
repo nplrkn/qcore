@@ -12,10 +12,19 @@ members = [
     "5g-libs/security", 
     "ebpf/ebpf-userplane",
     "ebpf/ebpf-common", 
-    "5g-libs/nas",
+    "5g-libs/nas", 
+    "load-test",
 ]
+
+# We want 
+# - 'cargo run' to run qcore without the need to specify --bin.
+# - 'cargo test' to be able to run any integration test, without the need to specify -p.
+#
+# These requirements, given Cargo limitations (https://github.com/rust-lang/cargo/issues/7290)
+# lead to "load-test" being separated out from the other tests and excluded from default-members. 
 default-members = [
     "qcore",
+    "tests"
 ]
 
 [profile.dev]

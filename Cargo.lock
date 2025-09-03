@@ -1321,6 +1321,39 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d26c52dbd32dccf2d10cac7725f8eae5296885fb5703b261f7d0a0739ec807ab"
 
 [[package]]
+name = "load-test"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "asn1-per",
+ "async-channel 1.9.0",
+ "async-net",
+ "async-std",
+ "async-trait",
+ "clap",
+ "hex",
+ "hex-literal 1.0.0",
+ "local-ip-address",
+ "nas",
+ "ngap",
+ "oxirush-nas",
+ "pdcp",
+ "pnet_packet",
+ "qcore",
+ "qcore-tests",
+ "rand 0.8.5",
+ "rrc",
+ "security",
+ "slog",
+ "slog-async",
+ "slog-envlogger",
+ "slog-term",
+ "stop-token",
+ "toml 0.9.5",
+ "xxap",
+]
+
+[[package]]
 name = "local-ip-address"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
