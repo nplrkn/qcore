@@ -8,6 +8,7 @@
 - Unhandled RrcReestablishmentRequest
 
 ## Bugs
+- "slog-async: logger dropped messages due to channel overflow" - for example, when hitting Ctrl-C at end of PacketRusher test
 - Poor download speed in F1ap mode possibly caused by out of order seq nos 
 - PDU session release command should flow on SRB 2, not SRB 1  
 - OAI test broken - simulated UE doesn't send Configuration Update Complete
