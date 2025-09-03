@@ -140,7 +140,7 @@ dependencies = [
  "asn1-codecs",
  "bitvec",
  "nonempty",
- "num_enum 0.5.11",
+ "num_enum",
 ]
 
 [[package]]
@@ -347,12 +347,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "atomic-counter"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62f447d68cfa5a9ab0c1c862a703da2a65b5ed1b7ce1153c9eb0169506d56019"
-
-[[package]]
 name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -429,15 +423,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.100",
-]
-
-[[package]]
-name = "aya-log-common"
-version = "0.1.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "befef9fe882e63164a2ba0161874e954648a72b0e1c4b361f532d590638c4eec"
-dependencies = [
- "num_enum 0.7.3",
 ]
 
 [[package]]
@@ -900,7 +885,7 @@ dependencies = [
  "async-trait",
  "hex",
  "nonempty",
- "num_enum 0.5.11",
+ "num_enum",
  "slog",
  "xxap",
 ]
@@ -1325,32 +1310,13 @@ name = "load-test"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "asn1-per",
- "async-channel 1.9.0",
- "async-net",
  "async-std",
- "async-trait",
  "clap",
- "hex",
- "hex-literal 1.0.0",
- "local-ip-address",
- "nas",
- "ngap",
- "oxirush-nas",
- "pdcp",
- "pnet_packet",
- "qcore",
  "qcore-tests",
- "rand 0.8.5",
- "rrc",
- "security",
  "slog",
  "slog-async",
  "slog-envlogger",
  "slog-term",
- "stop-token",
- "toml 0.9.5",
- "xxap",
 ]
 
 [[package]]
@@ -1452,7 +1418,7 @@ dependencies = [
  "asn1-per",
  "async-trait",
  "hex",
- "num_enum 0.5.11",
+ "num_enum",
  "slog",
  "xxap",
 ]
@@ -1476,31 +1442,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51d515d32fb182ee37cda2ccdcb92950d6a3c2893aa280e540671c2cd0f3b1d9"
 
 [[package]]
-name = "num_cpus"
-version = "1.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4161fcb6d602d4d2081af7c3a45852d875a03dd337a6bfdd6e06407b61342a43"
-dependencies = [
- "hermit-abi 0.3.9",
- "libc",
-]
-
-[[package]]
 name = "num_enum"
 version = "0.5.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f646caf906c20226733ed5b1374287eb97e3c2a5c227ce668c1f2ce20ae57c9"
 dependencies = [
- "num_enum_derive 0.5.11",
-]
-
-[[package]]
-name = "num_enum"
-version = "0.7.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e613fc340b2220f734a8595782c551f1250e969d87d3be1ae0579e8d4065179"
-dependencies = [
- "num_enum_derive 0.7.3",
+ "num_enum_derive",
 ]
 
 [[package]]
@@ -1513,17 +1460,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
-]
-
-[[package]]
-name = "num_enum_derive"
-version = "0.7.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af1844ef2428cc3e1cb900be36181049ef3d3193c63e43026cfe202983b27a56"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.100",
 ]
 
 [[package]]
@@ -1763,23 +1699,19 @@ dependencies = [
  "async-channel 2.3.1",
  "async-std",
  "async-trait",
- "atomic-counter",
  "aya",
  "aya-build",
- "aya-log-common",
  "bytes",
  "clap",
  "delegate",
  "ebpf-common",
  "f1ap",
  "hex",
- "hex-literal 1.0.0",
  "index-pool",
  "libc",
  "local-ip-address",
  "nas",
  "ngap",
- "num_cpus",
  "oxirush-nas",
  "pdcp",
  "rand 0.9.1",
@@ -1795,7 +1727,7 @@ dependencies = [
  "stop-token",
  "strum",
  "thiserror 2.0.12",
- "toml 0.8.22",
+ "toml",
  "ucs2",
  "xxap",
 ]
@@ -1810,7 +1742,6 @@ dependencies = [
  "async-net",
  "async-std",
  "async-trait",
- "clap",
  "f1ap",
  "hex",
  "hex-literal 1.0.0",
@@ -1825,11 +1756,9 @@ dependencies = [
  "rrc",
  "security",
  "slog",
- "slog-async",
  "slog-envlogger",
  "slog-term",
  "stop-token",
- "toml 0.9.5",
  "xxap",
 ]
 
@@ -1968,7 +1897,7 @@ version = "0.1.0"
 dependencies = [
  "asn1-per",
  "hex",
- "num_enum 0.5.11",
+ "num_enum",
 ]
 
 [[package]]
@@ -2076,15 +2005,6 @@ name = "serde_spanned"
 version = "0.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "87607cb1398ed59d48732e575a4c28a7a8ebf2454b964fe3f224f2afc07909e1"
-dependencies = [
- "serde",
-]
-
-[[package]]
-name = "serde_spanned"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40734c41988f7306bb04f0ecf60ec0f3f1caa34290e4e8ea471dcd3346483b83"
 dependencies = [
  "serde",
 ]
@@ -2416,24 +2336,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05ae329d1f08c4d17a59bed7ff5b5a769d062e64a62d34a3261b219e62cd5aae"
 dependencies = [
  "serde",
- "serde_spanned 0.6.8",
- "toml_datetime 0.6.9",
+ "serde_spanned",
+ "toml_datetime",
  "toml_edit 0.22.26",
-]
-
-[[package]]
-name = "toml"
-version = "0.9.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75129e1dc5000bfbaa9fee9d1b21f974f9fbad9daec557a521ee6e080825f6e8"
-dependencies = [
- "indexmap",
- "serde",
- "serde_spanned 1.0.0",
- "toml_datetime 0.7.0",
- "toml_parser",
- "toml_writer",
- "winnow 0.7.13",
 ]
 
 [[package]]
@@ -2446,22 +2351,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "toml_datetime"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bade1c3e902f58d73d3f294cd7f20391c1cb2fbcb643b73566bc773971df91e3"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "toml_edit"
 version = "0.19.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b5bb770da30e5cbfde35a2d7b9b8a2c4b8ef89548a7a6aeab5c9a576e3e7421"
 dependencies = [
  "indexmap",
- "toml_datetime 0.6.9",
+ "toml_datetime",
  "winnow 0.5.40",
 ]
 
@@ -2473,18 +2369,9 @@ checksum = "310068873db2c5b3e7659d2cc35d21855dbafa50d1ce336397c666e3cb08137e"
 dependencies = [
  "indexmap",
  "serde",
- "serde_spanned 0.6.8",
- "toml_datetime 0.6.9",
+ "serde_spanned",
+ "toml_datetime",
  "toml_write",
- "winnow 0.7.13",
-]
-
-[[package]]
-name = "toml_parser"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b551886f449aa90d4fe2bdaa9f4a2577ad2dde302c61ecf262d80b116db95c10"
-dependencies = [
  "winnow 0.7.13",
 ]
 
@@ -2493,12 +2380,6 @@ name = "toml_write"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bfb942dfe1d8e29a7ee7fcbde5bd2b9a25fb89aa70caea2eba3bee836ff41076"
-
-[[package]]
-name = "toml_writer"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fcc842091f2def52017664b53082ecbbeb5c7731092bad69d2c63050401dfd64"
 
 [[package]]
 name = "tracing"
@@ -2890,10 +2771,9 @@ dependencies = [
  "futures",
  "futures-core",
  "futures-lite 1.13.0",
- "hex",
  "libc",
  "log",
- "num_enum 0.5.11",
+ "num_enum",
  "os_socketaddr",
  "slog",
  "stop-token",

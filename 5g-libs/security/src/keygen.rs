@@ -112,7 +112,7 @@ pub fn respond_to_challenge_insecure(
 
     // MAC, XRES, CK, IK, AK
     let mut m = Milenage::new_with_opc(*k, *opc);
-    let (xres, ck, ik, _ak) = m.f2345(&rand);
+    let (xres, ck, ik, _ak) = m.f2345(rand);
 
     // KAUSF* - TS33.501, Annex A.2, using key definition function from TS33.220, B.2.0.
     let mut kausf = HmacSha256::new_from_slice(&[ck, ik].concat()).expect("Can't fail");

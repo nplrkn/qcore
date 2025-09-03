@@ -7,7 +7,6 @@ edition = "2024"
 
 [dependencies]
 async-trait = "0.1.68"
-hex = "0.4.3"
 anyhow = "1.0.52"
 slog = "2.7.0"
 asn1-per = { path = "../asn1-per" }
@@ -28,6 +27,9 @@ log = "0.4.3"
 stop-token = "0.7.0"
 dashmap = "5.4.0"
 thiserror = "1.0.36"
+
+[dev-dependencies]
+#hex = "0.4.3"
 
 
 [lib]

@@ -56,7 +56,7 @@ sudo systemctl restart mongod
 ```sh
 # Build QCore in release mode
 cd ~/qcore
-cargo build --release -p load-test -p qcore
+cargo build --release -p load-test
 
 # Get Open5GS's dbctl script from github
 wget https://raw.githubusercontent.com/open5gs/open5gs/refs/heads/main/misc/db/open5gs-dbctl

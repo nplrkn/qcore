@@ -42,11 +42,11 @@ pub async fn load_test(amf_ip: &IpAddr, sims: &SubscriberDb, logger: &Logger) ->
         for ue_id in 1..=ue_count {
             // Registration + session establishment = 13 messages
             let mut ue = MockUeNgap::new_with_session(
-                nth_imsi(ue_id - 1, &sims),
+                nth_imsi(ue_id - 1, sims),
                 ue_id as u32,
                 &gnb,
                 amf_ip,
-                &logger,
+                logger,
             )
             .await?;
 
