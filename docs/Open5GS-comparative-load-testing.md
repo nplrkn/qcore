@@ -1,28 +1,31 @@
 # Comparative load testing against Open5GS
 
+We use Open5GS as our example of a classic 5G core architecture, with multiple NFs and internal HTTP service based interface.  Thanks to the authors of Open5GS for their awesome project: https://github.com/open5gs/open5gs.
+
 ## Results
 
-The QCore control plane is >30x faster than Open5GS and has ~50x smaller memory footprint.
+The QCore control plane is >30x faster than Open5GS and has a 30-50x smaller memory footprint.
 
 This is based on measurements from the QCore load test, where
--  Open5GS's time to execute the test message sequence was ~34ms, using ~85% CPU, using 740MB resident memory
--  QCore's time to execute the test message sequence was ~1ms using around ~70% CPU, using 15MB resident memory
+-  Open5GS's time to execute the test message sequence was ~34ms, using ~55% CPU, using 500MB-750MB resident memory
+-  QCore's time to execute the test message sequence was ~1ms using around ~70% CPU, using ~15MB resident memory
 ...when confined to a single logical CPU (hyperhread).
 
 The message rates observed in the test were 
 -  Open5GS: ~800 messages/sec
 -  QCore: ~30k message/sec.
 
-The main time in Open5GS was spent in open5gs-scpd (27%), mongod (15%), open5gs-amfd (13%), 
-open5gs-udmd (8%), and open5gs-smfd (8%).  The main memory usage was in mongod (185MB) and open5gs-smfd (148MB).
-
-This is based on an out-of-the-box Ubuntu install of Open5GS compared to a standard release build of QCore.  Open5GS was not tuned 
+This is using an out-of-the-box Ubuntu install of Open5GS, compared to a standard release build of QCore.  Open5GS was not tuned 
 in any way.
+
+The main time in Open5GS was spent in open5gs-scpd (19%), mongod (9%), open5gs-amfd (9%), 
+open5gs-udmd (8%), and open5gs-smfd (8%).  The main memory usage was in mongod (180MB) and open5gs-smfd (80-150MB).
+
 
 ## Methodology
 
 -  The test message sequence is a 27-message sequence of: registration, configuration update, session establishment, context release, service request, session release, deregistration.  
-   - A message means an N2 NGAP message in either direction.  In many cases it contains a transported N1 NAS message. 
+   -  A message means an NGAP message in either direction.  In many cases it contains a transported NAS message. 
 
 -  The load test tool acts as a single gNB and loops repeatedly through 200 UEs running through the test message sequence for each UE serially.  To get a quick sense of it, 
 
@@ -35,21 +38,24 @@ in any way.
 
 ## Instructions
 
-### Install Open5GS and confine it to a single CPU
+### Install all configure Open5GS
 -  Follow the instructions at https://open5gs.org/open5gs/docs/guide/01-quickstart/ to install MongoDB and Open5GS.
 -  In /etc/open5gs/nrf.yaml, set mcc to 001 and mnc to 01 
 -  In /etc/open5gs/amf.yaml, set mcc and mnc as above (multiple places), and set the NGAP address to 127.0.0.1. 
--  Confine Open5GS to a CPU of your choice
-   - sudo vi system/multi-user.target.wants/open5gs-*.service
-     -  for each udr,pcf,scp,amf,udm,smf,ausf,bsf,upf,
-     -  add AllowedCPUs=<x> to the [Service] section, where x is the CPU to confine Open5GS to.
-   - same for system/multi-user.target.wants/mongod.service 
-   - sudo systemctl daemon-reload
-   - sudo systemctl restart all of the above services
-### Setup SIMs
+
+### Confine Open5GS to a single CPU
+To confine all Open5GS services to CPU 7:
+```sh
+sudo systemctl list-units --output=json 'open5gs*' | jq ".[].unit" | xargs -I{} sudo systemctl set-property {} AllowedCPUs=7
+sudo systemctl set-property mongod AllowedCPUs=7
+sudo systemctl restart "open5gs*"
+sudo systemctl restart mongod
+```
+
+### Provision SIMs
 ```sh
 # Build QCore in release mode
-cd qcore
+cd ~/qcore
 cargo build --release
 
 # Get Open5GS's dbctl script from github

@@ -1,10 +1,7 @@
 # Backlog
 
 ## In progress
-- Re-measure, and try a different CPU for Open5GS than CPU 8.
-- Clean up (readmes)
 - Live testing with multiple phones, update readme documenting interop status.
-
 
 ## Interop
 - OnePlus: Rejection of Registration Request from Security Mode Command if slice asked for is eMBB / SST 1 with "no network slices available" - causes OnePlus phone to reregister with MIoT SST 3 / SD 0.
