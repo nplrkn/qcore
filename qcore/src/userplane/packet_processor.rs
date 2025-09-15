@@ -1,7 +1,7 @@
 #![allow(clippy::unusual_byte_groupings)]
-use super::stats::dump_stats;
-//use super::aya_log::EbpfLogger;
 use super::MAX_UES;
+use super::aya_log::EbpfLogger;
+use super::stats::dump_stats;
 use crate::UserplaneSession;
 use crate::data::PdcpSequenceNumberLength;
 use anyhow::{Result, anyhow, bail, ensure};
@@ -66,7 +66,7 @@ impl PacketProcessor {
         f1u_if_name: &str,
         n6_if_name: &str,
         tun_if_name: &str,
-        _logger: &Logger,
+        logger: &Logger,
     ) -> Result<Ebpf> {
         let gtpu_local_ipv4 = match local_ip {
             IpAddr::V4(addr) => addr.octets(),
@@ -94,9 +94,9 @@ impl PacketProcessor {
             .set_global("TUN_IF_INDEX", &tun_if_index, true)
             .load(data)?;
 
-        // if let Err(e) = EbpfLogger::init_with_logger(&mut ebpf, logger.clone()) {
-        //     warn!(logger, "failed to initialize eBPF logger: {e}");
-        // }
+        if let Err(e) = EbpfLogger::init_with_logger(&mut ebpf, logger.clone()) {
+            warn!(logger, "failed to initialize eBPF logger: {e}");
+        }
 
         let (uplink_program, downlink_program) = if ngap_mode {
             ("tc_uplink_n3", "tc_downlink_n3")
@@ -197,11 +197,18 @@ impl PacketProcessor {
         let mut array = self.uplink_forwarding_table.lock().await;
         array.set(idx as u32, v, 0)?;
 
+        let remote_gtp_addr = u32::from_be_bytes(gtp_remote_ipv4.octets());
+        // TODO: broaden this to check for more invalid addresses.
+        ensure!(
+            remote_gtp_addr != 0xffffffff,
+            "All 1s address not allowed for remote GTP address"
+        );
+
         let v = DlForwardingEntry {
             next_pdcp_seq_num: 0,
             next_nr_seq_num: 0,
             teid: u32::from_be_bytes(remote_tunnel_info.gtp_teid.0),
-            remote_gtp_addr: u32::from_be_bytes(gtp_remote_ipv4.octets()),
+            remote_gtp_addr,
             pdcp_header_length,
         };
         let mut array = self.downlink_forwarding_table.lock().await;
@@ -220,7 +227,14 @@ impl PacketProcessor {
     // Currently the local TEID of the session is retained across de/reactivation.
     pub async fn deactivate_userplane_session(&self, session: &UserplaneSession, logger: &Logger) {
         let idx = session.uplink_gtp_teid.0[3] as u32;
-        self.clear_forwarding_entries(idx, logger).await;
+
+        let mut array = self.downlink_forwarding_table.lock().await;
+        if let Err(e) = array.set(idx, DlForwardingEntry::deactivated(), 0) {
+            warn!(
+                logger,
+                "Error deactivating downlink forwarding entry {} - {}", idx, e
+            )
+        }
         info!(logger, "Deactivated userplane session {}", session);
     }
 

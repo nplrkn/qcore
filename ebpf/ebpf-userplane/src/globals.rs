@@ -20,3 +20,9 @@ pub unsafe fn redirect_to_linux_routing() -> i32 {
     let tun_if_index = core::ptr::read_volatile(&TUN_IF_INDEX);
     bpf_redirect(tun_if_index, BPF_F_INGRESS as u64) as i32
 }
+
+#[inline(always)]
+pub unsafe fn redirect_to_controller() -> i32 {
+    let tun_if_index = core::ptr::read_volatile(&TUN_IF_INDEX);
+    bpf_redirect(tun_if_index, 0 as u64) as i32
+}

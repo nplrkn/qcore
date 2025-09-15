@@ -1,5 +1,7 @@
 use crate::{
-    Config, SubscriberAuthParams, UserplaneSession, data::UeContext5GC, procedures::UeMessage,
+    Config, SubscriberAuthParams, UserplaneSession,
+    data::{UeContext5GC, UePagingInfo},
+    procedures::UeMessage,
     qcore::ServedCellsMap,
 };
 use anyhow::Result;
@@ -52,6 +54,11 @@ pub trait ProcedureBase: Send + Sync + Clone + 'static {
         session: &UserplaneSession,
         logger: &Logger,
     ) -> Result<()>;
-    async fn deactivate_userplane_session(&self, session: &UserplaneSession, logger: &Logger);
+    async fn deactivate_userplane_session(
+        &self,
+        session: &UserplaneSession,
+        paging_info: &UePagingInfo,
+        logger: &Logger,
+    );
     async fn delete_userplane_session(&self, session: &UserplaneSession, logger: &Logger);
 }

@@ -1,6 +1,6 @@
 use crate::{
     ProcedureBase, UeContext,
-    data::{UeContext5GC, UeContextRan, UserplaneSession},
+    data::{UeContext5GC, UeContextRan, UePagingInfo, UserplaneSession},
     procedures::{
         UeMessage,
         ue_associated::{F1apUeProcedure, NgapUeProcedure, RanUeBase, ran_ue_base::ReleaseCause},
@@ -87,10 +87,17 @@ impl<A: ProcedureBase> UeMessageHandler<A> {
         }
     }
 
-    async fn deactivate_pdu_sessions(&mut self, ue: &UeContext) {
+    async fn deactivate_pdu_sessions(&self, ue: &UeContext) {
+        let Some(ref tmsi) = ue.core.tmsi else {
+            return;
+        };
+        let paging_info = UePagingInfo {
+            tmsi: tmsi.0,
+            tac: ue.ran.tac,
+        };
         for session in ue.core.pdu_sessions.iter() {
             self.api
-                .deactivate_userplane_session(&session.userplane_info, &self.logger)
+                .deactivate_userplane_session(&session.userplane_info, &paging_info, &self.logger)
                 .await;
         }
     }
@@ -267,7 +274,7 @@ impl<A: ProcedureBase> RanUeBase for &mut UeMessageHandler<A> {
             logger: &Logger,
         ) -> Result<P::Success, xxap::RequestError<P::Failure>>;
         async fn xxap_indication<P: xxap::Indication>(&self, r: Box<P::Request>, logger: &Logger);
-            async fn commit_userplane_session(
+        async fn commit_userplane_session(
             &self,
             session: &crate::data::UserplaneSession,
             logger: &Logger,

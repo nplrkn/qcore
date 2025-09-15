@@ -34,13 +34,14 @@ toml = "0.8.22"
 local-ip-address = "0.6.3"
 aya = { version = "0.13.1",  default-features = false, features = ["async_std"] }
 aya-build = { version = "0.1.2", default-features = false }
-#aya-log-common = "0.1.15"
+aya-log-common = "0.1.15"
 bytes = "1.10.1"
 thiserror = "2.0.12"
 ebpf-common = { path = "../ebpf/ebpf-common", features = ["user"]}
 strum = "0.27.1"
 ucs2 = "0.3.3"
 delegate = "0.13.4"
+async-tun = "0.10.1"
 
 [build-dependencies]
 anyhow = "1.0.97"

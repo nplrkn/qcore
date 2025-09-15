@@ -82,7 +82,7 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
     }
 
     async fn connect_session_downlink(
-        &self,
+        &mut self,
         pdu_session_resource_setup_response_transfer_bytes: &[u8],
         session: &mut PduSession,
     ) -> Result<()> {

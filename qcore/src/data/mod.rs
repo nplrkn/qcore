@@ -8,6 +8,7 @@ mod ue_context;
 mod ue_context_5gc;
 mod ue_context_ran;
 mod ue_context_rrc;
+mod ue_paging_info;
 mod ue_security_capabilities;
 mod userplane_session;
 
@@ -21,5 +22,6 @@ pub use ue_context::*;
 pub use ue_context_5gc::*;
 pub use ue_context_ran::*;
 pub use ue_context_rrc::*;
+pub use ue_paging_info::*;
 pub use ue_security_capabilities::*;
 pub use userplane_session::*;

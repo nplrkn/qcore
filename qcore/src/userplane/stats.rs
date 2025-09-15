@@ -11,7 +11,7 @@ pub async fn dump_stats(
 ) -> Result<()> {
     const FIRST_NON_RATE: usize = UlRxPkts as usize;
     const FIRST_WARN_IDX: usize = UlDropTooShort as usize;
-    const SAMPLE_INTERVAL_SECS: u64 = 10;
+    const SAMPLE_INTERVAL_SECS: u64 = 1;
     const RATE_APPROX_WINDOW_SECS: u64 = 30;
     const WEIGHT: f64 =
         2.0 / ((RATE_APPROX_WINDOW_SECS as f64 / SAMPLE_INTERVAL_SECS as f64) + 1.0);

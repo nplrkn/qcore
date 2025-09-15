@@ -1,8 +1,12 @@
 use super::subscriber_db::SubscriberDb;
 use super::userplane::PacketProcessor;
+use crate::data::UePagingInfo;
+use crate::downlink_data::{DlBufferBase, DownlinkBuffer};
 use crate::f1ap::{F1AP_BIND_PORT, F1AP_SCTP_PPID};
 use crate::ngap::{NGAP_BIND_PORT, NGAP_SCTP_PPID};
 use crate::procedures::{F1apHandler, NgapHandler, UeMessage, UeMessageHandler};
+use crate::protocols::nas::Tmsi;
+use crate::protocols::ngap::build::paging;
 use crate::{Config, ProcedureBase, Sqn, SubscriberAuthParams, UeContext5GC, UserplaneSession};
 use anyhow::{Result, anyhow, bail};
 use async_std::{
@@ -13,6 +17,7 @@ use async_std::{
 use async_trait::async_trait;
 use aya::Ebpf;
 use f1ap::GnbDuServedCellsItem;
+use ngap::{FiveGTmsi, Tac};
 use slog::{Logger, debug, info, o, warn};
 use std::collections::HashMap;
 use std::net::IpAddr;
@@ -34,6 +39,7 @@ pub struct QCore {
     logger: Logger,
     server_handle: Arc<Mutex<Option<ShutdownHandle>>>,
     packet_processor: PacketProcessor,
+    downlink_data_buffer: DownlinkBuffer,
     ue_tasks: Arc<Mutex<HashMap<u32, Sender<UeMessage>>>>,
     sub_db: Arc<Mutex<SubscriberDb>>,
     tmsis: Arc<Mutex<HashMap<[u8; 4], CoreContextLocator>>>,
@@ -102,6 +108,7 @@ impl QCore {
         sub_db: SubscriberDb,
         ngap_mode: bool,
     ) -> Result<Self> {
+        let tun_interface_name = config.tun_interface_name.clone();
         Ok(Self {
             config,
             stack: Stack::new(SctpTransportProvider::new()),
@@ -109,6 +116,7 @@ impl QCore {
             server_handle: Arc::new(Mutex::new(None)),
             ue_tasks: Arc::new(Mutex::new(HashMap::new())),
             packet_processor,
+            downlink_data_buffer: DownlinkBuffer::new(&tun_interface_name).await?,
             sub_db: Arc::new(Mutex::new(sub_db)),
             tmsis: Arc::new(Mutex::new(HashMap::new())),
             served_cells: Arc::new(Mutex::new(HashMap::new())),
@@ -149,6 +157,8 @@ impl QCore {
         };
 
         *self.server_handle.lock().await = Some(handle);
+
+        let _ = self.downlink_data_buffer.run(self.clone());
 
         Ok(())
     }
@@ -206,6 +216,24 @@ impl QCore {
                 warn!(logger, "Duplicate {tmsi:?} {op} - (owned by {old_ue_id})");
             }
             _ => {}
+        }
+    }
+}
+
+#[async_trait]
+impl DlBufferBase for QCore {
+    async fn page_ue(&self, paging_info: &UePagingInfo) {
+        if self.ngap_mode {
+            let paging = paging(
+                self.config.guami(),
+                FiveGTmsi(paging_info.tmsi),
+                Tac(paging_info.tac),
+            );
+            debug!(self.logger, "<< Ngap Paging");
+            self.xxap_indication::<ngap::PagingProcedure>(paging, &self.logger)
+                .await
+        } else {
+            warn!(self.logger, "Paging not implemented for F1AP mode");
         }
     }
 }
@@ -297,7 +325,13 @@ impl ProcedureBase for QCore {
     }
 
     async fn register_new_tmsi(&self, ue_id: u32, logger: &Logger) -> [u8; 4] {
-        let tmsi: [u8; 4] = rand::random(); // TODO: 0xffffffff is not a valid TMSI (TS23.003, 2.4))
+        let mut tmsi;
+        loop {
+            tmsi = rand::random();
+            if tmsi != [0, 0, 0, 0] || tmsi != [0xff, 0xff, 0xff, 0xff] {
+                break;
+            }
+        }
         debug!(self.logger, "Assigned TMSI {:?}", tmsi);
 
         self.put_tmsi(
@@ -376,7 +410,13 @@ impl ProcedureBase for QCore {
     ) -> Result<()> {
         self.packet_processor
             .commit_userplane_session(session, logger)
-            .await
+            .await?;
+
+        self.downlink_data_buffer
+            .reactivate_ip(&session.ue_ip_addr)
+            .await?;
+
+        Ok(())
     }
 
     async fn delete_userplane_session(&self, session: &UserplaneSession, logger: &Logger) {
@@ -385,9 +425,25 @@ impl ProcedureBase for QCore {
             .await
     }
 
-    async fn deactivate_userplane_session(&self, session: &UserplaneSession, logger: &Logger) {
+    async fn deactivate_userplane_session(
+        &self,
+        session: &UserplaneSession,
+        paging_info: &UePagingInfo,
+        logger: &Logger,
+    ) {
         self.packet_processor
             .deactivate_userplane_session(session, logger)
+            .await;
+
+        debug!(
+            logger,
+            "Arm downlink packet detection for IP {}, will page {}",
+            session.ue_ip_addr,
+            Tmsi(paging_info.tmsi)
+        );
+
+        self.downlink_data_buffer
+            .deactivate_ip(&session.ue_ip_addr, paging_info)
             .await
     }
 }

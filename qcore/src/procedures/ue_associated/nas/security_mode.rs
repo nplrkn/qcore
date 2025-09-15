@@ -2,8 +2,8 @@ use super::prelude::*;
 use oxirush_nas::messages::NasSecurityModeComplete;
 use oxirush_nas::{NasMessageContainer, NasUeSecurityCapability};
 
-// Returns the NAS message container from the SecurityModeComplete
 impl<'a, B: NasBase> NasProcedure<'a, B> {
+    // Returns the NAS message container from the SecurityModeComplete
     pub async fn security_mode(&mut self) -> Result<NasMessageContainer> {
         let security_capabilities =
             NasUeSecurityCapability::new(self.ue.security_capabilities.to_vec());

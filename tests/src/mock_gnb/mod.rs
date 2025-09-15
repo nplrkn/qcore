@@ -217,6 +217,22 @@ impl MockGnb {
         Ok(())
     }
 
+    pub async fn receive_paging(&self, expected_tmsi: &[u8]) -> Result<()> {
+        let pdu = self.receive_pdu().await?;
+        let NgapPdu::InitiatingMessage(InitiatingMessage::Paging(Paging {
+            ue_paging_identity: UePagingIdentity::FiveGSTmsi(ref tmsi),
+            ..
+        })) = *pdu
+        else {
+            bail!("Expected Ngap Paging, got {:?}", pdu)
+        };
+        info!(self.logger, "Ngap Paging <<");
+
+        assert_eq!(expected_tmsi, &tmsi.five_g_tmsi.0);
+
+        Ok(())
+    }
+
     pub async fn send_nas(
         &self,
         ue: &UeContext,

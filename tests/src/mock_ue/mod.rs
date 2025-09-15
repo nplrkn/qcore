@@ -366,7 +366,7 @@ impl<T: Transport> MockUe<T> {
             .await
     }
 
-    pub async fn recv_f1u_data_packet(&self) -> Result<Vec<u8>> {
+    pub async fn recv_ue_data_packet(&self) -> Result<Vec<u8>> {
         self.transport.receive_userplane_packet().await
     }
 

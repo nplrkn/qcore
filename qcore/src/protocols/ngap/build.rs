@@ -288,3 +288,30 @@ pub fn pdu_session_resource_release_command(
         pdu_session_resource_to_release_list_rel_cmd,
     }))
 }
+
+pub fn paging(guami: Guami, five_g_tmsi: FiveGTmsi, tac: Tac) -> Box<Paging> {
+    Box::new(Paging {
+        ue_paging_identity: UePagingIdentity::FiveGSTmsi(FiveGSTmsi {
+            amf_set_id: guami.amf_set_id,
+            amf_pointer: guami.amf_pointer,
+            five_g_tmsi,
+        }),
+        paging_drx: None,
+        tai_list_for_paging: TaiListForPaging(nonempty![TaiListForPagingItem {
+            tai: Tai {
+                plmn_identity: guami.plmn_identity,
+                tac
+            }
+        }]),
+        paging_priority: None,
+        ue_radio_capability_for_paging: None,
+        paging_origin: None,
+        assistance_data_for_paging: None,
+        nb_iot_paging_e_drx_info: None,
+        nb_iot_paging_drx: None,
+        enhanced_coverage_restriction: None,
+        wus_assistance_information: None,
+        paginge_drx_information: None,
+        c_emode_brestricted: None,
+    })
+}

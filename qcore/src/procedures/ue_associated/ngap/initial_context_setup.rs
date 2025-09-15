@@ -4,7 +4,7 @@ use ngap::{InitialContextSetupResponse, PduSessionResourceSetupUnsuccessfulTrans
 
 impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
     pub async fn initial_context_setup(
-        &self,
+        &mut self,
         kgnb: &[u8; 32],
         nas_pdu: Vec<u8>,
         session_list: &mut Vec<PduSession>,
@@ -70,7 +70,7 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
     }
 
     async fn connect_matching_session(
-        &self,
+        &mut self,
         session: &mut PduSession,
         rsp: &InitialContextSetupResponse,
     ) -> Result<()> {

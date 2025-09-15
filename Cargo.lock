@@ -140,7 +140,7 @@ dependencies = [
  "asn1-codecs",
  "bitvec",
  "nonempty",
- "num_enum",
+ "num_enum 0.5.11",
 ]
 
 [[package]]
@@ -347,6 +347,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-tun"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1e0017659415e2f501885ad31cfa43498faff6d6b760e92c8b71ebf3043c117"
+dependencies = [
+ "async-std",
+ "libc",
+ "mac_address",
+ "nix 0.24.3",
+]
+
+[[package]]
 name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -423,6 +435,48 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.100",
+]
+
+[[package]]
+name = "aya-log-common"
+version = "0.1.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "befef9fe882e63164a2ba0161874e954648a72b0e1c4b361f532d590638c4eec"
+dependencies = [
+ "num_enum 0.7.4",
+]
+
+[[package]]
+name = "aya-log-ebpf"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae348f459df78a79e5cd5e164b6562b927033b97ca3b033605b341a474f44510"
+dependencies = [
+ "aya-ebpf",
+ "aya-log-common",
+ "aya-log-ebpf-macros",
+]
+
+[[package]]
+name = "aya-log-ebpf-macros"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6d8251a75f56077db51892041aa6b77c70ef2723845d7a210979700b2f01bc4"
+dependencies = [
+ "aya-log-common",
+ "aya-log-parser",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.100",
+]
+
+[[package]]
+name = "aya-log-parser"
+version = "0.1.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14b102eb5c88c9aa0b49102d3fbcee08ecb0dfa81014f39b373311de7a7032cb"
+dependencies = [
+ "aya-log-common",
 ]
 
 [[package]]
@@ -577,6 +631,12 @@ name = "cfg-if"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
+
+[[package]]
+name = "cfg_aliases"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
 name = "cipher"
@@ -822,6 +882,7 @@ name = "ebpf-userplane"
 version = "0.1.0"
 dependencies = [
  "aya-ebpf",
+ "aya-log-ebpf",
  "ebpf-common",
  "network-types",
  "which",
@@ -885,7 +946,7 @@ dependencies = [
  "async-trait",
  "hex",
  "nonempty",
- "num_enum",
+ "num_enum 0.5.11",
  "slog",
  "xxap",
 ]
@@ -1351,10 +1412,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "mac_address"
+version = "1.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0aeb26bf5e836cc1c341c8106051b573f1766dfa05aa87f0b98be5e51b02303"
+dependencies = [
+ "nix 0.29.0",
+ "winapi",
+]
+
+[[package]]
 name = "memchr"
 version = "2.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
+
+[[package]]
+name = "memoffset"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5aa361d4faea93603064a027415f07bd8e1d5c88c9fbf68bf56a285428fd79ce"
+dependencies = [
+ "autocfg",
+]
+
+[[package]]
+name = "memoffset"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
+dependencies = [
+ "autocfg",
+]
 
 [[package]]
 name = "milenage"
@@ -1418,9 +1507,34 @@ dependencies = [
  "asn1-per",
  "async-trait",
  "hex",
- "num_enum",
+ "num_enum 0.5.11",
  "slog",
  "xxap",
+]
+
+[[package]]
+name = "nix"
+version = "0.24.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa52e972a9a719cecb6864fb88568781eb706bac2cd1d4f04a648542dbf78069"
+dependencies = [
+ "bitflags 1.3.2",
+ "cfg-if",
+ "libc",
+ "memoffset 0.6.5",
+]
+
+[[package]]
+name = "nix"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "71e2746dc3a24dd78b3cfcb7be93368c6de9963d30f43a6a73998a9cf4b17b46"
+dependencies = [
+ "bitflags 2.9.0",
+ "cfg-if",
+ "cfg_aliases",
+ "libc",
+ "memoffset 0.9.1",
 ]
 
 [[package]]
@@ -1447,7 +1561,17 @@ version = "0.5.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f646caf906c20226733ed5b1374287eb97e3c2a5c227ce668c1f2ce20ae57c9"
 dependencies = [
- "num_enum_derive",
+ "num_enum_derive 0.5.11",
+]
+
+[[package]]
+name = "num_enum"
+version = "0.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a973b4e44ce6cad84ce69d797acf9a044532e4184c4f267913d1b546a0727b7a"
+dependencies = [
+ "num_enum_derive 0.7.4",
+ "rustversion",
 ]
 
 [[package]]
@@ -1460,6 +1584,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "num_enum_derive"
+version = "0.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77e878c846a8abae00dd069496dbe8751b16ac1c3d6bd2a7283a938e8228f90d"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.100",
 ]
 
 [[package]]
@@ -1699,8 +1834,10 @@ dependencies = [
  "async-channel 2.3.1",
  "async-std",
  "async-trait",
+ "async-tun",
  "aya",
  "aya-build",
+ "aya-log-common",
  "bytes",
  "clap",
  "delegate",
@@ -1897,7 +2034,7 @@ version = "0.1.0"
 dependencies = [
  "asn1-per",
  "hex",
- "num_enum",
+ "num_enum 0.5.11",
 ]
 
 [[package]]
@@ -2773,7 +2910,7 @@ dependencies = [
  "futures-lite 1.13.0",
  "libc",
  "log",
- "num_enum",
+ "num_enum 0.5.11",
  "os_socketaddr",
  "slog",
  "stop-token",

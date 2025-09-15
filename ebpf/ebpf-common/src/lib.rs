@@ -16,20 +16,37 @@ unsafe impl aya::Pod for UlForwardingEntry {}
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct DlForwardingEntry {
+    // PDCP + NR sequence numbers.  Only used in F1 mode.
     pub next_pdcp_seq_num: u64,
     pub next_nr_seq_num: u64,
 
     // TEID in HOST byte order
+    // A zero value indicates that downlink packets should be dropped.
+    // Otherwise the action depends on the remote_gtp_addr field.
     pub teid: u32,
 
     // Remote IP in HOST byte order
+    // The value 0xffffffff means that packets should be sent up to the controller application
+    // rather than forwarded, otherwise they should be GTP encapsulated and forwarded to this address
+    // using the teid.
     pub remote_gtp_addr: u32,
 
-    // PDCP header length in bytes.
+    // PDCP header length in bytes.  Only used in F1 mode.
     // Set to 2 to use 12 bit PDCP sequence numbers
     // Set to 3 to use 18 bit PDCP sequence numbers
     pub pdcp_header_length: u8,
 }
+
+impl DlForwardingEntry {
+    pub fn deactivated() -> Self {
+        Self {
+            teid: 0xffffffff,
+            remote_gtp_addr: 0xffffffff,
+            ..DlForwardingEntry::default()
+        }
+    }
+}
+
 #[cfg(feature = "user")]
 unsafe impl aya::Pod for DlForwardingEntry {}
 
