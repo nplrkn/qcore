@@ -1,6 +1,6 @@
 #![allow(clippy::unusual_byte_groupings)]
 use super::MAX_UES;
-use super::aya_log::EbpfLogger;
+//use super::aya_log::EbpfLogger;
 use super::stats::dump_stats;
 use crate::UserplaneSession;
 use crate::data::PdcpSequenceNumberLength;
@@ -66,7 +66,7 @@ impl PacketProcessor {
         f1u_if_name: &str,
         n6_if_name: &str,
         tun_if_name: &str,
-        logger: &Logger,
+        _logger: &Logger,
     ) -> Result<Ebpf> {
         let gtpu_local_ipv4 = match local_ip {
             IpAddr::V4(addr) => addr.octets(),
@@ -94,9 +94,9 @@ impl PacketProcessor {
             .set_global("TUN_IF_INDEX", &tun_if_index, true)
             .load(data)?;
 
-        if let Err(e) = EbpfLogger::init_with_logger(&mut ebpf, logger.clone()) {
-            warn!(logger, "failed to initialize eBPF logger: {e}");
-        }
+        // if let Err(e) = EbpfLogger::init_with_logger(&mut ebpf, logger.clone()) {
+        //     warn!(logger, "failed to initialize eBPF logger: {e}");
+        // }
 
         let (uplink_program, downlink_program) = if ngap_mode {
             ("tc_uplink_n3", "tc_downlink_n3")

@@ -3,11 +3,6 @@
 ## In progress
 - Live testing with multiple phones, update readme documenting interop status.
 - Paging
-  -  Tun device file to receive / replay L3 packets punted up by eBPF code.
-  -  Deactivated eBPF code should punt packet up.
-  -  Convert IP address to TMSI and send a paging.  
-  -  Dequeue and transmit packet when reactivated.
-  
   -  On shutdown, delete rather than deactivate userplane sessions 
 
 ## Interop

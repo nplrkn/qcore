@@ -7,7 +7,7 @@ use aya_ebpf::helpers::r#gen::bpf_csum_diff;
 use aya_ebpf::macros::{classifier, map};
 use aya_ebpf::maps::Array;
 use aya_ebpf::programs::TcContext;
-use aya_log_ebpf::info;
+//use aya_log_ebpf::info;
 use core::intrinsics::{atomic_cxchg, AtomicOrdering};
 use ebpf_common::CounterIndex::*;
 use ebpf_common::*;
@@ -44,9 +44,7 @@ fn try_tc_downlink_n3(ctx: TcContext) -> Result<i32, i32> {
     unsafe {
         inc(DlRxPkts);
         let inner_ip_length = (ctx.len() - EthHdr::LEN as u32) as u16;
-        info!(&ctx, "packet in");
         let entry = lookup_entry_by_dest_ip(&ctx)?;
-        info!(&ctx, "matched");
         let teid = (*entry).teid;
         ensure!(teid != 0, DlDropUnknownUe);
         let remote_ip = (*entry).remote_gtp_addr;
@@ -54,10 +52,8 @@ fn try_tc_downlink_n3(ctx: TcContext) -> Result<i32, i32> {
 
         // Pass the packet up to the controller application if requested to do so.
         if remote_ip == 0xffffffff {
-            info!(&ctx, "send up to controller");
             return Ok(redirect_to_controller());
         }
-        info!(&ctx, "forward");
 
         push_common_outer_headers(
             &ctx,
