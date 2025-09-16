@@ -3,13 +3,14 @@ use asn1_per::SerDes;
 use ngap::{InitialContextSetupResponse, PduSessionResourceSetupUnsuccessfulTransfer};
 
 impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
+    // Returns if the UE was previously paged
     pub async fn initial_context_setup(
         &mut self,
         kgnb: &[u8; 32],
         nas_pdu: Vec<u8>,
         session_list: &mut Vec<PduSession>,
         ue_security_capabilities: &[u8; 2],
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let initial_context_setup_request = crate::ngap::build::initial_context_setup_request(
             self.api.config(),
             kgnb,
@@ -31,10 +32,13 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
         // Go through each PDU session on the UE reactivating it.  Delete if the reactivation failed.
         // TODO: commonize setting of remote tunnel info and error handling in Ngap PduSessionResourceSetupResponse,
         // Ngap InitialContextSetupResponse and F1ap UeContextSetupResponse
+
+        let mut ue_was_paged = false;
         let sessions = std::mem::take(session_list);
         for mut session in sessions.into_iter() {
             match self.connect_matching_session(&mut session, &rsp).await {
-                Ok(()) => {
+                Ok(downlink_data_sent) => {
+                    ue_was_paged = ue_was_paged || downlink_data_sent;
                     session_list.push(session);
                 }
 
@@ -66,26 +70,26 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
             );
         }
 
-        Ok(())
+        Ok(ue_was_paged)
     }
 
     async fn connect_matching_session(
         &mut self,
         session: &mut PduSession,
         rsp: &InitialContextSetupResponse,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         if let Some(ref list) = rsp.pdu_session_resource_setup_list_cxt_res {
             if let Some(matching_item) = list
                 .0
                 .iter()
                 .find(|item| item.pdu_session_id.0 == session.id)
             {
-                self.connect_session_downlink(
-                    &matching_item.pdu_session_resource_setup_response_transfer,
-                    session,
-                )
-                .await?;
-                return Ok(());
+                return self
+                    .connect_session_downlink(
+                        &matching_item.pdu_session_resource_setup_response_transfer,
+                        session,
+                    )
+                    .await;
             }
         }
         bail!("gNB did not supply resource setup response")

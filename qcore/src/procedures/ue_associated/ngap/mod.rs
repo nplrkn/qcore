@@ -85,7 +85,7 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
         &mut self,
         pdu_session_resource_setup_response_transfer_bytes: &[u8],
         session: &mut PduSession,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let pdu_session_resource_setup_response_transfer =
             PduSessionResourceSetupResponseTransfer::from_bytes(
                 pdu_session_resource_setup_response_transfer_bytes,
@@ -143,13 +143,14 @@ impl<'a, B: RanUeBase> NasBase for &mut NgapUeProcedure<'a, B> {
         self.pdu_session_resource_setup(nas, pdu_session).await
     }
 
+    // Returns true if the UE was previously paged
     async fn ran_context_create(
         &mut self,
         kgnb: &[u8; 32],
         nas: Vec<u8>,
         session_list: &mut Vec<PduSession>,
         ue_security_capabilities: &[u8; 2],
-    ) -> Result<()> {
+    ) -> Result<bool> {
         self.initial_context_setup(kgnb, nas, session_list, ue_security_capabilities)
             .await
     }

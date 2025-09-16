@@ -70,17 +70,22 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
 
         let accept = crate::nas::build::service_accept(active_sessions, reactivation_result);
         self.log_message("<< Nas ServiceAccept");
-        self.ran_context_create(accept).await
+        let ue_was_paged = self.ran_context_create(accept).await?;
+        if ue_was_paged {
+            // TS 24.501, 5.4.4.1
+            // "[Configuration Update] procedure shall be initiated by the network to assign a new 5G-GUTI to the UE
+            // after ... a successful service request procedure invoked as a response to a paging request from the network.
 
-        // TODO: once we have implemented paging, we are meant to assign a new 5G-GUTI here.
-        //
-        // // Regenerate GUTI and send a configuration update to update it.
-        // // TODO: actually the new GUTI should only be stored after the configuration update
-        // // has been acknowledged - TS 24.501, 5.4.4.4
-        // //   If a new 5G-GUTI was included in the CONFIGURATION UPDATE COMMAND message, the AMF shall
-        // //   consider the new 5G-GUTI as valid and the old 5G-GUTI as invalid.
-        // let guti = self.allocate_guti().await;
-        // self.perform_configuration_update(Some(guti)).await
+            // Regenerate GUTI and send a configuration update to update it.
+            // TODO: actually the new GUTI should only be stored after the configuration update
+            // has been acknowledged - TS 24.501, 5.4.4.4
+            //   If a new 5G-GUTI was included in the CONFIGURATION UPDATE COMMAND message, the AMF shall
+            //   consider the new 5G-GUTI as valid and the old 5G-GUTI as invalid.
+            let guti = self.allocate_guti().await;
+            self.perform_configuration_update(Some(guti)).await
+        } else {
+            Ok(())
+        }
     }
 
     async fn reject(&mut self, cause: u8) -> Result<()> {

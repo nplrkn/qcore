@@ -168,7 +168,7 @@ impl<'a, B: RrcBase> NasBase for &mut RrcProcedure<'a, B> {
         nas: Vec<u8>,
         session_list: &mut Vec<PduSession>,
         _ue_security_capabilities: &[u8; 2],
-    ) -> Result<()> {
+    ) -> Result<bool> {
         self.security_mode(kgnb).await?;
         if self.api.ue_rat_capabilities().is_none() {
             self.ue_capability_enquiry().await?;
@@ -178,10 +178,14 @@ impl<'a, B: RrcBase> NasBase for &mut RrcProcedure<'a, B> {
         if !session_list.is_empty() {
             // TODO: support >1 session
             let session = &mut session_list[0];
-            self.ran_session_setup(session, nas).await
+            self.ran_session_setup(session, nas).await?;
         } else {
-            self.send_nas(nas).await
+            self.send_nas(nas).await?;
         }
+
+        // TODO: implement + test paging in F1 mode.  We will need to return true here
+        // to trigger a configuration update to the UE following paging.
+        Ok(false)
     }
 
     async fn ran_session_release(

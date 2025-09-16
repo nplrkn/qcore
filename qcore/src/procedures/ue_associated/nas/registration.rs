@@ -19,7 +19,8 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
                 let guti = self.allocate_guti().await;
                 let accept =
                     self.build_registration_accept(guti, reactivation_result, current_sessions);
-                self.ran_context_create(accept)
+                let _ue_was_paged = self
+                    .ran_context_create(accept)
                     .await
                     .context("context creation")?;
                 self.receive_registration_complete()

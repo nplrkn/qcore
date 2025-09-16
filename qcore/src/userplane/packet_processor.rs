@@ -170,10 +170,6 @@ impl PacketProcessor {
             session.five_qi,
         );
 
-        // TODO: Once we implement downlink buffering, could split this into a command that starts buffering downlink packets, and
-        // then a second one that flushes the buffer (after the RRC Reconfiguration Complete).  Otherwise, the UE could
-        // receive a packet before it has confirmed setup of the new DRB.
-
         let IpAddr::V4(ue_ipv4) = session.ue_ip_addr else {
             bail!("IPv6 not implemented for UE");
         };

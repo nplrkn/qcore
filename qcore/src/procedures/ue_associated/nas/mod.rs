@@ -113,7 +113,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         self.receive_nas_response(filter, expected).await
     }
 
-    async fn ran_context_create(&mut self, nas: Box<Nas5gsMessage>) -> Result<()> {
+    async fn ran_context_create(&mut self, nas: Box<Nas5gsMessage>) -> Result<bool> {
         let nas = self.ue.nas.encode_dl(nas)?;
         debug!(
             self.logger,

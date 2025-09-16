@@ -1,12 +1,17 @@
 use anyhow::{Result, bail};
 use async_std::{
+    fs::File,
     io::{ReadExt, WriteExt},
     sync::Mutex,
     task::JoinHandle,
 };
 use async_trait::async_trait;
 use async_tun::{Tun, TunBuilder};
-use std::{net::IpAddr, sync::Arc};
+use std::{
+    net::IpAddr,
+    os::fd::{AsRawFd, FromRawFd},
+    sync::Arc,
+};
 
 use crate::data::UePagingInfo;
 
@@ -49,6 +54,9 @@ impl DownlinkBuffer {
             v.push(Mutex::new(UeInfo::default()))
         }
 
+        // let mut iter = tun.into_iter();
+        // let (tun1, tun2) = (iter.next().unwrap(), iter.next().unwrap());
+
         Ok(DownlinkBuffer {
             ues: Arc::new(v),
             tun: Arc::new(tun),
@@ -60,13 +68,23 @@ impl DownlinkBuffer {
             base,
             ues: self.ues.clone(),
         };
-        let tun_clone = self.tun.clone();
+
+        // TODO: surely there is a better way?
+        // If we just clone the tun and use its reader(), then reactivate_ip()
+        // hangs on writer.flush().  Presumably because a single File with a pending read
+        // has its internal lock taken out and so can't also flush.
+        let mut file = unsafe { File::from_raw_fd(self.tun.as_raw_fd()) };
+
         async_std::task::spawn(async move {
             while dl_buffer
-                .handle_next_downlink_packet(&tun_clone)
+                .handle_next_downlink_packet(&mut file)
                 .await
                 .is_ok()
             {}
+
+            // The fd is actually owned by the Arc<Tun> in self so we must not free it if
+            // the task below exits.
+            std::mem::forget(file);
         })
     }
 
@@ -78,7 +96,8 @@ impl DownlinkBuffer {
         // end critical section
     }
 
-    pub async fn reactivate_ip(&self, ue_ip_address: &IpAddr) -> Result<()> {
+    // Returns true if there was a buffered packet.
+    pub async fn reactivate_ip(&self, ue_ip_address: &IpAddr) -> Result<bool> {
         let ue_index = ue_index(ue_ip_address);
 
         // critical section
@@ -88,11 +107,13 @@ impl DownlinkBuffer {
         // end critical section
 
         if let Some(packet) = packet {
-            let _written = self.tun.writer().write(&packet).await?;
-
-            println!("Sent downlink packet wrote {_written} bytes");
+            let mut writer = self.tun.writer();
+            let _written = writer.write(&packet).await?;
+            writer.flush().await?;
+            Ok(true)
+        } else {
+            Ok(false)
         }
-        Ok(())
     }
 }
 
@@ -105,9 +126,9 @@ fn ue_index(ue_ip_address: &IpAddr) -> u8 {
 
 const MTU: usize = 1500;
 impl<T: DlBufferBase> DownlinkBufferTask<T> {
-    async fn handle_next_downlink_packet(&mut self, tun: &Tun) -> Result<()> {
+    async fn handle_next_downlink_packet(&mut self, file: &mut File) -> Result<()> {
         let mut v = vec![0u8; MTU];
-        let bytes_read = tun.reader().read(&mut v).await?;
+        let bytes_read = file.read(&mut v).await?;
 
         if bytes_read < 19 {
             // TODO counter

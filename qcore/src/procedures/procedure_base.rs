@@ -53,7 +53,7 @@ pub trait ProcedureBase: Send + Sync + Clone + 'static {
         &self,
         session: &UserplaneSession,
         logger: &Logger,
-    ) -> Result<()>;
+    ) -> Result<bool>;
     async fn deactivate_userplane_session(
         &self,
         session: &UserplaneSession,

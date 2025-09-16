@@ -223,6 +223,7 @@ impl QCore {
 #[async_trait]
 impl DlBufferBase for QCore {
     async fn page_ue(&self, paging_info: &UePagingInfo) {
+        // TODO: start timer T3513.  (TS24.501, 5.6.2.2.1)
         if self.ngap_mode {
             let paging = paging(
                 self.config.guami(),
@@ -403,20 +404,19 @@ impl ProcedureBase for QCore {
             .await
     }
 
+    // Returns true if we sent a downlink buffered packet.
     async fn commit_userplane_session(
         &self,
         session: &UserplaneSession,
         logger: &Logger,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         self.packet_processor
             .commit_userplane_session(session, logger)
             .await?;
 
         self.downlink_data_buffer
             .reactivate_ip(&session.ue_ip_addr)
-            .await?;
-
-        Ok(())
+            .await
     }
 
     async fn delete_userplane_session(&self, session: &UserplaneSession, logger: &Logger) {

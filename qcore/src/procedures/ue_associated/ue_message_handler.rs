@@ -278,7 +278,7 @@ impl<A: ProcedureBase> RanUeBase for &mut UeMessageHandler<A> {
             &self,
             session: &crate::data::UserplaneSession,
             logger: &Logger,
-        ) -> Result<()>;
+        ) -> Result<bool>;
         async fn delete_userplane_session(
             &self,
             session: &crate::data::UserplaneSession,
