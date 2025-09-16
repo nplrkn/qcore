@@ -1,3 +1,4 @@
+use crate::data::UePagingInfo;
 use anyhow::{Result, bail};
 use async_std::{
     fs::File,
@@ -13,10 +14,8 @@ use std::{
     sync::Arc,
 };
 
-use crate::data::UePagingInfo;
-
 #[async_trait]
-pub trait DlBufferBase: Send + Sync + 'static {
+pub trait PagingApi: Send + Sync + 'static {
     async fn page_ue(&self, paging_info: &UePagingInfo);
 }
 
@@ -26,18 +25,18 @@ pub struct UeInfo {
     queued_packet: Option<Vec<u8>>,
 }
 
-struct DownlinkBufferTask<T: DlBufferBase> {
-    base: T,
+struct DownlinkBufferTask<T: PagingApi> {
+    paging_provider: T,
     ues: Arc<Vec<Mutex<UeInfo>>>,
 }
 
 #[derive(Clone)]
-pub struct DownlinkBuffer {
+pub struct DownlinkBufferController {
     ues: Arc<Vec<Mutex<UeInfo>>>,
     tun: Arc<Tun>,
 }
 
-impl DownlinkBuffer {
+impl DownlinkBufferController {
     pub async fn new(n6_tun_device_name: &str) -> Result<Self> {
         let tun = match TunBuilder::new()
             .name(n6_tun_device_name)
@@ -54,18 +53,15 @@ impl DownlinkBuffer {
             v.push(Mutex::new(UeInfo::default()))
         }
 
-        // let mut iter = tun.into_iter();
-        // let (tun1, tun2) = (iter.next().unwrap(), iter.next().unwrap());
-
-        Ok(DownlinkBuffer {
+        Ok(DownlinkBufferController {
             ues: Arc::new(v),
             tun: Arc::new(tun),
         })
     }
 
-    pub fn run<T: DlBufferBase>(&self, base: T) -> JoinHandle<()> {
+    pub fn run<T: PagingApi>(&self, paging_provider: T) -> JoinHandle<()> {
         let mut dl_buffer = DownlinkBufferTask {
-            base,
+            paging_provider,
             ues: self.ues.clone(),
         };
 
@@ -125,7 +121,7 @@ fn ue_index(ue_ip_address: &IpAddr) -> u8 {
 }
 
 const MTU: usize = 1500;
-impl<T: DlBufferBase> DownlinkBufferTask<T> {
+impl<T: PagingApi> DownlinkBufferTask<T> {
     async fn handle_next_downlink_packet(&mut self, file: &mut File) -> Result<()> {
         let mut v = vec![0u8; MTU];
         let bytes_read = file.read(&mut v).await?;
@@ -160,7 +156,7 @@ impl<T: DlBufferBase> DownlinkBufferTask<T> {
         // end of critical section
 
         if let Some(paging_info) = paging_needed {
-            self.base.page_ue(&paging_info).await
+            self.paging_provider.page_ue(&paging_info).await
         }
 
         Ok(())
