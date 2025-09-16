@@ -188,7 +188,7 @@ impl<'a> MockUeF1ap<'a> {
     }
 
     pub async fn perform_rrc_setup_with_service_request(&mut self) -> Result<()> {
-        let service_request = self.base.build_service_request()?;
+        let service_request = self.base.build_service_request(false)?;
         info!(&self.logger, "Nas ServiceRequest >>");
         self.perform_rrc_setup_common(service_request, true).await
     }

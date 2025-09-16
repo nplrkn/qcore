@@ -42,25 +42,35 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         // We peek inside the message to get out the GUTI, retrieve the security context, and then admit the message.
         if let (nas, Some(security_header)) = &nas {
             if !self.ue.nas.security_activated() {
-                if let Ok(MobileIdentity::Guti(Guti(_plmn, amf_ids, tmsi))) =
-                    peek_mobile_identity(nas)
-                {
-                    match self
-                        .retrieve_ue(Some(amf_ids.0[0]), &amf_ids.0[1..3], &tmsi.0)
-                        .await
-                    {
-                        Ok(false) => {
-                            debug!(
-                                self.logger,
-                                "Using TMSI from registration message peek for NAS admit"
-                            );
-                            self.ue
-                                .nas
-                                .admit_message(Some(security_header), &nas_bytes)?;
+                match peek_mobile_identity(nas) {
+                    Ok(MobileIdentity::Guti(Guti(_plmn, amf_ids, tmsi))) => {
+                        match self
+                            .retrieve_ue(Some(amf_ids.0[0]), &amf_ids.0[1..3], &tmsi.0)
+                            .await
+                        {
+                            Ok(false) => {
+                                debug!(
+                                    self.logger,
+                                    "Using TMSI from message peek for initial NAS admit"
+                                );
+                                self.ue
+                                    .nas
+                                    .admit_message(Some(security_header), &nas_bytes)?;
+                            }
+                            Ok(true) => {
+                                // TODO: should we stop processing at this point?
+                                // For a register, we can carry on and do an identity request - is that the right step
+                                // in other cases too?
+                                debug!(self.logger, "Unknown TMSI in initial NAS message")
+                            }
+                            Err(e) => warn!(self.logger, "Error retrieving UE {e}"),
                         }
-                        Ok(true) => debug!(self.logger, "Unknown TMSI in registration"),
-                        Err(e) => warn!(self.logger, "Error retrieving UE {e}"),
                     }
+                    Ok(x) => warn!(
+                        self.logger,
+                        "Expected GUTI mobile identity on initial NAS message, got {:?}", x
+                    ),
+                    Err(e) => warn!(self.logger, "{e}"),
                 }
             }
         }
@@ -168,6 +178,11 @@ pub fn peek_mobile_identity(r: &Nas5gsMessage) -> Result<MobileIdentity> {
         Nas5gsMessage::Gmm(_header, Nas5gmmMessage::RegistrationRequest(registration_request)) => {
             crate::nas::parse::fgs_mobile_identity(&registration_request.fgs_mobile_identity)
         }
-        _ => bail!("Not a registration request"),
+        Nas5gsMessage::Gmm(
+            _header,
+            Nas5gmmMessage::DeregistrationRequestFromUe(deregistration_request),
+        ) => crate::nas::parse::fgs_mobile_identity(&deregistration_request.fgs_mobile_identity),
+
+        _ => bail!("Identity peek not implemented for message type"),
     }
 }

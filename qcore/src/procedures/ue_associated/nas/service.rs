@@ -35,31 +35,28 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
                 .await?;
         }
 
-        // There should be an inner ServiceRequest message contained in this.
-        let Some(ref inner_message) = r.nas_message_container else {
-            bail!("Service request missing message container")
-        };
-        let inner_message =
-            Box::new(decode_nas_5gs_message(&inner_message.value).map_err(|e| {
-                anyhow!(
-                    "NAS decode error - {e} - message bytes: {:?}",
-                    inner_message
-                )
-            })?);
-        let inner_message =
+        // If there is an inner ServiceRequest message contained, switch to using it from now on.
+        let service_request = if let Some(x) = r.nas_message_container {
+            let inner_message = Box::new(
+                decode_nas_5gs_message(&x.value)
+                    .map_err(|e| anyhow!("NAS decode error - {e} - message bytes: {:?}", x))?,
+            );
             if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::ServiceRequest(x)) = *inner_message {
-                x
+                Box::new(x)
             } else {
                 bail!(
                     "Service Request outer message non-Service Request inner message {:?}",
                     inner_message
                 )
-            };
+            }
+        } else {
+            r
+        };
 
         let (active_sessions, reactivation_result) = self
             .reconcile_sessions(
-                &inner_message.uplink_data_status,
-                &inner_message.pdu_session_status,
+                &service_request.uplink_data_status,
+                &service_request.pdu_session_status,
             )
             .await?;
 

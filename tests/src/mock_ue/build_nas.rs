@@ -228,27 +228,36 @@ fn pdu_session_status() -> NasPduSessionStatus {
 pub fn service_request(
     fg_s_tmsi: NasFGsMobileIdentity,
     nas_ctxt: &mut NasContext,
+    omit_inner_container: bool,
 ) -> Result<Vec<u8>> {
     let ngksi = NasKeySetIdentifier::new(1); // TODO
-    let inner_message = Nas5gmmMessage::ServiceRequest(NasServiceRequest {
-        ngksi: ngksi.clone(),
-        fg_s_tmsi: fg_s_tmsi.clone(),
-        uplink_data_status: Some(uplink_data_status()),
-        pdu_session_status: Some(pdu_session_status()),
-        allowed_pdu_session_status: None,
-        nas_message_container: None,
-        ue_request_type: None,
-        paging_restriction: None,
-    });
-    let inner_message = Nas5gsMessage::Gmm(
-        Nas5gmmHeader {
-            extended_protocol_discriminator: ExtendedProtocolDiscriminator::FIVEGMM,
-            security_header_type: SecurityHeaderType::PLAIN_5GS_NAS_MESSAGE_NOT_SECURITY_PROTECTED,
-            message_type: Nas5gmmMessageType::ServiceRequest,
-        },
-        inner_message,
-    );
-    let inner_message = encode_nas_5gs_message(&inner_message)?;
+
+    let nas_message_container = if omit_inner_container {
+        None
+    } else {
+        let inner_message = Nas5gmmMessage::ServiceRequest(NasServiceRequest {
+            ngksi: ngksi.clone(),
+            fg_s_tmsi: fg_s_tmsi.clone(),
+            uplink_data_status: Some(uplink_data_status()),
+            pdu_session_status: Some(pdu_session_status()),
+            allowed_pdu_session_status: None,
+            nas_message_container: None,
+            ue_request_type: None,
+            paging_restriction: None,
+        });
+        let inner_message = Nas5gsMessage::Gmm(
+            Nas5gmmHeader {
+                extended_protocol_discriminator: ExtendedProtocolDiscriminator::FIVEGMM,
+                security_header_type:
+                    SecurityHeaderType::PLAIN_5GS_NAS_MESSAGE_NOT_SECURITY_PROTECTED,
+                message_type: Nas5gmmMessageType::ServiceRequest,
+            },
+            inner_message,
+        );
+        Some(NasMessageContainer::new(encode_nas_5gs_message(
+            &inner_message,
+        )?))
+    };
 
     let outer_message = Nas5gmmMessage::ServiceRequest(NasServiceRequest {
         ngksi,
@@ -256,7 +265,7 @@ pub fn service_request(
         uplink_data_status: None,
         pdu_session_status: None,
         allowed_pdu_session_status: None,
-        nas_message_container: Some(NasMessageContainer::new(inner_message)),
+        nas_message_container,
         ue_request_type: None,
         paging_restriction: None,
     });

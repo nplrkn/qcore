@@ -165,11 +165,12 @@ impl<T: Transport> MockUe<T> {
         }
     }
 
-    fn build_service_request(&mut self) -> Result<Vec<u8>> {
+    fn build_service_request(&mut self, omit_inner_container: bool) -> Result<Vec<u8>> {
         if let Some(guti) = self.data.guti {
             build_nas::service_request(
                 build_nas::mobile_identity_stmsi(&guti),
                 &mut self.data.nas_context,
+                omit_inner_container,
             )
         } else {
             bail!("GUTI missing")
@@ -349,9 +350,13 @@ impl<T: Transport> MockUe<T> {
     }
 
     pub async fn send_nas_service_request(&mut self) -> Result<()> {
+        self.send_nas_service_request_ext(false).await
+    }
+
+    pub async fn send_nas_service_request_ext(&mut self, omit_inner_container: bool) -> Result<()> {
         // Potential fields needed in the InitialUeMessage:
         // - UEContextRequest
-        let nas_bytes = self.build_service_request()?;
+        let nas_bytes = self.build_service_request(omit_inner_container)?;
         self.send_nas(nas_bytes).await
     }
 

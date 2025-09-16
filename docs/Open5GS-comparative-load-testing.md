@@ -4,7 +4,7 @@ We use Open5GS as our example of a classic 5G core architecture, with multiple N
 
 ## Results
 
-The QCore control plane is >30x faster than Open5GS and has a 30-50x smaller memory footprint.
+The QCore control plane is >30x faster than Open5GS at serial message processing and has a 30-50x smaller memory footprint.
 
 This is based on measurements from the QCore load test, where
 -  Open5GS's time to execute the test message sequence was ~34ms, using ~55% CPU, using 500MB-750MB resident memory
@@ -15,8 +15,7 @@ The message rates observed in the test were
 -  Open5GS: ~800 messages/sec
 -  QCore: ~30k message/sec.
 
-This is using an out-of-the-box Ubuntu install of Open5GS, compared to a standard release build of QCore.  Open5GS was not tuned 
-in any way.
+This is using an out-of-the-box Ubuntu install of Open5GS, compared to a standard release build of QCore.  Open5GS was not tuned in any way.
 
 The main time in Open5GS was spent in open5gs-scpd (19%), mongod (9%), open5gs-amfd (9%), 
 open5gs-udmd (8%), and open5gs-smfd (8%).  The main memory usage was in mongod (180MB) and open5gs-smfd (80-150MB).

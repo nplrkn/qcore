@@ -2,14 +2,15 @@
  <img src="docs/images/monolith.jpg" alt="drawing" width="200"/><br>QCore
 </h1> 
 
-QCore is an ultra-compact private 5G Core, designed to minimise compute and power cost.  Its goal is to cater for small, data-only 5G networks in remote locations where weight and power are critical factors: 5G in a backpack / on a drone / in space.
+QCore is a free, ultra-compact private 5G Core, written in Rust, designed to minimise compute and power cost.  
 
-QCore is simple, free, and outperforms other 5G cores at the low end.  Whereas most 5G cores consist of many different services, QCore is a single Linux executable, making it easy to orchestrate.
+It is simple to use, and significantly outperforms other single-node 5G cores thanks to its monolithic architecture.  
 
-It has been tested and works well with several Android phones but remains at an early stage of maturity.  
+Using a tiny 30MB executable, it can handle 30,000 control plane messages per second on a single CPU core ([details](docs/Open5GS-comparative-load-testing.md)).  The userplane is implemented using eBPF for gigabit/s throughput.
+
+It has been tested and works well with several Android phones (Samsung, OnePlus and Oppo) but remains at an early stage of maturity.  
 
 I would welcome collaborators to help improve and mature it.  Please contact me via a GitHub issue or on LinkedIn if you are interested.
-
 
 ## Architecture overview
 
@@ -18,11 +19,9 @@ The three external interfaces of QCore are:
 -  the N3 (NG-U) GTP interface with the gNodeB
 -  the N6 IP interface that connects UEs to the outside world.
 
-QCore is designed as a monolith, without the standard network function decomposition of a 5G Core.  It has no internal protocol interfaces (no SBI), and a single UE context.  
+Whereas most 5G cores consist of many different services, QCore is a single Linux executable.  It is designed as a monolith, without the standard network function decomposition of a 5G Core.  It has no internal protocol interfaces (no SBI), and a single UE context.  
 
-The motivation for the monolithic approach is to minimize control plane processing cost.  QCore avoids a lot of the usual network hops, context switches, database accesses and (de)serialization.  As well as performance, its minimalist design also has side benefits in the areas of ease of orchestration, security, and simplicity / speed of development. 
-
-QCore is written in Rust, and has an eBPF userplane. 
+The motivation for the monolithic approach is to minimize control plane processing cost.  QCore avoids a lot of the usual network hops, context switches, database accesses and (de)serialization.  As well as performance, its minimalist design also has major benefits in the areas of ease of orchestration, security, and simplicity / speed of development. 
 
 
 ## F1 mode

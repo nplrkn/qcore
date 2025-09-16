@@ -144,9 +144,10 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         if !guami_matches {
             warn!(
                 self.logger,
-                "Wrong AMF IDs in GUTI/STMSI - theirs {:?}, {:?} ours {}",
-                amf_region,
-                amf_set_and_pointer,
+                "Wrong AMF IDs in GUTI/STMSI - theirs {:02x}{:02x}{:02x} ours {}",
+                amf_region.unwrap_or_default(),
+                amf_set_and_pointer[0],
+                amf_set_and_pointer[1],
                 self.api.config().amf_ids
             );
         }
