@@ -2,8 +2,6 @@
 
 ## In progress
 - Live testing with multiple phones, update readme documenting interop status.
-- Paging
-  -  On shutdown, delete rather than deactivate userplane sessions 
 
 ## Interop
 -  Service request missing container from Samsung.  It asked for a UE context but no sessions.  So probably no need for non-cleartext inner message.  We dropped it on the floor.
@@ -60,15 +58,9 @@ Sep 05 13:32:42.473 DEBG << NasAuthenticationRequest, ue_id: 1060125697
 
 -  Bad trace line: WARN Wrong AMF IDs in GUTI/STMSI - theirs Some(2), [0, 64] ours 010080,
 
--  Samsung 
-
-- OnePlus: Rejection of Registration Request from Security Mode Command if slice asked for is eMBB / SST 1 with "no network slices available" - causes OnePlus phone to reregister with MIoT SST 3 / SD 0.
-- Unhandled RrcReestablishmentRequest
-
-## Bugs
+## Bugs / tech debt
 - "slog-async: logger dropped messages due to channel overflow" - for example, when hitting Ctrl-C at end of PacketRusher test - check out tracing-appender
-- Poor download speed in F1ap mode possibly caused by out of order seq nos 
-- PDU session release command should flow on SRB 2, not SRB 1  
+-  On shutdown, delete rather than deactivate userplane sessions 
 - OAI test broken - simulated UE doesn't send Configuration Update Complete
 
 ## Performance
@@ -91,18 +83,6 @@ Sep 05 13:32:42.473 DEBG << NasAuthenticationRequest, ue_id: 1060125697
 - Sessions / IP addresses should not persist forever.  Timeout; flush on TMSI register/service request without session reactivation; flush on IMSI registration? 
 - Large SCTP messages - e.g. unfiltered UE Capability Information
 - UE static IP
-- CU specific function
-  - Paging
-  - RRC uplink integrity validation
-  - RRC ciphering
-  - PDCP Rx reordering
-  - Obey DL DATA DELIVERY STATUS backpressure (desired buffer size)
-  - PDCP retransmission for RLC Am
-  - Processing of UE measurements - detect when UE changes cell
-  - Handling of PDCP control packets
-  - Handling of uplink PDCP sequence number out or order / gaps
-  - RRC Inactive
-  - Update / Remove a DU's served cells on Du configuration update, F1 Remove, disconnection
 - Time out during procedures - e.g. Authentication procedure uses T3560
 - UE AMBR
 - Transport key for SIM creds
@@ -113,6 +93,23 @@ Sep 05 13:32:42.473 DEBG << NasAuthenticationRequest, ue_id: 1060125697
 - Negative testing of rejections and protocol errors
 - >1 PDU session per UE
 - >1 DU
+
+# CU specific function gaps / bugs
+  - Paging
+  - Poor download speed in F1ap mode possibly caused by out of order seq nos 
+  - PDU session release command should flow on SRB 2, not SRB 1  
+  - Unhandled RrcReestablishmentRequest
+  - RRC uplink integrity validation
+  - RRC ciphering
+  - PDCP Rx reordering
+  - Obey DL DATA DELIVERY STATUS backpressure (desired buffer size)
+  - PDCP retransmission for RLC Am
+  - Processing of UE measurements - detect when UE changes cell
+  - Handling of PDCP control packets
+  - Handling of uplink PDCP sequence number out or order / gaps
+  - RRC Inactive
+  - Update / Remove a DU's served cells on Du configuration update, F1 Remove, disconnection
+
 
 ## Error handling
 - Session setup with existing PDU session ID should not leave up old session.  Seen with OnePlus phone which repeated 
