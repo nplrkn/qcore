@@ -1,4 +1,4 @@
-use crate::data::UePagingInfo;
+use crate::{data::UePagingInfo, userplane::MAX_UES};
 use anyhow::{Result, bail};
 use async_std::{
     fs::File,
@@ -85,16 +85,16 @@ impl DownlinkBufferController {
     }
 
     pub async fn deactivate_ip(&self, ue_ip_address: &IpAddr, paging_info: &UePagingInfo) {
-        let ue_index = ue_index(ue_ip_address);
-
-        // critical section
-        self.ues[ue_index as usize].lock().await.paging_info = paging_info.clone();
-        // end critical section
+        if let Ok(ue_index) = ue_index(ue_ip_address) {
+            // critical section
+            self.ues[ue_index as usize].lock().await.paging_info = paging_info.clone();
+            // end critical section
+        }
     }
 
     // Returns true if there was a buffered packet.
     pub async fn reactivate_ip(&self, ue_ip_address: &IpAddr) -> Result<bool> {
-        let ue_index = ue_index(ue_ip_address);
+        let ue_index = ue_index(ue_ip_address)?;
 
         // critical section
         let mut slot = self.ues[ue_index as usize].lock().await;
@@ -113,10 +113,15 @@ impl DownlinkBufferController {
     }
 }
 
-fn ue_index(ue_ip_address: &IpAddr) -> u8 {
-    match ue_ip_address {
+fn ue_index(ue_ip_address: &IpAddr) -> Result<u8> {
+    let idx = match ue_ip_address {
         IpAddr::V4(ip) => ip.octets()[3],
         IpAddr::V6(ip) => ip.octets()[15],
+    };
+    if (idx as usize) < MAX_UES {
+        Ok(idx)
+    } else {
+        bail!("UE index {} out of range", idx)
     }
 }
 

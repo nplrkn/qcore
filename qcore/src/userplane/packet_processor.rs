@@ -3,7 +3,7 @@ use super::MAX_UES;
 use super::aya_log::EbpfLogger;
 use super::stats::dump_stats;
 use crate::UserplaneSession;
-use crate::data::PdcpSequenceNumberLength;
+use crate::data::{EthernetSesssionParams, Ipv4SessionParams, Payload, PdcpSequenceNumberLength};
 use anyhow::{Result, anyhow, bail, ensure};
 use async_std::{net::IpAddr, sync::Mutex};
 use async_tun::{Tun, TunBuilder};
@@ -26,9 +26,13 @@ pub struct PacketProcessor {
     ue_subnet: Ipv4Addr,
     uplink_forwarding_table: Arc<Mutex<UplinkForwardingTable>>,
     downlink_forwarding_table: Arc<Mutex<DownlinkForwardingTable>>,
-    eth_index_lookup_table: Arc<Mutex<EthIndexLookupTable>>,
+    eth_if_index_lookup_table: Arc<Mutex<EthIndexLookupTable>>,
     //tuns: Arc<Vec<Tun>>,
-    ethernet_interface_indices: Arc<InterfaceIndices>,
+
+    // This is a list of available ethernet interface indices for ethernet
+    // PDU sessions.  When an ethernet session is allocated, we pop an
+    // item out of this list, and, when it is freed, we put it back.
+    ethernet_interface_indices: Arc<Mutex<InterfaceIndices>>,
 }
 
 type UplinkForwardingTable = Array<MapData, UlForwardingEntry>;
@@ -37,8 +41,6 @@ type EthIndexLookupTable = Array<MapData, u16>;
 
 // // First the if index we will use for transmitting from this UE, then the if index we will
 // // use to detect downlink packets to this UE.
-// type InterfaceIndices = Vec<(u32, u32)>;
-
 type InterfaceIndices = Vec<u32>;
 
 impl PacketProcessor {
@@ -81,36 +83,34 @@ impl PacketProcessor {
             warn!(logger, "failed to initialize eBPF logger: {e}");
         }
 
-        let (uplink_program, downlink_program) = if ngap_mode {
-            ("tc_uplink_n3", "tc_downlink_n3")
+        let (uplink_program, ip_downlink_program) = if ngap_mode {
+            ("xdp_uplink_n3", "tc_downlink_n3")
         } else {
-            ("tc_uplink_f1u", "tc_downlink_f1u")
+            ("xdp_uplink_f1u", "tc_downlink_f1u")
         };
 
         // XDP uplink program.
-        let program: &mut Xdp = ebpf.program_mut("xdp_uplink_n3").unwrap().try_into()?;
+        let program: &mut Xdp = ebpf.program_mut(uplink_program).unwrap().try_into()?;
         program.load()?;
         program.attach(ran_if_name, XdpFlags::default())?;
 
-        // TODO - both XDP and TC program are both going to try to intercept packets to the GTP port.
+        // TC uplink redirect program.   The XDP uplink program passes IP packets through to this.
+        let _ = tc::qdisc_add_clsact(ran_if_name);
+        let tc_uplink_program: &mut SchedClassifier =
+            ebpf.program_mut("tc_uplink_redirect").unwrap().try_into()?;
+        tc_uplink_program.load()?;
+        tc_uplink_program.attach(ran_if_name, TcAttachType::Ingress)?;
 
-        // TODO
-        // TC uplink program for IP packets.
-        // let _ = tc::qdisc_add_clsact(ran_if_name);
-        // let program: &mut SchedClassifier = ebpf.program_mut(uplink_program).unwrap().try_into()?;
-        // program.load()?;
-        // program.attach(ran_if_name, TcAttachType::Ingress)?;
-
-        let program: &mut SchedClassifier =
-            ebpf.program_mut(downlink_program).unwrap().try_into()?;
-        program.load()?;
+        // TC downlink program
+        let tc_ip_downlink_program: &mut SchedClassifier =
+            ebpf.program_mut(ip_downlink_program).unwrap().try_into()?;
+        tc_ip_downlink_program.load()?;
 
         let _ = tc::qdisc_add_clsact(n6_if_name);
-        program.attach(n6_if_name, TcAttachType::Ingress)?;
+        tc_ip_downlink_program.attach(n6_if_name, TcAttachType::Ingress)?;
 
-        // Look up UE ethernet interfaces and attach both XDP and TC downlink ethernet programs to each.
-        // TODO: is UE 2 veth_ue_1 and slot 0 in this vec???  that is mighty confusing
-
+        // XDP and TC downlink eth programs get attached to every UE ethernet interface.
+        // At the same time, we build up a list of inteface indices to allocate to ethernet PDU sessions.
         let tc_downlink_eth_program: &mut SchedClassifier = ebpf
             .program_mut("tc_downlink_eth_redirect")
             .unwrap()
@@ -121,10 +121,10 @@ impl PacketProcessor {
         for ue_id in 1..MAX_UES {
             let eth_interface_name = format!("veth_ue_{}_a", ue_id);
 
-            // Stop looking after the first failure.  In other words, we can't support
-            // gaps in the naming (e.g. 'veth_ue_2_a' won't get picked up unless 'veth_ue_1_a'
-            // exists in our network namespace).
             let Ok(if_index) = get_if_index(&eth_interface_name) else {
+                // Stop looking after the first failure.  In other words, we can't support
+                // gaps in the naming (e.g. 'veth_ue_2_a' won't get picked up unless 'veth_ue_1_a'
+                // is visible in our network namespace).
                 break;
             };
 
@@ -133,24 +133,9 @@ impl PacketProcessor {
             tc_downlink_eth_program.attach(&eth_interface_name, TcAttachType::Ingress)?;
 
             ethernet_session_if_indices.push(if_index);
-
-            // let veth_interface_name_a = format!("veth_ue_{}_a", ue_id);
-            // let veth_interface_name_b = format!("veth_ue_{}_b", ue_id);
-
-            // // Stop looking after the first failure.  In other words, we can't support
-            // // gaps in the naming (e.g. 'veth_ue_2_a' won't get picked up unless 'veth_ue_1_a'
-            // // exists in our network namespace).
-            // let Ok(if_index_a) = get_if_index(&veth_interface_name_a) else {
-            //     break;
-            // };
-            // let Ok(if_index_b) = get_if_index(&veth_interface_name_b) else {
-            //     break;
-            // };
-
-            // ethernet_session_if_indices.push((if_index_a, if_index_b));
         }
 
-        // Now attach the XDP program too.
+        // Go back through the interface again, attaching the XDP program.
         let xdp_downlink_eth_program: &mut Xdp = ebpf
             .program_mut("xdp_downlink_n3_eth")
             .unwrap()
@@ -193,38 +178,23 @@ impl PacketProcessor {
             let _stats_task = async_std::task::spawn(dump_stats(logger.clone(), counters));
         }
 
-        // Open all tap interfaces to bring them up.
-        // let mut tuns = vec![];
-        // for idx in 0..if_indices.len() {
-        //     let device_name = format!("tap_ue{}", idx + 1);
-        //     match TunBuilder::new()
-        //         .name(&device_name)
-        //         .tap(true)
-        //         .packet_info(false)
-        //         .try_build()
-        //         .await
-        //     {
-        //         Ok(t) => tuns.push(t),
-        //         Err(e) => bail!("Failed to open {device_name} - {e}"),
-        //     };
-        // }
-        // let tuns = Arc::new(tuns);
         Ok(PacketProcessor {
             index_pool,
             ue_subnet,
             uplink_forwarding_table: Arc::new(Mutex::new(ul_forwarding_table)),
             downlink_forwarding_table: Arc::new(Mutex::new(dl_forwarding_table)),
-            eth_index_lookup_table: Arc::new(Mutex::new(eth_index_lookup_table)),
-            ethernet_interface_indices: Arc::new(if_indices),
-            //tuns,
+            eth_if_index_lookup_table: Arc::new(Mutex::new(eth_index_lookup_table)),
+            ethernet_interface_indices: Arc::new(Mutex::new(if_indices)),
         })
     }
 
-    /// Allocates an IP address and TEID for a userplane session.
+    /// Allocates a userplane session including TEID.
+    /// If `ipv4`` is true, allocates an IPv4 PDU session, otherwise an Ethernet PDU session.
     pub async fn allocate_userplane_session(
         &self,
         five_qi: u8,
         pdcp_sn_length: PdcpSequenceNumberLength,
+        ipv4: bool,
         _logger: &Logger,
     ) -> Result<UserplaneSession> {
         let idx = self.index_pool.lock().await.new_id();
@@ -236,15 +206,29 @@ impl PacketProcessor {
         rand::rng().fill_bytes(&mut teid[0..3]);
         teid[3] = idx as u8;
 
-        // Generate a UE IP.  We currently hardcode assumptions of 1 PDU session
-        // per UE, and max 253 UEs.
-        let mut ue_addr_octets = self.ue_subnet.octets();
-        ue_addr_octets[3] = idx;
-        let ue_ipv4_addr = Ipv4Addr::from(ue_addr_octets);
+        let payload = if ipv4 {
+            // IPv4 PDU session
+
+            // Generate a UE IP.  We currently hardcode assumptions of 1 PDU session
+            // per UE, and max 253 UEs.
+            let mut ue_addr_octets = self.ue_subnet.octets();
+            ue_addr_octets[3] = idx;
+            let ue_ipv4_addr = Ipv4Addr::from(ue_addr_octets);
+
+            Payload::Ipv4(Ipv4SessionParams {
+                ue_ip_addr: ue_ipv4_addr,
+            })
+        } else {
+            // Allocate a spare Ethernet interface.
+            let Some(if_index) = self.ethernet_interface_indices.lock().await.pop() else {
+                bail!("No Ethernet interfaces currently available")
+            };
+            Payload::Ethernet(EthernetSesssionParams { if_index })
+        };
 
         Ok(UserplaneSession {
             uplink_gtp_teid: GtpTeid(teid),
-            ue_ip_addr: IpAddr::V4(ue_ipv4_addr),
+            payload,
             qfi: 1,
             five_qi,
             pdcp_sn_length,
@@ -264,40 +248,39 @@ impl PacketProcessor {
 
         info!(
             logger,
-            "Activate userplane session UE IP {}, local teid {:08}, remote {}-{:08}, 5QI={}",
-            session.ue_ip_addr,
+            "Activate userplane session {}, local teid {:08}, remote {}-{:08}, 5QI={}",
+            session.payload,
             session.uplink_gtp_teid,
             remote_tunnel_info.transport_layer_address,
             remote_tunnel_info.gtp_teid,
             session.five_qi,
         );
 
-        let IpAddr::V4(ue_ipv4) = session.ue_ip_addr else {
-            bail!("IPv6 not implemented for UE");
-        };
         let gtp_remote_ip: IpAddr = remote_tunnel_info.transport_layer_address.try_into()?;
         let IpAddr::V4(gtp_remote_ipv4) = gtp_remote_ip else {
             bail!("IPv6 not implemented for GTP");
         };
 
-        // We use the least significant byte of the UE address as the index.
-        let idx = ue_ipv4.octets()[3];
+        // The least significant byte of the TEID is the forwarding table index.
+        let forwarding_idx = session.uplink_gtp_teid.0[3];
 
         let pdcp_header_length = match session.pdcp_sn_length {
             PdcpSequenceNumberLength::TwelveBits => 2,
             PdcpSequenceNumberLength::EighteenBits => 3,
         };
 
-        // TODO - not like this :-)
-        let egress_if_index = self.ethernet_interface_indices[idx as usize - 2];
-        println!("Supply if index {}", egress_if_index);
+        let eth_if_idx = match session.payload {
+            Payload::Ethernet(EthernetSesssionParams { if_index }) => if_index,
+            _ => 0,
+        };
+
         let v = UlForwardingEntry {
             teid_top_bytes: session.uplink_gtp_teid.0[0..3].try_into().unwrap(),
             pdcp_header_length,
-            egress_if_index,
+            egress_if_index: eth_if_idx,
         };
         let mut array = self.uplink_forwarding_table.lock().await;
-        array.set(idx as u32, v, 0)?;
+        array.set(forwarding_idx as u32, v, 0)?;
 
         let remote_gtp_addr = u32::from_be_bytes(gtp_remote_ipv4.octets());
         // TODO: broaden this to check for more invalid addresses.
@@ -314,21 +297,20 @@ impl PacketProcessor {
             pdcp_header_length,
         };
         let mut array = self.downlink_forwarding_table.lock().await;
-        if let Err(e) = array.set(idx as u32, v, 0) {
+        if let Err(e) = array.set(forwarding_idx as u32, v, 0) {
             warn!(
                 logger,
-                "Error storing downlink forwarding entry {} - {}", idx, e
+                "Failed to set downlink forwarding {} - {}", forwarding_idx, e
             )
         }
 
-        // For an ethernet PDU session, we need to set up the interface mapping table
-        // for whichever if index is assigned to this UE.
-        let if_index = self.ethernet_interface_indices[idx as usize - 2];
-        let mut array = self.eth_index_lookup_table.lock().await;
-        if let Err(e) = array.set(if_index as u32, idx as u16, 0) {
-            warn!(logger, "Error storing eth index entry {} - {}", idx, e)
+        // For an Ethernet PDU session, set up the interface lookup table to point to the forwarding table entry.
+        if eth_if_idx != 0 {
+            let mut array = self.eth_if_index_lookup_table.lock().await;
+            if let Err(e) = array.set(eth_if_idx as u32, forwarding_idx as u16, 0) {
+                warn!(logger, "Failed to set eth lookup {} - {}", eth_if_idx, e)
+            }
         }
-        println!("Set ethernet if {if_index} to point to UE {idx}");
 
         Ok(())
     }
@@ -350,17 +332,24 @@ impl PacketProcessor {
     }
 
     pub async fn delete_userplane_session(&self, session: &UserplaneSession, logger: &Logger) {
+        info!(logger, "Delete userplane session {}", session.payload);
         let idx = session.uplink_gtp_teid.0[3] as u32;
         self.clear_forwarding_entries(idx, logger).await;
+
+        // Note there is no 'linger' function right now, so there might be timing windows
+        // where a new UE session could immediately obtain the IP address / ethernet link of whatever old UE
+        // session we are deleting here and potentially receive and receive the final packets on the old session.
+        match session.payload {
+            Payload::Ethernet(EthernetSesssionParams { if_index }) => {
+                // Return the ethernet interface index to the pool of available indices.
+                self.ethernet_interface_indices.lock().await.push(if_index);
+            }
+            Payload::Ipv4(_) => {}
+        }
 
         if let Err(e) = self.index_pool.lock().await.return_id(idx as usize) {
             warn!(logger, "Error returning UE index {} - {}", idx, e)
         }
-
-        info!(
-            logger,
-            "Deleted userplane session UE IP {}", session.ue_ip_addr
-        );
     }
 
     async fn clear_forwarding_entries(&self, idx: u32, logger: &Logger) {

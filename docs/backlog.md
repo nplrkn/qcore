@@ -2,24 +2,21 @@
 
 ## In progress
 - Ethernet PDU sessions
+  - get test framework passing
+  - test case where there are more ethernet sessions than available veth devices
+  - commonize downlink to use XDP in both cases
+  - try again redirecting to loopback from XDP program by installing dummy XDP programs? (https://ants-gitlab.inf.um.es/jorgegm/xdp-tutorial/-/tree/ae0ad18e1d7cba35cb5afbc8c4dfee2efa72fc38/packet03-redirecting)
   - prove unicast and broadcast between two UEs in test framework 
   -  with the XDP downlink program we can see the rewritten packet flowing (on veth_ue_1_a or veth_ue_2_a) but not being forwarded to lo 
      -  so try chaining onto TC program - safest first step?
         - (using [metadata ](https://docs.ebpf.io/linux/program-context/__sk_buff/#data_meta)) - e.g. do everything in XDP apart from the redirect?  - this avoids the memmove.
-        -  first without metadata, just the slow way
-
-     -  or try to fix it
-        -  see https://github.com/torvalds/linux/blob/master/samples/bpf/xdp_fwd_kern.c
-        -  and note point from https://ants-gitlab.inf.um.es/jorgegm/xdp-tutorial/-/tree/ae0ad18e1d7cba35cb5afbc8c4dfee2efa72fc38/packet03-redirecting "in order to the transmit and/or redirect functionality to work, all involved devices should have an attached XDP program, including both veth peers." 
-        -  also "The bpf_redirect helper actually shouldn’t be used in production as it is slow" 
-        -  anyway, what is to stop us routing the GTP flow from userspace?  and just configuring the MAC?
-           -  so how about we try hardcoding the MACs and redirect if index
-           -  and enabling XDP dummy program on veths and on lo? (https://www.spinics.net/lists/netdev/msg625217.html)
-
+        -  first without metadata, just the slow way 
   - ensure stats give visibility into each arm of ethernet XDP/TC code
   - have the setup-ethernet script take a param which is number of veths to set up
+  - "The bpf_redirect helper actually shouldn’t be used in production as it is slow" 
   - write up design notes if not clear from code
-  - test with lots of UEs / veths in parallel 
+  - decide what to do about downlink buffering - issue warning for now?
+
 
 ## Bugs / tech debt
 - "slog-async: logger dropped messages due to channel overflow" - for example, when hitting Ctrl-C at end of PacketRusher test - check out tracing-appender

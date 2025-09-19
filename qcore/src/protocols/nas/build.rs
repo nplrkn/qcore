@@ -1,6 +1,9 @@
 #![allow(clippy::unusual_byte_groupings)]
-use crate::PduSession;
-use anyhow::{Result, bail};
+use crate::{
+    PduSession,
+    data::{Ipv4SessionParams, Payload},
+};
+use anyhow::Result;
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gmmMessageType, Nas5gsMessage, Nas5gsmMessage, Nas5gsmMessageType, NasAbba,
     NasAdditionalFGSecurityInformation, NasAuthenticationParameterAutn,
@@ -250,15 +253,17 @@ pub fn pdu_session_establishment_accept(
     pti: u8,
     sst: u8,
 ) -> Result<Box<Nas5gsMessage>> {
-    let ue_ip_addr = pdu_session.userplane_info.ue_ip_addr;
-    let IpAddr::V4(ue_ipv4) = ue_ip_addr else {
-        bail!("IPv6 not implemented")
-    };
-
     let five_qi = pdu_session.userplane_info.five_qi;
     let qfi = pdu_session.userplane_info.qfi;
     let dns_primary = &[0x08, 0x08, 0x08, 0x08];
     let dns_secondary = &[0x08, 0x08, 0x04, 0x04];
+
+    let pdu_address = match pdu_session.userplane_info.payload {
+        Payload::Ipv4(Ipv4SessionParams { ue_ip_addr }) => {
+            Some(nas_pdu_address(&ue_ip_addr.octets()))
+        }
+        Payload::Ethernet { .. } => None,
+    };
 
     // Work around limitation in NAS library.  SSC Mode and Selected Session Type are
     // half byte V fields (24.501, table 8.3.2.1.1).  NasPduSessionType wrongly includes
@@ -276,7 +281,7 @@ pub fn pdu_session_establishment_accept(
             authorized_qos_rules: authorized_qos_rules(qfi),
             session_ambr: session_ambr(),
             fgsm_cause: None,
-            pdu_address: Some(nas_pdu_address(&ue_ipv4.octets())),
+            pdu_address,
             rq_timer_value: None,
             s_nssai: Some(snssai(sst)),
             always_on_pdu_session_indication: None,

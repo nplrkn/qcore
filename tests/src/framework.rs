@@ -142,7 +142,7 @@ pub async fn send_uplink_ipv4<T: Transport>(ue: &MockUe<T>, dn: &DataNetwork) ->
 
 pub async fn send_uplink_ethernet_broadcast<T: Transport>(
     ue: &MockUe<T>,
-    dn: &DataNetwork,
+    _dn: &DataNetwork,
 ) -> Result<()> {
     ue.send_userplane_ethernet_broadcast().await
 }

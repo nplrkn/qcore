@@ -1,6 +1,6 @@
 use super::subscriber_db::SubscriberDb;
 use super::userplane::{DownlinkBufferController, PacketProcessor, PagingApi};
-use crate::data::UePagingInfo;
+use crate::data::{Ipv4SessionParams, Payload, UePagingInfo};
 use crate::f1ap::{F1AP_BIND_PORT, F1AP_SCTP_PPID};
 use crate::ngap::{NGAP_BIND_PORT, NGAP_SCTP_PPID};
 use crate::procedures::{F1apHandler, NgapHandler, UeMessage, UeMessageHandler};
@@ -400,7 +400,12 @@ impl ProcedureBase for QCore {
 
     async fn allocate_userplane_session(&self, logger: &Logger) -> Result<UserplaneSession> {
         self.packet_processor
-            .allocate_userplane_session(self.config().five_qi, self.config().pdcp_sn_length, logger)
+            .allocate_userplane_session(
+                self.config().five_qi,
+                self.config().pdcp_sn_length,
+                true,
+                logger,
+            )
             .await
     }
 
@@ -414,9 +419,13 @@ impl ProcedureBase for QCore {
             .commit_userplane_session(session, logger)
             .await?;
 
-        self.downlink_data_buffer
-            .reactivate_ip(&session.ue_ip_addr)
-            .await
+        if let Payload::Ipv4(Ipv4SessionParams { ue_ip_addr }) = session.payload {
+            self.downlink_data_buffer
+                .reactivate_ip(&IpAddr::V4(ue_ip_addr))
+                .await
+        } else {
+            Ok(false)
+        }
     }
 
     async fn delete_userplane_session(&self, session: &UserplaneSession, logger: &Logger) {
@@ -435,15 +444,22 @@ impl ProcedureBase for QCore {
             .deactivate_userplane_session(session, logger)
             .await;
 
-        debug!(
-            logger,
-            "Arm downlink packet detection for IP {}, will page {}",
-            session.ue_ip_addr,
-            Tmsi(paging_info.tmsi)
-        );
+        if let Payload::Ipv4(Ipv4SessionParams { ue_ip_addr }) = session.payload {
+            debug!(
+                logger,
+                "Arm downlink packet detection for IP {}, will page {}",
+                ue_ip_addr,
+                Tmsi(paging_info.tmsi)
+            );
 
-        self.downlink_data_buffer
-            .deactivate_ip(&session.ue_ip_addr, paging_info)
-            .await
+            self.downlink_data_buffer
+                .deactivate_ip(&IpAddr::V4(ue_ip_addr), paging_info)
+                .await
+        } else {
+            warn!(
+                logger,
+                "Ethernet session downlink buffering not yet implemented"
+            );
+        }
     }
 }

@@ -7,6 +7,7 @@ use aya_ebpf::bindings::xdp_action::XDP_ABORTED;
 use aya_ebpf::bindings::xdp_action::XDP_PASS;
 //use crate::utils::*;
 use aya_ebpf::bindings::xdp_md;
+use aya_ebpf::helpers::gen::bpf_xdp_adjust_meta;
 use aya_ebpf::helpers::r#gen::bpf_redirect;
 use aya_ebpf::helpers::r#gen::bpf_xdp_adjust_head;
 use aya_ebpf::macros::xdp;
@@ -40,10 +41,18 @@ pub unsafe fn byte_at(ctx: &XdpContext, offset: usize) -> u8 {
 const GTP_TEID_OFFSET: usize = EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + 4;
 
 /// This classifier is attached to the interface connected to the RAN and handles incoming Ethernet packets
-/// directed to QCore's N3 GTP port.
+/// directed to QCore's GTP port.
 #[xdp]
 pub fn xdp_uplink_n3(ctx: XdpContext) -> u32 {
     match try_uplink_n3(ctx) {
+        Ok(rc) => rc,
+        Err(rc) => rc,
+    }
+}
+
+#[xdp]
+pub fn xdp_uplink_f1u(ctx: XdpContext) -> u32 {
+    match try_uplink_f1u(ctx) {
         Ok(rc) => rc,
         Err(rc) => rc,
     }
@@ -57,7 +66,20 @@ fn try_uplink_n3(ctx: XdpContext) -> Result<u32, u32> {
         let extension_header_type = parse_gtp_header(&ctx)?;
         let entry = lookup_entry(&ctx)?;
         let payload_offset = parse_gtp_ext_pdu_session_container(&ctx, extension_header_type)?;
-        output_inner_ethernet_frame(&ctx, payload_offset, (*entry).egress_if_index)
+        output_inner_packet(&ctx, payload_offset, (*entry).egress_if_index)
+    }
+}
+
+#[inline(always)]
+pub fn try_uplink_f1u(ctx: XdpContext) -> Result<u32, u32> {
+    unsafe {
+        check_udp_dest_port(&ctx)?;
+        let extension_header_type = parse_gtp_header(&ctx)?;
+        let entry = lookup_entry(&ctx)?;
+        let offset = process_gtp_extension_headers(&ctx, extension_header_type)?;
+        let payload_offset =
+            process_pdcp_and_sdap_headers(&ctx, (*entry).pdcp_header_length, offset)?;
+        output_inner_packet(&ctx, payload_offset, (*entry).egress_if_index)
     }
 }
 
@@ -146,6 +168,49 @@ fn lookup_entry(ctx: &XdpContext) -> Result<*const UlForwardingEntry, u32> {
         Ok(entry)
     }
 }
+
+#[inline(always)]
+// Returns PDCP header offset, if caller should continue processing
+fn process_gtp_extension_headers(
+    ctx: &XdpContext,
+    extension_header_type: u8,
+) -> Result<usize, u32> {
+    unsafe {
+        const PDCP_HEADER_OFFSET: usize =
+            GTP_EXTENSION_HEADER_OFFSET + GtpExtDlDataDeliveryStatus::LEN;
+
+        if extension_header_type == 0 {
+            return Ok(EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + GtpHdr::LEN);
+        };
+
+        ensure!(
+            extension_header_type == GTP_EXT_NR_RAN_CONTAINER,
+            UlDropUnsupportedExt
+        );
+
+        ensure!(is_long_enough(ctx, PDCP_HEADER_OFFSET), UlDropTooShort);
+        let delivery_status: *const GtpExtDlDataDeliveryStatus =
+            ptr_at(ctx, GTP_EXTENSION_HEADER_OFFSET);
+        ensure!(
+            (*delivery_status).len_div_4 == (GtpExtDlDataDeliveryStatus::LEN / 4) as u8,
+            UlDropExtLength
+        );
+        ensure!(
+            (*delivery_status).next_extension_header_type == 0,
+            UlDropUnsupportedExt
+        );
+
+        // If we just reached the end of the packet, then record an status only packet and
+        // drop.
+        ensure!(
+            is_long_enough(ctx, PDCP_HEADER_OFFSET + 1),
+            UlRxStatusOnlyPkts
+        );
+
+        Ok(PDCP_HEADER_OFFSET)
+    }
+}
+
 const PAYLOAD_OFFSET: usize = GTP_EXTENSION_HEADER_OFFSET + GtpExtPduSessionContainer::LEN;
 
 #[inline(always)]
@@ -175,22 +240,84 @@ fn parse_gtp_ext_pdu_session_container(
 }
 
 #[inline(always)]
-pub fn output_inner_ethernet_frame(
+fn process_pdcp_and_sdap_headers(
     ctx: &XdpContext,
-    offset: usize,
-    if_index: u32,
-) -> Result<u32, u32> {
+    pdcp_header_length: u8,
+    mut offset: usize,
+) -> Result<usize, u32> {
     unsafe {
-        info!(ctx, "About to adjust head by {}", offset);
-        // Reset the head of the packet to the start of the inner Ethernet frame.
+        ensure!(
+            is_long_enough(ctx, offset + PdcpHdr18BitSn::LEN + SDAP_HEADER_LEN),
+            UlDropTooShortExt
+        );
+
+        // Skip over the PDCP header. TS38.323, 6.2.1.
+        // This starts with the D/C bit.  PDCP control packets are not implemented.
+        ensure!(byte_at(ctx, offset) & 0x80 != 0, UlDropPdcpControl);
+        if pdcp_header_length == 2 {
+            offset += PdcpHdr12BitSn::LEN;
+        } else {
+            offset += PdcpHdr18BitSn::LEN;
+        }
+
+        // Skip over the 1-byte UL SDAP header - TS37.624, 6.2.2.3
+        // | D/C |  R  |              QFI                 |
+        // SDAP control packets are not implemented
+        ensure!(byte_at(ctx, offset) & 0x80 != 0, UlDropSdapControl);
+        offset += SDAP_HEADER_LEN;
+        Ok(offset)
+    }
+}
+
+#[inline(always)]
+pub fn output_inner_packet(ctx: &XdpContext, mut offset: usize, if_index: u32) -> Result<u32, u32> {
+    unsafe {
+        // If this is an IP packet, add an empty Ethernet header just before the inner packet.
+        if if_index == 0 {
+            offset = offset - EthHdr::LEN;
+            ensure!(is_long_enough(ctx, offset + EthHdr::LEN), UlDropTooShort);
+            let ethhdr: *mut EthHdr = ptr_at(ctx, offset);
+            (*ethhdr).dst_addr = [0, 0, 0, 0, 0, 0];
+            (*ethhdr).src_addr = [0, 0, 0, 0, 0, 0];
+            (*ethhdr).ether_type = EtherType::Ipv4;
+        }
+
+        // Advance to the start of the inner packet.
         let ret = bpf_xdp_adjust_head(ctx.ctx as *mut xdp_md, offset as i32);
 
         info!(
             ctx,
-            "Adjust head ret {}, now will emit to device {}", ret, if_index
+            "Adjust head ret {}, len now {}, now will emit to device {}",
+            ret,
+            ctx.data_end() - ctx.data(),
+            if_index
         );
 
-        // Redirect to this UE's veth device.
-        Ok(bpf_redirect(if_index, 0) as u32)
+        // In our bandwidth counters we distinguish between
+        // - header bytes: the outer IP, UDP, GTP, and PDCP headers - i.e. the overhead that we have just
+        //   stripped off
+        // - payload bytes
+        add(UlRxHeaderBytes, offset as u64);
+        add(UlPayloadBytes, (ctx.data_end() - ctx.data()) as u64);
+
+        // For an IP packet we redirect to qcoretun device ingress.  This is done by a simple TC program
+        // (since an XDP program can only redirect to a device egress).  We add a magic
+        // number to the metadata so that the TC program can identify the packet.
+
+        // TODO: why do we need the TC program and the redirect?  Provide we disable rp filtering (and set up NAT)
+        // on the ran interface, surely packet from this device will be routed by Linux?
+        if if_index == 0 {
+            bpf_xdp_adjust_meta(ctx.ctx as *mut xdp_md, -(size_of::<u32>() as i32));
+            if ctx.metadata() + 4 > ctx.metadata_end() {
+                return Err(XDP_ABORTED);
+            }
+            let meta: *mut u32 = ctx.metadata() as *mut u32;
+            *meta = 34759;
+            info!(ctx, "Wrote to meta");
+
+            Ok(XDP_PASS)
+        } else {
+            Ok(bpf_redirect(if_index, 0) as u32)
+        }
     }
 }
