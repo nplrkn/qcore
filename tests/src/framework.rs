@@ -1,6 +1,7 @@
 use super::{DataNetwork, MockDu, MockUe};
 use crate::{MockGnb, mock_ue::Transport};
 use anyhow::{Result, bail};
+use pnet_base::MacAddr;
 use qcore::{
     AmfIds, Config, NetworkDisplayName, PdcpSequenceNumberLength, ProgramHandle, QCore,
     SubscriberAuthParams, SubscriberDb,
@@ -135,8 +136,15 @@ pub async fn send_uplink_ipv4<T: Transport>(ue: &MockUe<T>, dn: &DataNetwork) ->
     let IpAddr::V4(dst_ip) = dst_udp_server.ip() else {
         bail!("Expected IPv4 address");
     };
-    ue.send_userplane_packet(&dst_ip, TEST_UDP_PORT, dst_udp_server.port())
+    ue.send_userplane_udp(&dst_ip, TEST_UDP_PORT, dst_udp_server.port())
         .await
+}
+
+pub async fn send_uplink_ethernet_broadcast<T: Transport>(
+    ue: &MockUe<T>,
+    dn: &DataNetwork,
+) -> Result<()> {
+    ue.send_userplane_ethernet_broadcast().await
 }
 
 pub async fn pass_through_uplink_ipv4<T: Transport>(
@@ -147,14 +155,33 @@ pub async fn pass_through_uplink_ipv4<T: Transport>(
     dn.receive_n6_udp_packet().await
 }
 
+pub async fn pass_through_uplink_ethernet_broadcast<T: Transport>(
+    ue: &MockUe<T>,
+    dn: &DataNetwork,
+) -> Result<()> {
+    send_uplink_ethernet_broadcast(ue, dn).await
+    //dn.receive_n6_ethernet_broadcast().await
+}
+
 pub async fn pass_through_ue_to_ue_ipv4<T: Transport>(
     src_ue: &MockUe<T>,
     dst_ue: &MockUe<T>,
 ) -> Result<()> {
     src_ue
-        .send_userplane_packet(&dst_ue.data.ipv4_addr, TEST_UDP_PORT, TEST_UDP_PORT)
+        .send_userplane_udp(&dst_ue.data.ipv4_addr, TEST_UDP_PORT, TEST_UDP_PORT)
         .await?;
     let _ip_packet = dst_ue.recv_ue_data_packet().await?;
+    Ok(())
+}
+
+pub async fn pass_through_ue_to_ue_ethernet_unicast<T: Transport>(
+    src_ue: &MockUe<T>,
+    dst_ue: &MockUe<T>,
+) -> Result<()> {
+    let dst = MacAddr::new(2, 2, 2, 2, 2, 2);
+    let src = MacAddr::new(2, 2, 2, 2, 2, 1);
+    src_ue.send_userplane_ethernet_unicast(&src, &dst).await?;
+    let _ethernet_packet = dst_ue.recv_ue_data_packet().await?;
     Ok(())
 }
 

@@ -140,7 +140,7 @@ dependencies = [
  "asn1-codecs",
  "bitvec",
  "nonempty",
- "num_enum",
+ "num_enum 0.5.11",
 ]
 
 [[package]]
@@ -435,6 +435,48 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.100",
+]
+
+[[package]]
+name = "aya-log-common"
+version = "0.1.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "befef9fe882e63164a2ba0161874e954648a72b0e1c4b361f532d590638c4eec"
+dependencies = [
+ "num_enum 0.7.4",
+]
+
+[[package]]
+name = "aya-log-ebpf"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae348f459df78a79e5cd5e164b6562b927033b97ca3b033605b341a474f44510"
+dependencies = [
+ "aya-ebpf",
+ "aya-log-common",
+ "aya-log-ebpf-macros",
+]
+
+[[package]]
+name = "aya-log-ebpf-macros"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6d8251a75f56077db51892041aa6b77c70ef2723845d7a210979700b2f01bc4"
+dependencies = [
+ "aya-log-common",
+ "aya-log-parser",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.100",
+]
+
+[[package]]
+name = "aya-log-parser"
+version = "0.1.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14b102eb5c88c9aa0b49102d3fbcee08ecb0dfa81014f39b373311de7a7032cb"
+dependencies = [
+ "aya-log-common",
 ]
 
 [[package]]
@@ -840,6 +882,7 @@ name = "ebpf-userplane"
 version = "0.1.0"
 dependencies = [
  "aya-ebpf",
+ "aya-log-ebpf",
  "ebpf-common",
  "network-types",
  "which",
@@ -903,7 +946,7 @@ dependencies = [
  "async-trait",
  "hex",
  "nonempty",
- "num_enum",
+ "num_enum 0.5.11",
  "slog",
  "xxap",
 ]
@@ -1464,7 +1507,7 @@ dependencies = [
  "asn1-per",
  "async-trait",
  "hex",
- "num_enum",
+ "num_enum 0.5.11",
  "slog",
  "xxap",
 ]
@@ -1518,7 +1561,17 @@ version = "0.5.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f646caf906c20226733ed5b1374287eb97e3c2a5c227ce668c1f2ce20ae57c9"
 dependencies = [
- "num_enum_derive",
+ "num_enum_derive 0.5.11",
+]
+
+[[package]]
+name = "num_enum"
+version = "0.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a973b4e44ce6cad84ce69d797acf9a044532e4184c4f267913d1b546a0727b7a"
+dependencies = [
+ "num_enum_derive 0.7.4",
+ "rustversion",
 ]
 
 [[package]]
@@ -1531,6 +1584,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "num_enum_derive"
+version = "0.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77e878c846a8abae00dd069496dbe8751b16ac1c3d6bd2a7283a938e8228f90d"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.100",
 ]
 
 [[package]]
@@ -1773,6 +1837,7 @@ dependencies = [
  "async-tun",
  "aya",
  "aya-build",
+ "aya-log-common",
  "bytes",
  "clap",
  "delegate",
@@ -1822,6 +1887,7 @@ dependencies = [
  "ngap",
  "oxirush-nas",
  "pdcp",
+ "pnet_base",
  "pnet_packet",
  "qcore",
  "rand 0.8.5",
@@ -1969,7 +2035,7 @@ version = "0.1.0"
 dependencies = [
  "asn1-per",
  "hex",
- "num_enum",
+ "num_enum 0.5.11",
 ]
 
 [[package]]
@@ -2845,7 +2911,7 @@ dependencies = [
  "futures-lite 1.13.0",
  "libc",
  "log",
- "num_enum",
+ "num_enum 0.5.11",
  "os_socketaddr",
  "slog",
  "stop-token",

@@ -1,0 +1,12 @@
+#!/bin/sh
+
+sudo ip link add veth_ue_1_a type veth peer veth_ue_1_b
+sudo ip link add veth_ue_2_a type veth peer veth_ue_2_b
+sudo ip link set veth_ue_1_a up
+sudo ip link set veth_ue_1_b up
+sudo ip link set veth_ue_2_a up
+sudo ip link set veth_ue_2_b up
+sudo ip link add qcore_br0 type bridge
+sudo ip link set veth_ue_1_b master qcore_br0
+sudo ip link set veth_ue_2_b master qcore_br0
+sudo ip link set qcore_br0 up

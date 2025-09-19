@@ -1,4 +1,5 @@
-use aya_ebpf::{helpers::r#gen::bpf_map_lookup_elem, programs::TcContext};
+use aya_ebpf::helpers::r#gen::bpf_map_lookup_elem;
+use aya_ebpf::programs::TcContext;
 
 #[inline(always)]
 pub fn is_long_enough(ctx: &TcContext, length: usize) -> bool {

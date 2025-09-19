@@ -24,6 +24,7 @@ asn1-per = { path = "../5g-libs/asn1-per" }
 rand = "0.8.5"
 async-net = "1.6.1"
 pnet_packet = "0.35.0"
+pnet_base = "0.35.0"
 slog-term = "2.8.0"
 slog-envlogger = "2.2.0"
 hex-literal = "1.0.0"

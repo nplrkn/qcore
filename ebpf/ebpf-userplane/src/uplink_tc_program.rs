@@ -1,10 +1,10 @@
 use crate::counters::*;
 use crate::globals::*;
 use crate::headers::*;
+use crate::maps::UL_FORWARDING_TABLE;
 use crate::utils::*;
 use aya_ebpf::bindings::{bpf_adj_room_mode::BPF_ADJ_ROOM_MAC, TC_ACT_OK};
-use aya_ebpf::macros::{classifier, map};
-use aya_ebpf::maps::Array;
+use aya_ebpf::macros::classifier;
 use aya_ebpf::programs::TcContext;
 //use aya_log_ebpf::info;
 use ebpf_common::CounterIndex::*;
@@ -14,10 +14,6 @@ use network_types::{
     ip::{IpProto, Ipv4Hdr},
     udp::UdpHdr,
 };
-
-#[map]
-static mut UL_FORWARDING_TABLE: Array<UlForwardingEntry> =
-    Array::with_max_entries(FORWARDING_TABLE_SIZE, 0);
 
 const GTP_TEID_OFFSET: usize = EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + 4;
 
@@ -55,11 +51,14 @@ pub fn try_tc_uplink_f1u(ctx: TcContext) -> Result<i32, i32> {
 
 #[inline(always)]
 fn try_uplink_n3(ctx: TcContext) -> Result<i32, i32> {
-    check_udp_dest_port(&ctx)?;
-    let extension_header_type = parse_gtp_header(&ctx)?;
-    let _entry = lookup_entry(&ctx)?;
-    let offset = parse_gtp_ext_pdu_session_container(&ctx, extension_header_type)?;
-    output_inner_ipv4_packet(&ctx, offset)
+    unsafe {
+        check_udp_dest_port(&ctx)?;
+        let extension_header_type = parse_gtp_header(&ctx)?;
+        let entry = lookup_entry(&ctx)?;
+        let payload_offset = parse_gtp_ext_pdu_session_container(&ctx, extension_header_type)?;
+        //output_inner_ipv4_packet(&ctx, payload_offset)
+        output_inner_ethernet_frame(&ctx, payload_offset, (*entry).egress_if_index)
+    }
 }
 
 #[inline(always)]
@@ -105,7 +104,7 @@ fn parse_gtp_header(ctx: &TcContext) -> Result<u8, i32> {
             UlDropTooShort
         );
 
-        let gtphdr: *const GtpExtendedHdr = ptr_at(&ctx, EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN);
+        let gtphdr: *const GtpExtendedHdr = ptr_at(ctx, EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN);
         ensure!(
             (*gtphdr).base.message_type == GTP_MESSAGE_TYPE_GPDU,
             UlDropGtpMessageType
@@ -184,13 +183,13 @@ fn parse_gtp_ext_pdu_session_container(
     extension_header_type: u8,
 ) -> Result<usize, i32> {
     unsafe {
-        const INNER_IP_OFFSET: usize = GTP_EXTENSION_HEADER_OFFSET + GtpExtPduSessionContainer::LEN;
+        const PAYLOAD_OFFSET: usize = GTP_EXTENSION_HEADER_OFFSET + GtpExtPduSessionContainer::LEN;
         ensure!(
             extension_header_type == GTP_EXT_PDU_SESSION_CONTAINER,
             UlDropGtpExtMissing
         );
 
-        ensure!(is_long_enough(ctx, INNER_IP_OFFSET), UlDropTooShort);
+        ensure!(is_long_enough(ctx, PAYLOAD_OFFSET), UlDropTooShort);
         let session_container: *const GtpExtPduSessionContainer =
             ptr_at(ctx, GTP_EXTENSION_HEADER_OFFSET);
         ensure!(
@@ -201,7 +200,7 @@ fn parse_gtp_ext_pdu_session_container(
             (*session_container).next_extension_header_type == 0,
             UlDropUnsupportedExt
         );
-        Ok(INNER_IP_OFFSET)
+        Ok(PAYLOAD_OFFSET)
     }
 }
 
@@ -283,5 +282,24 @@ pub fn output_inner_ipv4_packet(ctx: &TcContext, offset: usize) -> Result<i32, i
         // Emit the packet as if it comes from the "ue" tun.
         // Even though this has an Ethernet header - which is wrong for an L3 interface - Linux is ok to process it
         Ok(redirect_to_linux_routing())
+    }
+}
+
+#[inline(always)]
+pub fn output_inner_ethernet_frame(
+    _ctx: &TcContext,
+    _offset: usize,
+    if_index: u32,
+) -> Result<i32, i32> {
+    unsafe {
+        // Temporary hack: just forward the packet as is over the output eth device.
+        // This leverages the fact that it already has a valid ethernet header.
+
+        // Actually we need to strip off all of the outer headers, possibly police the
+        // source ethernet address, and then forward the inner packet.
+
+        // Emit the packet as if it comes from the "ue" tun.
+        // Even though this has an Ethernet header - which is wrong for an L3 interface - Linux is ok to process it
+        Ok(aya_ebpf::helpers::r#gen::bpf_redirect(if_index, 0) as i32)
     }
 }

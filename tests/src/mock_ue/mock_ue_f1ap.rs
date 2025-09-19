@@ -9,7 +9,7 @@ use qcore::SubscriberAuthParams;
 use rrc::*;
 use slog::{Logger, info};
 use std::{
-    net::{IpAddr, Ipv4Addr},
+    net::IpAddr,
     ops::{Deref, DerefMut},
 };
 
@@ -102,18 +102,12 @@ impl<'a> Transport for UeF1apMode<'a> {
         }
     }
 
-    async fn send_userplane_packet(
-        &self,
-        src_ip: &Ipv4Addr,
-        dst_ip: &Ipv4Addr,
-        src_port: u16,
-        dst_port: u16,
-    ) -> Result<()> {
-        let packet = Packet::new_ue_udp(src_ip, dst_ip, src_port, dst_port);
+    async fn send_userplane_packet(&self, packet: Packet) -> Result<()> {
         self.du
             .send_f1u_data_packet(&self.du_ue_context, packet)
             .await
     }
+
     async fn receive_userplane_packet(&self) -> Result<Vec<u8>> {
         self.du.recv_f1u_data_packet(&self.du_ue_context).await
     }

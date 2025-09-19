@@ -18,11 +18,13 @@ pub unsafe fn add(stat_id: CounterIndex, amount: u64) {
     }
 }
 
+// TODO: need more clarity about whether this drops the packet (TC_ACT_SHOT / XDP_DROP)
+// or passes it.  "drop_unless"?
 macro_rules! ensure {
     ($cond:expr, $stat:ident) => {
         if !$cond {
             inc($stat);
-            return Err(aya_ebpf::bindings::TC_ACT_SHOT);
+            return Err(2);
         }
     };
 }

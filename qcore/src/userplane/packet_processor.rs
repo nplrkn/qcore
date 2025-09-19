@@ -1,13 +1,14 @@
 #![allow(clippy::unusual_byte_groupings)]
 use super::MAX_UES;
-//use super::aya_log::EbpfLogger;
+use super::aya_log::EbpfLogger;
 use super::stats::dump_stats;
 use crate::UserplaneSession;
 use crate::data::PdcpSequenceNumberLength;
 use anyhow::{Result, anyhow, bail, ensure};
 use async_std::{net::IpAddr, sync::Mutex};
+use async_tun::{Tun, TunBuilder};
 use aya::maps::{Array, MapData, PerCpuArray};
-use aya::programs::{SchedClassifier, TcAttachType, tc};
+use aya::programs::{SchedClassifier, TcAttachType, Xdp, XdpFlags, tc};
 use aya::{Ebpf, EbpfLoader};
 use ebpf_common::*;
 use index_pool::IndexPool;
@@ -25,49 +26,30 @@ pub struct PacketProcessor {
     ue_subnet: Ipv4Addr,
     uplink_forwarding_table: Arc<Mutex<UplinkForwardingTable>>,
     downlink_forwarding_table: Arc<Mutex<DownlinkForwardingTable>>,
+    eth_index_lookup_table: Arc<Mutex<EthIndexLookupTable>>,
+    //tuns: Arc<Vec<Tun>>,
+    ethernet_interface_indices: Arc<InterfaceIndices>,
 }
 
 type UplinkForwardingTable = Array<MapData, UlForwardingEntry>;
 type DownlinkForwardingTable = Array<MapData, DlForwardingEntry>;
+type EthIndexLookupTable = Array<MapData, u16>;
+
+// // First the if index we will use for transmitting from this UE, then the if index we will
+// // use to detect downlink packets to this UE.
+// type InterfaceIndices = Vec<(u32, u32)>;
+
+type InterfaceIndices = Vec<u32>;
 
 impl PacketProcessor {
-    pub async fn new(
-        ue_subnet: Ipv4Addr,
-        ebpf: &mut Ebpf,
-        userplane_stats: bool,
-        logger: &Logger,
-    ) -> Result<Self> {
-        let mut index_pool = IndexPool::new();
-        // Take the 0 and 1 slots, so that the first UE gets an IP address ending in .2.
-        let _ = index_pool.request_id(0);
-        let _ = index_pool.request_id(1);
-        let index_pool = Arc::new(Mutex::new(index_pool));
-
-        let counters = PerCpuArray::try_from(ebpf.take_map("COUNTERS").unwrap())?;
-        let ul_forwarding_table = Array::try_from(ebpf.take_map("UL_FORWARDING_TABLE").unwrap())?;
-        let dl_forwarding_table = Array::try_from(ebpf.take_map("DL_FORWARDING_TABLE").unwrap())?;
-
-        // Spawn the stats task
-        if userplane_stats {
-            let _stats_task = async_std::task::spawn(dump_stats(logger.clone(), counters));
-        }
-
-        Ok(PacketProcessor {
-            index_pool,
-            ue_subnet,
-            uplink_forwarding_table: Arc::new(Mutex::new(ul_forwarding_table)),
-            downlink_forwarding_table: Arc::new(Mutex::new(dl_forwarding_table)),
-        })
-    }
-
     pub fn install_ebpf(
         ngap_mode: bool,
         local_ip: IpAddr,
-        f1u_if_name: &str,
+        ran_if_name: &str,
         n6_if_name: &str,
         tun_if_name: &str,
-        _logger: &Logger,
-    ) -> Result<Ebpf> {
+        logger: &Logger,
+    ) -> Result<(Ebpf, InterfaceIndices)> {
         let gtpu_local_ipv4 = match local_ip {
             IpAddr::V4(addr) => addr.octets(),
             _ => bail!("Ipv6 not supported"),
@@ -88,15 +70,16 @@ impl PacketProcessor {
         // }
 
         let tun_if_index = get_if_index(tun_if_name)?;
+
         let data = aya::include_bytes_aligned!(concat!(env!("OUT_DIR"), "/ebpf-userplane-program"));
         let mut ebpf = EbpfLoader::new()
             .set_global("GTPU_LOCAL_IPV4", &gtpu_local_ipv4, true)
             .set_global("TUN_IF_INDEX", &tun_if_index, true)
             .load(data)?;
 
-        // if let Err(e) = EbpfLogger::init_with_logger(&mut ebpf, logger.clone()) {
-        //     warn!(logger, "failed to initialize eBPF logger: {e}");
-        // }
+        if let Err(e) = EbpfLogger::init_with_logger(&mut ebpf, logger.clone()) {
+            warn!(logger, "failed to initialize eBPF logger: {e}");
+        }
 
         let (uplink_program, downlink_program) = if ngap_mode {
             ("tc_uplink_n3", "tc_downlink_n3")
@@ -104,18 +87,137 @@ impl PacketProcessor {
             ("tc_uplink_f1u", "tc_downlink_f1u")
         };
 
-        let _ = tc::qdisc_add_clsact(f1u_if_name);
-        let program: &mut SchedClassifier = ebpf.program_mut(uplink_program).unwrap().try_into()?;
+        // XDP uplink program.
+        let program: &mut Xdp = ebpf.program_mut("xdp_uplink_n3").unwrap().try_into()?;
         program.load()?;
-        program.attach(f1u_if_name, TcAttachType::Ingress)?;
+        program.attach(ran_if_name, XdpFlags::default())?;
 
-        let _ = tc::qdisc_add_clsact(n6_if_name);
+        // TODO - both XDP and TC program are both going to try to intercept packets to the GTP port.
+
+        // TODO
+        // TC uplink program for IP packets.
+        // let _ = tc::qdisc_add_clsact(ran_if_name);
+        // let program: &mut SchedClassifier = ebpf.program_mut(uplink_program).unwrap().try_into()?;
+        // program.load()?;
+        // program.attach(ran_if_name, TcAttachType::Ingress)?;
+
         let program: &mut SchedClassifier =
             ebpf.program_mut(downlink_program).unwrap().try_into()?;
         program.load()?;
+
+        let _ = tc::qdisc_add_clsact(n6_if_name);
         program.attach(n6_if_name, TcAttachType::Ingress)?;
 
-        Ok(ebpf)
+        // Look up UE ethernet interfaces and attach both XDP and TC downlink ethernet programs to each.
+        // TODO: is UE 2 veth_ue_1 and slot 0 in this vec???  that is mighty confusing
+
+        let tc_downlink_eth_program: &mut SchedClassifier = ebpf
+            .program_mut("tc_downlink_eth_redirect")
+            .unwrap()
+            .try_into()?;
+        tc_downlink_eth_program.load()?;
+
+        let mut ethernet_session_if_indices = vec![];
+        for ue_id in 1..MAX_UES {
+            let eth_interface_name = format!("veth_ue_{}_a", ue_id);
+
+            // Stop looking after the first failure.  In other words, we can't support
+            // gaps in the naming (e.g. 'veth_ue_2_a' won't get picked up unless 'veth_ue_1_a'
+            // exists in our network namespace).
+            let Ok(if_index) = get_if_index(&eth_interface_name) else {
+                break;
+            };
+
+            // Attach the TC program.
+            let _ = tc::qdisc_add_clsact(&eth_interface_name);
+            tc_downlink_eth_program.attach(&eth_interface_name, TcAttachType::Ingress)?;
+
+            ethernet_session_if_indices.push(if_index);
+
+            // let veth_interface_name_a = format!("veth_ue_{}_a", ue_id);
+            // let veth_interface_name_b = format!("veth_ue_{}_b", ue_id);
+
+            // // Stop looking after the first failure.  In other words, we can't support
+            // // gaps in the naming (e.g. 'veth_ue_2_a' won't get picked up unless 'veth_ue_1_a'
+            // // exists in our network namespace).
+            // let Ok(if_index_a) = get_if_index(&veth_interface_name_a) else {
+            //     break;
+            // };
+            // let Ok(if_index_b) = get_if_index(&veth_interface_name_b) else {
+            //     break;
+            // };
+
+            // ethernet_session_if_indices.push((if_index_a, if_index_b));
+        }
+
+        // Now attach the XDP program too.
+        let xdp_downlink_eth_program: &mut Xdp = ebpf
+            .program_mut("xdp_downlink_n3_eth")
+            .unwrap()
+            .try_into()?;
+        xdp_downlink_eth_program.load()?;
+        for if_index in &ethernet_session_if_indices {
+            xdp_downlink_eth_program.attach_to_if_index(*if_index, XdpFlags::default())?;
+        }
+
+        info!(
+            logger,
+            "Found {} ethernet devices to use for Ethernet PDU sessions",
+            ethernet_session_if_indices.len()
+        );
+
+        Ok((ebpf, ethernet_session_if_indices))
+    }
+
+    pub async fn new(
+        ue_subnet: Ipv4Addr,
+        ebpf: &mut Ebpf,
+        userplane_stats: bool,
+        if_indices: InterfaceIndices,
+        logger: &Logger,
+    ) -> Result<Self> {
+        let mut index_pool = IndexPool::new();
+        // Take the 0 and 1 slots, so that the first UE gets an IP address ending in .2.
+        let _ = index_pool.request_id(0);
+        let _ = index_pool.request_id(1);
+        let index_pool = Arc::new(Mutex::new(index_pool));
+
+        let counters = PerCpuArray::try_from(ebpf.take_map("COUNTERS").unwrap())?;
+        let ul_forwarding_table = Array::try_from(ebpf.take_map("UL_FORWARDING_TABLE").unwrap())?;
+        let dl_forwarding_table = Array::try_from(ebpf.take_map("DL_FORWARDING_TABLE").unwrap())?;
+        let eth_index_lookup_table =
+            Array::try_from(ebpf.take_map("DL_ETH_IF_INDEX_LOOKUP").unwrap())?;
+
+        // Spawn the stats task
+        if userplane_stats {
+            let _stats_task = async_std::task::spawn(dump_stats(logger.clone(), counters));
+        }
+
+        // Open all tap interfaces to bring them up.
+        // let mut tuns = vec![];
+        // for idx in 0..if_indices.len() {
+        //     let device_name = format!("tap_ue{}", idx + 1);
+        //     match TunBuilder::new()
+        //         .name(&device_name)
+        //         .tap(true)
+        //         .packet_info(false)
+        //         .try_build()
+        //         .await
+        //     {
+        //         Ok(t) => tuns.push(t),
+        //         Err(e) => bail!("Failed to open {device_name} - {e}"),
+        //     };
+        // }
+        // let tuns = Arc::new(tuns);
+        Ok(PacketProcessor {
+            index_pool,
+            ue_subnet,
+            uplink_forwarding_table: Arc::new(Mutex::new(ul_forwarding_table)),
+            downlink_forwarding_table: Arc::new(Mutex::new(dl_forwarding_table)),
+            eth_index_lookup_table: Arc::new(Mutex::new(eth_index_lookup_table)),
+            ethernet_interface_indices: Arc::new(if_indices),
+            //tuns,
+        })
     }
 
     /// Allocates an IP address and TEID for a userplane session.
@@ -186,9 +288,13 @@ impl PacketProcessor {
             PdcpSequenceNumberLength::EighteenBits => 3,
         };
 
+        // TODO - not like this :-)
+        let egress_if_index = self.ethernet_interface_indices[idx as usize - 2];
+        println!("Supply if index {}", egress_if_index);
         let v = UlForwardingEntry {
             teid_top_bytes: session.uplink_gtp_teid.0[0..3].try_into().unwrap(),
             pdcp_header_length,
+            egress_if_index,
         };
         let mut array = self.uplink_forwarding_table.lock().await;
         array.set(idx as u32, v, 0)?;
@@ -214,6 +320,15 @@ impl PacketProcessor {
                 "Error storing downlink forwarding entry {} - {}", idx, e
             )
         }
+
+        // For an ethernet PDU session, we need to set up the interface mapping table
+        // for whichever if index is assigned to this UE.
+        let if_index = self.ethernet_interface_indices[idx as usize - 2];
+        let mut array = self.eth_index_lookup_table.lock().await;
+        if let Err(e) = array.set(if_index as u32, idx as u16, 0) {
+            warn!(logger, "Error storing eth index entry {} - {}", idx, e)
+        }
+        println!("Set ethernet if {if_index} to point to UE {idx}");
 
         Ok(())
     }

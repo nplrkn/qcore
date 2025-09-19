@@ -8,8 +8,11 @@ mod utils;
 #[macro_use]
 mod counters;
 mod downlink_tc_program;
+mod downlink_xdp_program;
 mod globals;
+mod maps;
 mod uplink_tc_program;
+mod uplink_xdp_program;
 
 #[cfg(not(test))]
 #[panic_handler]

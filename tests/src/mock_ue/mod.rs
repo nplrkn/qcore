@@ -11,11 +11,13 @@ use oxirush_nas::{
         NasPduSessionReleaseCommand,
     },
 };
+use pnet_base::MacAddr;
 use qcore::SubscriberAuthParams;
 use slog::{Logger, info, o};
 use std::net::Ipv4Addr;
 
 pub use crate::mock_ue::build_nas::{NGKSI_IN_USE, SYNCH_FAILURE};
+use crate::packet::Packet;
 
 // TODO: commonize with QCore
 #[macro_export]
@@ -44,13 +46,7 @@ pub trait Transport {
         logger: &Logger,
     ) -> Result<()>;
     async fn receive_nas(&mut self, logger: &Logger) -> Result<Vec<u8>>;
-    async fn send_userplane_packet(
-        &self,
-        src_ip: &Ipv4Addr,
-        dst_ip: &Ipv4Addr,
-        src_port: u16,
-        dst_port: u16,
-    ) -> Result<()>;
+    async fn send_userplane_packet(&self, packet: Packet) -> Result<()>;
     async fn receive_userplane_packet(&self) -> Result<Vec<u8>>;
 }
 
@@ -59,6 +55,7 @@ pub struct MockUe<T: Transport> {
     transport: T,
     logger: Logger,
     use_wrong_imsi: bool,
+    use_ethernet: bool,
 }
 
 impl<T: Transport> MockUe<T> {
@@ -74,6 +71,7 @@ impl<T: Transport> MockUe<T> {
             transport,
             logger: logger.new(o!("ue" => ue_id)),
             use_wrong_imsi: false,
+            use_ethernet: false,
         }
     }
 
@@ -83,6 +81,7 @@ impl<T: Transport> MockUe<T> {
             transport,
             logger: logger.new(o!("ue" => ue_id)),
             use_wrong_imsi: false,
+            use_ethernet: false,
         }
     }
 
@@ -104,6 +103,10 @@ impl<T: Transport> MockUe<T> {
 
     pub fn use_dnn(&mut self, dnn: &'static [u8]) {
         self.data.dnn = Some(dnn);
+    }
+
+    pub fn use_ethernet(&mut self) {
+        self.use_ethernet = true;
     }
 
     async fn send_nas(&mut self, nas_bytes: Vec<u8>) -> Result<()> {
@@ -360,15 +363,28 @@ impl<T: Transport> MockUe<T> {
         self.send_nas(nas_bytes).await
     }
 
-    pub async fn send_userplane_packet(
+    pub async fn send_userplane_udp(
         &self,
         dst_ip: &Ipv4Addr,
         src_port: u16,
         dst_port: u16,
     ) -> Result<()> {
-        self.transport
-            .send_userplane_packet(&self.data.ipv4_addr, dst_ip, src_port, dst_port)
-            .await
+        let packet = Packet::new_ue_udp(&self.data.ipv4_addr, dst_ip, src_port, dst_port);
+        self.transport.send_userplane_packet(packet).await
+    }
+
+    pub async fn send_userplane_ethernet_broadcast(&self) -> Result<()> {
+        let packet = Packet::new_ue_ethernet_broadcast();
+        self.transport.send_userplane_packet(packet).await
+    }
+
+    pub async fn send_userplane_ethernet_unicast(
+        &self,
+        src: &MacAddr,
+        dst: &MacAddr,
+    ) -> Result<()> {
+        let packet = Packet::new_ue_ethernet_unicast(src, dst);
+        self.transport.send_userplane_packet(packet).await
     }
 
     pub async fn recv_ue_data_packet(&self) -> Result<Vec<u8>> {

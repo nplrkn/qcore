@@ -1,12 +1,13 @@
 use crate::counters::*;
 use crate::globals::*;
 use crate::headers::*;
+use crate::maps::DL_FORWARDING_TABLE;
 use crate::utils::*;
 use aya_ebpf::bindings::bpf_adj_room_mode::BPF_ADJ_ROOM_MAC;
 use aya_ebpf::helpers::r#gen::bpf_csum_diff;
-use aya_ebpf::macros::{classifier, map};
-use aya_ebpf::maps::Array;
+use aya_ebpf::macros::classifier;
 use aya_ebpf::programs::TcContext;
+use aya_log_ebpf::info;
 //use aya_log_ebpf::info;
 use core::intrinsics::{atomic_cxchg, AtomicOrdering};
 use ebpf_common::CounterIndex::*;
@@ -16,11 +17,6 @@ use network_types::{
     ip::{IpProto, Ipv4Hdr},
     udp::UdpHdr,
 };
-
-// TODO - replace with a N3 variant that has QFI in
-#[map]
-static mut DL_FORWARDING_TABLE: Array<DlForwardingEntry> =
-    Array::with_max_entries(FORWARDING_TABLE_SIZE, 0);
 
 /// This classifier is attached to an Ethernet device ingress and handles downlink IPv4 packets addressed to UEs
 #[classifier]
@@ -37,6 +33,14 @@ pub fn tc_downlink_n3(ctx: TcContext) -> i32 {
         Ok(rc) => rc,
         Err(rc) => rc,
     }
+}
+
+// This program is installed on a UE veth and runs downstream of the XDP program.  The XDP program is responsible for
+// GTP encapsulation, and this one just redirects the GTP packet to qcoretun for routing.
+#[classifier]
+pub fn tc_downlink_eth_redirect(ctx: TcContext) -> i32 {
+    info!(&ctx, "Redirecting a packet on a veth to Linux routing");
+    unsafe { redirect_to_linux_routing() }
 }
 
 #[inline(always)]
@@ -57,6 +61,7 @@ fn try_tc_downlink_n3(ctx: TcContext) -> Result<i32, i32> {
 
         push_common_outer_headers(
             &ctx,
+            inner_ip_length,
             GtpExtPduSessionContainer::LEN as i32,
             remote_ip,
             teid,
@@ -74,6 +79,7 @@ pub fn try_tc_downlink_f1u(ctx: TcContext) -> Result<i32, i32> {
         inc(DlRxPkts);
         let entry = lookup_entry_by_dest_ip(&ctx)?;
         let inner_ip_length = (ctx.len() - EthHdr::LEN as u32) as u16;
+
         let pdcp_header_length = (*entry).pdcp_header_length as usize;
         let teid = (*entry).teid;
         ensure!(teid != 0, DlDropUnknownUe);
@@ -83,6 +89,7 @@ pub fn try_tc_downlink_f1u(ctx: TcContext) -> Result<i32, i32> {
 
         push_common_outer_headers(
             &ctx,
+            inner_ip_length,
             (GtpExtDlUserData::LEN + pdcp_header_length) as i32,
             remote_ip,
             teid,
@@ -159,21 +166,24 @@ fn lookup_entry_by_dest_ip(ctx: &TcContext) -> Result<*mut DlForwardingEntry, i3
 #[inline(always)]
 fn push_common_outer_headers(
     ctx: &TcContext,
-    inner_ip_offset_from_gtp_header: i32,
+    payload_length: u16,
+    inner_packet_offset_from_gtp_header: i32,
     remote_ip: u32,
     teid: u32,
     next_extension_header_type: u8,
 ) -> Result<(), i32> {
     unsafe {
-        let inner_ip_length = (ctx.len() - EthHdr::LEN as u32) as u16;
-        let outer_header_length =
-            (GTP_EXTENSION_HEADER_OFFSET - EthHdr::LEN) as i32 + inner_ip_offset_from_gtp_header;
+        let outer_header_length = (GTP_EXTENSION_HEADER_OFFSET - EthHdr::LEN) as i32
+            + inner_packet_offset_from_gtp_header;
 
+        info!(ctx, "About to adjust room");
         ensure!(
             ctx.adjust_room(outer_header_length, BPF_ADJ_ROOM_MAC, 0)
                 .is_ok(),
             DlInternalError
         );
+
+        info!(ctx, "Adjust room ok");
 
         // Populate the outer IP, UDP, GTP.
         // Optimization: avoid repeating this test by using a single pointer to fill in all of
@@ -190,10 +200,12 @@ fn push_common_outer_headers(
 
         // The original Ethernet header is still in place at the start of the packet.
 
+        info!(ctx, "ALl good");
+
         (*ipv4hdr).set_version(4);
         (*ipv4hdr).set_ihl(5);
         (*ipv4hdr).tos = 0;
-        (*ipv4hdr).set_total_len(outer_header_length as u16 + inner_ip_length);
+        (*ipv4hdr).set_total_len(outer_header_length as u16 + payload_length);
         (*ipv4hdr).set_id(0);
         (*ipv4hdr).frag_off = [0, 0];
         (*ipv4hdr).ttl = 64;
@@ -223,7 +235,7 @@ fn push_common_outer_headers(
         (*ipv4hdr).check = csum.to_ne_bytes();
 
         // UDP header
-        (*udphdr).set_len(inner_ip_length + (outer_header_length as usize - Ipv4Hdr::LEN) as u16);
+        (*udphdr).set_len(payload_length + (outer_header_length as usize - Ipv4Hdr::LEN) as u16);
         (*udphdr).set_source(GTPU_PORT);
         (*udphdr).set_dest(GTPU_PORT);
         (*udphdr).set_check(0);
@@ -231,9 +243,9 @@ fn push_common_outer_headers(
         // --- GTP header with optional fields present
         (*gtphdr).byte0 = 0b001_1_0_1_0_0; // version=1, PT=1, R, E=1, S=0, PN=0
         (*gtphdr).message_type = GTP_MESSAGE_TYPE_GPDU;
-        let gtp_payload_length = inner_ip_length
+        let gtp_payload_length = payload_length
             + GtpHdrOptionalFields::LEN as u16
-            + inner_ip_offset_from_gtp_header as u16;
+            + inner_packet_offset_from_gtp_header as u16;
         (*gtphdr).message_length = gtp_payload_length.to_be_bytes();
         (*gtphdr).teid = teid.to_be_bytes();
         (*gtpexthdr).sequence_number = [0, 0];

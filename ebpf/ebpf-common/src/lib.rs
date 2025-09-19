@@ -5,10 +5,13 @@
 pub struct UlForwardingEntry {
     pub teid_top_bytes: [u8; 3],
 
-    // PDCP header length in bytes.
+    // PDCP header length in bytes.  Only used in F1 mode.
     // Set to 2 to use 12 bit PDCP sequence numbers
     // Set to 3 to use 18 bit PDCP sequence numbers
     pub pdcp_header_length: u8,
+
+    // Egress interface for Ethernet userplane packets.
+    pub egress_if_index: u32,
 }
 #[cfg(feature = "user")]
 unsafe impl aya::Pod for UlForwardingEntry {}

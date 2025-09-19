@@ -1,6 +1,7 @@
 use std::{net::Ipv4Addr, ops::Deref};
 
 use anyhow::{Result, ensure};
+use pnet_base::MacAddr;
 use pnet_packet::{ipv4::MutableIpv4Packet, udp::MutableUdpPacket};
 
 /// A prependable packet buffer
@@ -96,5 +97,68 @@ impl Packet {
         self.packet[new_start..self.start].copy_from_slice(bytes);
         self.start = new_start;
         Ok(())
+    }
+
+    pub fn new_ue_ethernet_broadcast() -> Self {
+        const HEADROOM: usize = 40;
+        let mut packet = vec![0u8; HEADROOM];
+
+        packet.extend_from_slice(&[
+            // ---- Inner Ethernet header ----
+            0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // dest broadcast MAC = ff:ff:ff:ff:ff:ff
+            0x02, 0x02, 0x02, 0x02, 0x02, 0x02, // source MAC
+            0x08, 0x06, // Ethertype = ARP
+            // ---- ARP packet
+            0x00, 0x01, // Ethernet
+            0x08, 0x00, // IP
+            0x06, // Hardware size
+            0x04, // Protocol length
+            0x00, 0x01, // Operation = request
+            0x02, 0x02, 0x02, 0x02, 0x02, 0x02, // sender hardware address
+            0x0a, 0x0a, 0x0a, 0x01, // sender protocol address
+            0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // target hardware address
+            0x0a, 0x0a, 0x0a, 0x01, // target protocol address
+            // 16 byte trailer
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00,
+        ]);
+
+        Packet {
+            packet,
+            start: HEADROOM,
+        }
+    }
+
+    pub fn new_ue_ethernet_unicast(src: &MacAddr, dst: &MacAddr) -> Self {
+        const HEADROOM: usize = 40;
+        let mut packet = vec![0u8; HEADROOM];
+
+        packet.extend_from_slice(&dst.octets());
+        packet.extend_from_slice(&src.octets());
+        packet.extend_from_slice(&[
+            0x08, 0x06, // Ethertype = ARP
+            // ---- ARP packet
+            0x00, 0x01, // Ethernet
+            0x08, 0x00, // IP
+            0x06, // Hardware size
+            0x04, // Protocol length
+            0x00, 0x01, // Operation = request
+        ]);
+        packet.extend_from_slice(&src.octets()); // sender hardware address
+        packet.extend_from_slice(&[
+            0x0a, 0x0a, 0x0a, 0x02, // sender protocol address
+        ]);
+        packet.extend_from_slice(&dst.octets()); // target hardware address
+        packet.extend_from_slice(&[
+            0x0a, 0x0a, 0x0a, 0x02, // target protocol address
+            // 16 byte trailer
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00,
+        ]);
+
+        Packet {
+            packet,
+            start: HEADROOM,
+        }
     }
 }

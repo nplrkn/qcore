@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use qcore::SubscriberAuthParams;
 use slog::Logger;
 use std::{
-    net::{IpAddr, Ipv4Addr},
+    net::IpAddr,
     ops::{Deref, DerefMut},
 };
 
@@ -65,14 +65,7 @@ impl<'a> Transport for UeNgapMode<'a> {
         self.gnb.receive_nas(&mut self.gnb_ue_context, logger).await
     }
 
-    async fn send_userplane_packet(
-        &self,
-        src_ip: &Ipv4Addr,
-        dst_ip: &Ipv4Addr,
-        src_port: u16,
-        dst_port: u16,
-    ) -> Result<()> {
-        let packet = Packet::new_ue_udp(src_ip, dst_ip, src_port, dst_port);
+    async fn send_userplane_packet(&self, packet: Packet) -> Result<()> {
         self.gnb
             .send_n3_data_packet(&self.gnb_ue_context, packet)
             .await
