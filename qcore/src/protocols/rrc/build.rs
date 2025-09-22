@@ -78,8 +78,7 @@ pub fn reconfiguration(
     let dedicated_nas_message_list = nas_messages.map(|x| (x.map(DedicatedNasMessage)));
 
     let (srb_to_add_mod_list, drb_to_add_mod_list) = if let Some(session_to_add) = session_to_add {
-        let (pdcp_sn_size_ul, pdcp_sn_size_dl) = match session_to_add.userplane_info.pdcp_sn_length
-        {
+        let (pdcp_sn_size_ul, pdcp_sn_size_dl) = match session_to_add.userplane.pdcp_sn_length {
             PdcpSequenceNumberLength::TwelveBits => {
                 (Some(PdcpSnSizeUl::Len12bits), Some(PdcpSnSizeDl::Len12bits))
             }
@@ -101,9 +100,7 @@ pub fn reconfiguration(
                     sdap_header_dl: SdapHeaderDl::Absent,
                     sdap_header_ul: SdapHeaderUl::Present,
                     default_drb: true,
-                    mapped_qos_flows_to_add: Some(nonempty![Qfi(session_to_add
-                        .userplane_info
-                        .qfi)]),
+                    mapped_qos_flows_to_add: Some(nonempty![Qfi(session_to_add.userplane.qfi)]),
                     mapped_qos_flows_to_release: None
                 })),
                 drb_identity: DrbIdentity(1),

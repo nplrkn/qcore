@@ -8,7 +8,7 @@ use oxirush_nas::{
     NasPduSessionStatus, NasPduSessionType, decode_nas_5gs_message,
     messages::{
         NasAuthenticationRequest, NasDlNasTransport, NasPduSessionEstablishmentAccept,
-        NasPduSessionReleaseCommand,
+        NasPduSessionEstablishmentReject, NasPduSessionReleaseCommand,
     },
 };
 use pnet_base::MacAddr;
@@ -447,6 +447,22 @@ impl<T: Transport> MockUe<T> {
         }
 
         info!(&self.logger, "Nas PduSessionEstablishmentAccept <<");
+
+        Ok(())
+    }
+
+    pub async fn receive_nas_session_reject(&mut self) -> Result<()> {
+        let nas = self.receive_nas().await?;
+        let message = decode_security_protected_sm(nas)?;
+
+        let Nas5gsmMessage::PduSessionEstablishmentReject(NasPduSessionEstablishmentReject {
+            ..
+        }) = message
+        else {
+            bail!("Expected NasPduSessionEstablishmentReject, got {message:?}");
+        };
+
+        info!(&self.logger, "Nas PduSessionEstablishmentReject <<");
 
         Ok(())
     }

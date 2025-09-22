@@ -14,20 +14,38 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
     ) -> Result<()> {
         self.log_message(">> Nas PduSessionEstablishmentRequest");
 
+        let session_id = hdr.pdu_session_identity;
+        let pti = hdr.procedure_transaction_identity;
+
         let ipv4 = if let Some(NasPduSessionType { value, .. }) = r.pdu_session_type {
             match value {
                 0b001 => true,  // IPv4
                 0b101 => false, // Ethernet
-                _ => bail!("Unsupported PduSessionType {value:03b}"),
+                _ => {
+                    warn!(self.logger, "Unsupported PduSessionType {value:03b}");
+                    // TODO: magic number
+                    self.session_reject(session_id, pti, 28).await?; // unknown PDU session type
+                    return Ok(());
+                }
             }
         } else {
             true
         };
 
+        let userplane = match self.api.allocate_userplane_session(ipv4).await {
+            Ok(userplane) => userplane,
+            Err(e) => {
+                warn!(self.logger, "{e}");
+                // TODO: magic number
+                self.session_reject(session_id, pti, 26).await?; // unknown PDU session type
+                return Ok(());
+            }
+        };
+
         let mut session = PduSession {
             id: hdr.pdu_session_identity,
             snssai: Snssai(self.api.config().sst, Some([0, 0, 0])),
-            userplane_info: self.api.allocate_userplane_session(ipv4).await?,
+            userplane,
             dnn: dnn.unwrap_or(b"internet".to_vec()),
         };
 
@@ -43,5 +61,11 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         self.ue.pdu_sessions.push(session);
 
         Ok(())
+    }
+
+    async fn session_reject(&mut self, session_id: u8, pti: u8, cause: u8) -> Result<()> {
+        let reject = crate::nas::build::pdu_session_establishment_reject(session_id, pti, cause)?;
+        self.log_message("<< Nas PduSessionEstablishmentReject");
+        self.send_nas(reject).await
     }
 }

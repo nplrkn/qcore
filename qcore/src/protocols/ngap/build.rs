@@ -189,7 +189,7 @@ fn pdu_session_resource_setup_request_transfer(
         }),
         ul_ngu_up_tnl_information: UpTransportLayerInformation::GtpTunnel(GtpTunnel {
             transport_layer_address: transport_layer_address.clone(),
-            gtp_teid: pdu_session.userplane_info.uplink_gtp_teid,
+            gtp_teid: pdu_session.userplane.uplink_gtp_teid,
         }),
         additional_ul_ngu_up_tnl_information: None,
         data_forwarding_not_possible: None,
@@ -200,7 +200,7 @@ fn pdu_session_resource_setup_request_transfer(
             qos_flow_identifier: QosFlowIdentifier(1),
             qos_flow_level_qos_parameters: QosFlowLevelQosParameters {
                 qos_characteristics: QosCharacteristics::NonDynamic5qi(NonDynamic5qiDescriptor {
-                    five_qi: FiveQi(pdu_session.userplane_info.five_qi),
+                    five_qi: FiveQi(pdu_session.userplane.five_qi),
                     priority_level_qos: None,
                     averaging_window: None,
                     maximum_data_burst_volume: None,

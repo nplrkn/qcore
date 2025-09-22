@@ -147,12 +147,12 @@ pub fn drb_to_be_setup_item(
 ) -> DrbsToBeSetupItem {
     let gtp_tunnel = GtpTunnel {
         transport_layer_address,
-        gtp_teid: session.userplane_info.uplink_gtp_teid,
+        gtp_teid: session.userplane.uplink_gtp_teid,
     };
 
-    let five_qi = session.userplane_info.five_qi;
-    let qfi = session.userplane_info.qfi;
-    let (dlpdcpsn_length, ulpdcpsn_length) = match session.userplane_info.pdcp_sn_length {
+    let five_qi = session.userplane.five_qi;
+    let qfi = session.userplane.qfi;
+    let (dlpdcpsn_length, ulpdcpsn_length) = match session.userplane.pdcp_sn_length {
         PdcpSequenceNumberLength::TwelveBits => (
             Some(PdcpsnLength::TwelveBits),
             Some(PdcpsnLength::TwelveBits),

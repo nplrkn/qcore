@@ -48,7 +48,7 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
                         "Failed to reactivate session {} - {e}", session.id
                     );
                     self.api
-                        .delete_userplane_session(&session.userplane_info, &self.logger)
+                        .delete_userplane_session(&session.userplane, &self.logger)
                         .await;
                 }
             }

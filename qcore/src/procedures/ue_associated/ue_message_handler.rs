@@ -97,7 +97,7 @@ impl<A: ProcedureBase> UeMessageHandler<A> {
         };
         for session in ue.core.pdu_sessions.iter() {
             self.api
-                .deactivate_userplane_session(&session.userplane_info, &paging_info, &self.logger)
+                .deactivate_userplane_session(&session.userplane, &paging_info, &self.logger)
                 .await;
         }
     }

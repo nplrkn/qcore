@@ -223,7 +223,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
                     "UE not aware of session {} so delete it", session.id
                 );
                 self.api
-                    .delete_userplane_session(&session.userplane_info)
+                    .delete_userplane_session(&session.userplane)
                     .await;
             } else {
                 debug!(self.logger, "UE confirms existing session {}", session.id);

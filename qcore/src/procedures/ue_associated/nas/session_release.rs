@@ -33,7 +33,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
             .ran_session_release(&released_session, pdu_session_release_command)
             .await?;
         self.api
-            .delete_userplane_session(&released_session.userplane_info)
+            .delete_userplane_session(&released_session.userplane)
             .await;
 
         let _pdu_session_release_complete = self

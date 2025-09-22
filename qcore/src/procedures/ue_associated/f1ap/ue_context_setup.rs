@@ -23,9 +23,9 @@ impl<'a, B: RanUeBase> F1apUeProcedure<'a, B> {
         // TODO: commonize setting of remote tunnel info and error handling in Ngap PduSessionResourceSetupResponse,
         // Ngap InitialContextSetupResponse and F1ap UeContextSetupResponse
         let (cell_group_config, gtp_tunnel) = self.check_ue_context_setup_response(rsp)?;
-        session.userplane_info.remote_tunnel_info = Some(gtp_tunnel);
+        session.userplane.remote_tunnel_info = Some(gtp_tunnel);
         self.api
-            .commit_userplane_session(&session.userplane_info, &self.logger)
+            .commit_userplane_session(&session.userplane, &self.logger)
             .await?;
 
         Ok(cell_group_config.0)

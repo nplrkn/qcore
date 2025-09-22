@@ -18,8 +18,8 @@ use oxirush_nas::{
     messages::{
         NasAuthenticationRequest, NasConfigurationUpdateCommand, NasDeregistrationAcceptFromUe,
         NasDlNasTransport, NasFGmmStatus, NasIdentityRequest, NasPduSessionEstablishmentAccept,
-        NasPduSessionReleaseCommand, NasRegistrationAccept, NasRegistrationReject,
-        NasSecurityModeCommand, NasServiceAccept, NasServiceReject,
+        NasPduSessionEstablishmentReject, NasPduSessionReleaseCommand, NasRegistrationAccept,
+        NasRegistrationReject, NasSecurityModeCommand, NasServiceAccept, NasServiceReject,
     },
 };
 use security::NAS_ABBA;
@@ -252,15 +252,15 @@ pub fn pdu_session_establishment_accept(
     pti: u8,
     sst: u8,
 ) -> Result<Box<Nas5gsMessage>> {
-    let five_qi = pdu_session.userplane_info.five_qi;
-    let qfi = pdu_session.userplane_info.qfi;
+    let five_qi = pdu_session.userplane.five_qi;
+    let qfi = pdu_session.userplane.qfi;
     let dns_primary = &[0x08, 0x08, 0x08, 0x08];
     let dns_secondary = &[0x08, 0x08, 0x04, 0x04];
 
     let pdu_address;
     let selected_session_type;
     let extended_protocol_configuration_options;
-    match pdu_session.userplane_info.payload {
+    match pdu_session.userplane.payload {
         Payload::Ipv4(Ipv4SessionParams { ue_ip_addr }) => {
             pdu_address = Some(nas_pdu_address(&ue_ip_addr.octets()));
             selected_session_type = 0b001;
@@ -312,6 +312,29 @@ pub fn pdu_session_establishment_accept(
         pti,
     );
     wrap_in_dl_nas_transport(pdu_session.id, &inner_message)
+}
+
+pub fn pdu_session_establishment_reject(
+    session_id: u8,
+    pti: u8,
+    cause: u8,
+) -> Result<Box<Nas5gsMessage>> {
+    let inner_message = Nas5gsMessage::new_5gsm(
+        Nas5gsmMessageType::PduSessionEstablishmentReject,
+        Nas5gsmMessage::PduSessionEstablishmentReject(NasPduSessionEstablishmentReject {
+            fgsm_cause: NasFGsmCause::new(cause),
+            back_off_timer_value: None,
+            allowed_ssc_mode: None,
+            eap_message: None,
+            fgsm_congestion_re_attempt_indicator: None,
+            extended_protocol_configuration_options: None,
+            re_attempt_indicator: None,
+            service_level_aa_container: None,
+        }),
+        session_id,
+        pti,
+    );
+    wrap_in_dl_nas_transport(session_id, &inner_message)
 }
 
 pub fn pdu_session_release_command(
