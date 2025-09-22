@@ -2,8 +2,8 @@ use qcore_tests::framework::*;
 
 #[async_std::test]
 async fn paging() -> anyhow::Result<()> {
-    let (gnb, qc, dn, mut builder, _logger) = init_ngap().await?;
-    let mut ue = builder.with_session().new_ngap_ue(&gnb, &qc).await?;
+    let (gnb, qc, dn, builder, _logger) = init_ngap().await?;
+    let mut ue = builder.ngap_ue(&gnb).with_session().await?;
 
     gnb.send_ue_context_release_request(ue.gnb_ue_context())
         .await?;

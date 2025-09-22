@@ -8,6 +8,7 @@ use crate::protocols::nas::Tmsi;
 use crate::protocols::ngap::build::paging;
 use crate::{Config, ProcedureBase, Sqn, SubscriberAuthParams, UeContext5GC, UserplaneSession};
 use anyhow::{Result, anyhow, bail};
+use async_std::task::JoinHandle;
 use async_std::{
     channel::{self, Sender},
     sync::Mutex,
@@ -45,6 +46,7 @@ pub struct QCore {
     served_cells: ServedCellsMap,
     ngap_mode: bool,
     shutting_down: Arc<Mutex<bool>>,
+    downlink_buffer_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
 }
 
 enum CoreContextLocator {
@@ -123,6 +125,7 @@ impl QCore {
             served_cells: Arc::new(Mutex::new(HashMap::new())),
             ngap_mode,
             shutting_down: Arc::new(Mutex::new(false)),
+            downlink_buffer_handle: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -159,8 +162,8 @@ impl QCore {
         };
 
         *self.server_handle.lock().await = Some(handle);
-
-        let _ = self.downlink_data_buffer.run(self.clone());
+        *self.downlink_buffer_handle.lock().await =
+            Some(self.downlink_data_buffer.run(self.clone()));
 
         Ok(())
     }

@@ -306,7 +306,7 @@ impl PacketProcessor {
         // For an Ethernet PDU session, set up the interface lookup table to point to the forwarding table entry.
         if eth_if_idx != 0 {
             let mut array = self.eth_if_index_lookup_table.lock().await;
-            if let Err(e) = array.set(eth_if_idx as u32, forwarding_idx as u16, 0) {
+            if let Err(e) = array.set(eth_if_idx, forwarding_idx as u16, 0) {
                 warn!(logger, "Failed to set eth lookup {} - {}", eth_if_idx, e)
             }
         }

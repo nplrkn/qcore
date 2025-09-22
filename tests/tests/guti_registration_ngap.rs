@@ -2,8 +2,8 @@ use qcore_tests::framework::*;
 
 #[async_std::test]
 async fn guti_registration_ngap() -> anyhow::Result<()> {
-    let (gnb, qc, _dn, mut builder, _logger) = init_ngap().await?;
-    let mut ue = builder.registered().new_ngap_ue(&gnb, &qc).await?;
+    let (gnb, qc, _dn, builder, _logger) = init_ngap().await?;
+    let mut ue = builder.ngap_ue(&gnb).registered().await?;
 
     // UE reconnects
     let old_ue_context = gnb

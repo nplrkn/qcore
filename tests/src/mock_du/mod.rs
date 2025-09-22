@@ -320,7 +320,13 @@ impl MockDu {
         Ok(rrc)
     }
 
-    pub async fn handle_ue_context_release(
+    pub async fn handle_ue_context_release(&self, ue: &mut UeContext) -> Result<()> {
+        let rrc = self.handle_ue_context_release_with_rrc(ue).await?;
+        assert!(rrc.is_none());
+        Ok(())
+    }
+
+    async fn handle_ue_context_release_with_rrc(
         &self,
         ue: &mut UeContext,
     ) -> Result<Option<Box<DlDcchMessageType>>> {

@@ -3,7 +3,7 @@ use qcore_tests::framework::*;
 #[async_std::test]
 async fn parallel_config_update_session_establishment() -> anyhow::Result<()> {
     let (gnb, qc, _dn, builder, _logger) = init_ngap().await?;
-    let mut ue = builder.new_ngap_ue(&gnb, &qc).await?;
+    let mut ue = builder.ngap_ue(&gnb).build().await?;
 
     // See the design doc on 'ue serialization' for some background here.
 

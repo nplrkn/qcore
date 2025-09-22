@@ -2,8 +2,8 @@ use qcore_tests::framework::*;
 
 #[async_std::test]
 async fn ims_session_establishment() -> anyhow::Result<()> {
-    let (du, qc, _dn, builder, _logger) = init_f1ap2().await?;
-    let mut ue = builder.new_f1ap_ue(&du, &qc).await?;
+    let (du, _qc, _dn, builder, _logger) = init_f1ap().await?;
+    let mut ue = builder.f1ap_ue(&du).build().await?;
 
     ue.perform_rrc_setup().await?;
     ue.handle_nas_authentication().await?;

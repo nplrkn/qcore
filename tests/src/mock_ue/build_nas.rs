@@ -386,12 +386,12 @@ pub fn pdu_session_establishment_request(
     nas_ctxt: &mut NasContext,
     ethernet: bool,
 ) -> Result<Vec<u8>> {
-    let pdu_session_type;
-    if ethernet {
-        pdu_session_type = Some(NasPduSessionType::new(0b101));
+    let pdu_session_type = if ethernet {
+        Some(NasPduSessionType::new(0b101))
     } else {
-        pdu_session_type = Some(NasPduSessionType::new(0b001));
-    }
+        Some(NasPduSessionType::new(0b001))
+    };
+
     // See https://www.sharetechnote.com/html/5G/5G_PDUSessionEstablishment.html for an example.
     let inner_message = Nas5gsMessage::Gsm(
         Nas5gsmHeader {

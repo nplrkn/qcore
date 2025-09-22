@@ -2,8 +2,8 @@ use qcore_tests::{MockUeNgap, framework::*};
 
 #[async_std::test]
 async fn ngap_session_reactivation() -> anyhow::Result<()> {
-    let (mut gnb, qc, dn, mut builder, logger) = init_ngap().await?;
-    let ue = builder.with_session().new_ngap_ue(&gnb, &qc).await?;
+    let (mut gnb, qc, dn, builder, logger) = init_ngap().await?;
+    let ue = builder.ngap_ue(&gnb).with_session().await?;
 
     let mock_ue = ue.into();
 

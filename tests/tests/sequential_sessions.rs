@@ -2,8 +2,8 @@ use qcore_tests::framework::*;
 
 #[async_std::test]
 async fn sequential_sessions() -> anyhow::Result<()> {
-    let (du, qc, _dn, mut builder, _logger) = init_f1ap2().await?;
-    let mut ue = builder.with_session().new_f1ap_ue(&du, &qc).await?;
+    let (du, _qc, _dn, builder, _logger) = init_f1ap().await?;
+    let mut ue = builder.f1ap_ue(&du).with_session().await?;
 
     ue.send_nas_pdu_session_release_request().await?;
     du.handle_ue_context_modification(ue.du_ue_context())

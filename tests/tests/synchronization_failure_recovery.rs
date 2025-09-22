@@ -2,8 +2,8 @@ use qcore_tests::{SYNCH_FAILURE, framework::*};
 
 #[async_std::test]
 async fn synchronization_failure_recovery() -> anyhow::Result<()> {
-    let (du, qc, _dn, builder, _logger) = init_f1ap2().await?;
-    let mut ue = builder.new_f1ap_ue(&du, &qc).await?;
+    let (du, _qc, _dn, builder, _logger) = init_f1ap().await?;
+    let mut ue = builder.f1ap_ue(&du).build().await?;
 
     // This is a test of synchronization failure recovery from TS33.501, 6.1.3.3.
     // Synchronization failure occurs when the UE and QCore disagree about the SQN parameters used
@@ -28,7 +28,5 @@ async fn synchronization_failure_recovery() -> anyhow::Result<()> {
     du.handle_ue_context_release(ue.du_ue_context()).await?;
 
     ue.perform_rrc_setup().await?;
-    ue.handle_nas_authentication().await?;
-
-    Ok(())
+    ue.handle_nas_authentication().await
 }

@@ -2,12 +2,12 @@ use qcore_tests::framework::*;
 
 #[async_std::test]
 async fn attach() -> anyhow::Result<()> {
-    let (du, qc, dn, builder, _logger) = init_f1ap2().await?;
+    let (du, _qc, dn, builder, _logger) = init_f1ap().await?;
 
     // This test carries out the attach flow - see docs/attach.md.
 
     // UE registers
-    let mut ue = builder.new_f1ap_ue(&du, &qc).await?;
+    let mut ue = builder.f1ap_ue(&du).build().await?;
     ue.perform_rrc_setup().await?;
     ue.handle_nas_authentication().await?;
     ue.handle_nas_security_mode().await?;

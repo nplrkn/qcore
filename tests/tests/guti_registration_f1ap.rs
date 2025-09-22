@@ -2,8 +2,8 @@ use qcore_tests::framework::*;
 
 #[async_std::test]
 async fn guti_registration_f1ap() -> anyhow::Result<()> {
-    let (du, qc, _dn, mut builder, _logger) = init_f1ap2().await?;
-    let mut ue = builder.registered().new_f1ap_ue(&du, &qc).await?;
+    let (du, _qc, _dn, builder, _logger) = init_f1ap().await?;
+    let mut ue = builder.f1ap_ue(&du).registered().await?;
 
     // In the first variant, the UE message handler is not running.
 

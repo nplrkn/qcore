@@ -2,8 +2,8 @@ use qcore_tests::{MockUeF1ap, framework::*};
 
 #[async_std::test]
 async fn f1ap_session_reactivation() -> anyhow::Result<()> {
-    let (mut du, qc, dn, mut builder, logger) = init_f1ap2().await?;
-    let ue = builder.with_session().new_f1ap_ue(&du, &qc).await?;
+    let (mut du, qc, dn, builder, logger) = init_f1ap().await?;
+    let ue = builder.f1ap_ue(&du).with_session().await?;
 
     let ue_data = ue.into();
 

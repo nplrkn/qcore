@@ -2,8 +2,8 @@ use qcore_tests::{MockUeNgap, framework::*};
 
 #[async_std::test]
 async fn ngap_service_request_variants() -> anyhow::Result<()> {
-    let (mut gnb, qc, _dn, mut builder, logger) = init_ngap().await?;
-    let ue = builder.registered().new_ngap_ue(&gnb, &qc).await?;
+    let (mut gnb, qc, _dn, builder, logger) = init_ngap().await?;
+    let ue = builder.ngap_ue(&gnb).registered().await?;
 
     let mock_ue = ue.into();
     gnb.disconnect().await;

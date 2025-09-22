@@ -9,7 +9,7 @@ async fn deregistration_during_nas_request() -> anyhow::Result<()> {
     // immediately action the deregistration request.
 
     let (gnb, qc, _dn, builder, logger) = init_ngap().await?;
-    let mut ue = builder.new_ngap_ue(&gnb, &qc).await?;
+    let mut ue = builder.ngap_ue(&gnb).build().await?;
 
     for variant in 0..1 {
         info!(logger, "Test variant {}", variant);

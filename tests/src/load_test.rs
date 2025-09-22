@@ -29,7 +29,6 @@ pub async fn load_test(amf_ip: IpAddr, sims: SubscriberDb, logger: Logger) -> Re
 
     let ue_count = sims.0.len();
     let mut builder = UeBuilder::new(sims, amf_ip, logger);
-    builder.with_session();
 
     const RUN_DURATION_SECS: usize = 10;
     let now = std::time::Instant::now();
@@ -43,7 +42,7 @@ pub async fn load_test(amf_ip: IpAddr, sims: SubscriberDb, logger: Logger) -> Re
         builder.reset_ue_index().await;
         for _ in 1..=ue_count {
             // Registration + session establishment = 13 messages
-            let mut ue = builder.new_ngap_ue_no_wait(&gnb).await?;
+            let mut ue = builder.ngap_ue(&gnb).with_session().await?;
 
             // let mut ue = MockUeNgap::new_with_session(
             //     nth_imsi(ue_id - 1, sims),

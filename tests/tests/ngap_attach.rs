@@ -3,7 +3,7 @@ use qcore_tests::framework::*;
 #[async_std::test]
 async fn ngap_attach() -> anyhow::Result<()> {
     let (gnb, qc, dn, builder, _logger) = init_ngap().await?;
-    let mut ue = builder.new_ngap_ue(&gnb, &qc).await?;
+    let mut ue = builder.ngap_ue(&gnb).build().await?;
 
     ue.send_nas_register_request().await?;
     ue.handle_nas_authentication().await?;
