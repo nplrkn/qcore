@@ -2,12 +2,8 @@ use qcore_tests::{MockUeNgap, framework::*};
 
 #[async_std::test]
 async fn ngap_session_reactivation() -> anyhow::Result<()> {
-    let (mut gnb, qc, dn, sims, logger) = init_ngap().await?;
-
-    gnb.perform_ng_setup(qc.ip_addr()).await?;
-    let ue =
-        MockUeNgap::new_with_session(nth_imsi(0, &sims), 1, &gnb, qc.ip_addr(), &logger).await?;
-    wait_until_idle(&qc).await?;
+    let (mut gnb, qc, dn, mut builder, logger) = init_ngap().await?;
+    let ue = builder.with_session().new_ngap_ue(&gnb, &qc).await?;
 
     let mock_ue = ue.into();
 
@@ -15,7 +11,7 @@ async fn ngap_session_reactivation() -> anyhow::Result<()> {
     gnb.disconnect().await;
 
     // TODO - remove this - probably by replacing the above with an NgReset procedure
-    async_std::task::sleep(std::time::Duration::from_secs(1)).await;
+    async_std::task::sleep(std::time::Duration::from_millis(500)).await;
     gnb.perform_ng_setup(qc.ip_addr()).await?;
 
     // UE sends a service request with GUTI to reactivate its previous session.

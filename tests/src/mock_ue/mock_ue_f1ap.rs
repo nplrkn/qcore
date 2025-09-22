@@ -148,6 +148,23 @@ impl<'a> MockUeF1ap<'a> {
         })
     }
 
+    pub async fn register(&mut self) -> Result<()> {
+        self.perform_rrc_setup().await?;
+        self.handle_nas_authentication().await?;
+        self.handle_nas_security_mode().await?;
+        self.handle_rrc_security_mode().await?;
+        self.handle_capability_enquiry().await?;
+        self.handle_nas_registration_accept().await?;
+        self.handle_nas_configuration_update().await
+    }
+
+    pub async fn establish_session(&mut self, du: &'a MockDu) -> Result<()> {
+        self.send_nas_pdu_session_establishment_request().await?;
+        du.handle_f1_ue_context_setup(self.du_ue_context()).await?;
+        self.handle_rrc_reconfiguration_with_added_session().await?;
+        self.receive_nas_session_accept().await
+    }
+
     pub async fn new_with_session(
         (imsi, sub_auth_params): (String, SubscriberAuthParams),
         ue_id: u32,
@@ -156,13 +173,6 @@ impl<'a> MockUeF1ap<'a> {
         logger: &Logger,
     ) -> Result<Self> {
         let mut ue = Self::new((imsi, sub_auth_params), ue_id, du, cu_ip_addr, logger).await?;
-        ue.perform_rrc_setup().await?;
-        ue.handle_nas_authentication().await?;
-        ue.handle_nas_security_mode().await?;
-        ue.handle_rrc_security_mode().await?;
-        ue.handle_capability_enquiry().await?;
-        ue.handle_nas_registration_accept().await?;
-        ue.handle_nas_configuration_update().await?;
         ue.send_nas_pdu_session_establishment_request().await?;
         du.handle_f1_ue_context_setup(ue.du_ue_context()).await?;
         ue.handle_rrc_reconfiguration_with_added_session().await?;

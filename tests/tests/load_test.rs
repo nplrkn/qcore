@@ -11,5 +11,5 @@ async fn load_test() -> anyhow::Result<()> {
     let logger = init_logging();
     let qc_ip = "127.0.0.1";
     let _qc = start_qcore(qc_ip, sims.clone(), &logger, true).await?;
-    qcore_tests::load_test::load_test(&qc_ip.parse()?, &sims, &logger).await
+    qcore_tests::load_test::load_test(qc_ip.parse()?, sims, logger).await
 }

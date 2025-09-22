@@ -1,16 +1,14 @@
-use qcore_tests::{MockUeF1ap, SYNCH_FAILURE, framework::*};
+use qcore_tests::{SYNCH_FAILURE, framework::*};
 
 #[async_std::test]
 async fn synchronization_failure_recovery() -> anyhow::Result<()> {
-    let (mut du, qc, _dn, sims, logger) = init_f1ap().await?;
+    let (du, qc, _dn, builder, _logger) = init_f1ap2().await?;
+    let mut ue = builder.new_f1ap_ue(&du, &qc).await?;
 
     // This is a test of synchronization failure recovery from TS33.501, 6.1.3.3.
     // Synchronization failure occurs when the UE and QCore disagree about the SQN parameters used
     // in 5G-AKA authentication.
 
-    // Given a UE that is trying to register
-    du.perform_f1_setup(qc.ip_addr()).await?;
-    let mut ue = MockUeF1ap::new(nth_imsi(0, &sims), 1, &du, qc.ip_addr(), &logger).await?;
     ue.perform_rrc_setup().await?;
 
     // When UE rejects authentication with a 'Synch failure' cause and an AUTS value.

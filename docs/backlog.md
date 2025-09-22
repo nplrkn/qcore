@@ -3,6 +3,7 @@
 ## In progress
 - Ethernet PDU session
   - builder pattern in test framework
+    - run load test
   - try again with XDP_PASS, TC_ACT_OK, ? 
     -  in particular, a) why is tc_downlink_eth_redirect() needed?  b) why do try_tc_downlink_n3() / try_tc_downlink_n6() not pass
     -  (https://ants-gitlab.inf.um.es/jorgegm/xdp-tutorial/-/tree/ae0ad18e1d7cba35cb5afbc8c4dfee2efa72fc38/packet03-redirecting)

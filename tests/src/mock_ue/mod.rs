@@ -1,8 +1,9 @@
 mod mock_ue_5gc;
 pub use mock_ue_5gc::*;
-
+mod builder;
 use anyhow::{Result, anyhow, bail, ensure};
 use async_trait::async_trait;
+pub use builder::UeBuilder;
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gsMessage, Nas5gsmMessage, NasPduAddress, NasPduSessionReactivationResult,
     NasPduSessionStatus, NasPduSessionType, decode_nas_5gs_message,

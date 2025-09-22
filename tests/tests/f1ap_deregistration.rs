@@ -1,13 +1,9 @@
-use qcore_tests::{MockUeF1ap, framework::*};
+use qcore_tests::framework::*;
 
 #[async_std::test]
 async fn f1ap_deregistration() -> anyhow::Result<()> {
-    let (mut du, qc, _dn, sims, logger) = init_f1ap().await?;
-
-    // Given an established UE context at the DU
-    du.perform_f1_setup(qc.ip_addr()).await?;
-    let mut ue =
-        MockUeF1ap::new_with_session(nth_imsi(0, &sims), 1, &du, qc.ip_addr(), &logger).await?;
+    let (du, qc, _dn, mut builder, _logger) = init_f1ap2().await?;
+    let mut ue = builder.with_session().new_f1ap_ue(&du, &qc).await?;
 
     // When a UE deregisters
     ue.send_nas_deregistration_request().await?;

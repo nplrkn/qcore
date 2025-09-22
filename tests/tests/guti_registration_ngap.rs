@@ -1,13 +1,9 @@
-use qcore_tests::{MockUeNgap, framework::*};
+use qcore_tests::framework::*;
 
 #[async_std::test]
 async fn guti_registration_ngap() -> anyhow::Result<()> {
-    let (mut gnb, qc, _dn, sims, logger) = init_ngap().await?;
-
-    gnb.perform_ng_setup(qc.ip_addr()).await?;
-    let mut ue =
-        MockUeNgap::new_registered(nth_imsi(0, &sims), 1, &gnb, qc.ip_addr(), &logger).await?;
-    wait_until_idle(&qc).await?;
+    let (gnb, qc, _dn, mut builder, _logger) = init_ngap().await?;
+    let mut ue = builder.registered().new_ngap_ue(&gnb, &qc).await?;
 
     // UE reconnects
     let old_ue_context = gnb

@@ -1,12 +1,9 @@
-use qcore_tests::{MockUeNgap, framework::*};
+use qcore_tests::framework::*;
 
 #[async_std::test]
 async fn paging() -> anyhow::Result<()> {
-    let (mut gnb, qc, dn, sims, logger) = init_ngap().await?;
-
-    gnb.perform_ng_setup(qc.ip_addr()).await?;
-    let mut ue =
-        MockUeNgap::new_with_session(nth_imsi(0, &sims), 1, &gnb, qc.ip_addr(), &logger).await?;
+    let (gnb, qc, dn, mut builder, _logger) = init_ngap().await?;
+    let mut ue = builder.with_session().new_ngap_ue(&gnb, &qc).await?;
 
     gnb.send_ue_context_release_request(ue.gnb_ue_context())
         .await?;

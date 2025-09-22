@@ -109,44 +109,23 @@ impl<'a> MockUeNgap<'a> {
         })
     }
 
-    pub async fn new_registered(
-        (imsi, sub_auth_params): (String, SubscriberAuthParams),
-        ue_id: u32,
-        gnb: &'a MockGnb,
-        amf_ip_addr: &IpAddr,
-        logger: &Logger,
-    ) -> Result<Self> {
-        let mut ue =
-            MockUeNgap::new((imsi, sub_auth_params), ue_id, gnb, amf_ip_addr, logger).await?;
-        ue.send_nas_register_request().await?;
-        ue.handle_nas_authentication().await?;
-        ue.handle_nas_security_mode().await?;
-        gnb.handle_initial_context_setup(ue.gnb_ue_context())
+    pub async fn register(&mut self, gnb: &'a MockGnb) -> Result<()> {
+        self.send_nas_register_request().await?;
+        self.handle_nas_authentication().await?;
+        self.handle_nas_security_mode().await?;
+        gnb.handle_initial_context_setup(self.gnb_ue_context())
             .await?;
-        gnb.send_ue_radio_capability_info(ue.gnb_ue_context())
+        gnb.send_ue_radio_capability_info(self.gnb_ue_context())
             .await?;
-        ue.handle_nas_registration_accept().await?;
-        ue.handle_nas_configuration_update().await?;
-        Ok(ue)
+        self.handle_nas_registration_accept().await?;
+        self.handle_nas_configuration_update().await
     }
 
-    pub async fn new_with_session(
-        (imsi, sub_auth_params): (String, SubscriberAuthParams),
-        ue_id: u32,
-        gnb: &'a MockGnb,
-        amf_ip_addr: &IpAddr,
-        logger: &Logger,
-    ) -> Result<Self> {
-        let mut ue =
-            MockUeNgap::new_registered((imsi, sub_auth_params), ue_id, gnb, amf_ip_addr, logger)
-                .await?;
-
-        // UE establishes PDU session
-        ue.send_nas_pdu_session_establishment_request().await?;
-        gnb.handle_pdu_session_resource_setup(ue.gnb_ue_context())
+    pub async fn establish_session(&mut self, gnb: &'a MockGnb) -> Result<()> {
+        self.send_nas_pdu_session_establishment_request().await?;
+        gnb.handle_pdu_session_resource_setup(self.gnb_ue_context())
             .await?;
-        ue.receive_nas_session_accept().await?;
-        Ok(ue)
+        self.receive_nas_session_accept().await
     }
 
     pub fn gnb_ue_context(&mut self) -> &mut GnbUeContext {

@@ -1,19 +1,9 @@
-use qcore_tests::{MockUeF1ap, framework::*};
+use qcore_tests::framework::*;
 
 #[async_std::test]
 async fn guti_registration_f1ap() -> anyhow::Result<()> {
-    let (mut du, qc, _dn, sims, logger) = init_f1ap().await?;
-
-    // Register a UE
-    du.perform_f1_setup(qc.ip_addr()).await?;
-    let mut ue = MockUeF1ap::new(nth_imsi(0, &sims), 1, &du, qc.ip_addr(), &logger).await?;
-    ue.perform_rrc_setup().await?;
-    ue.handle_nas_authentication().await?;
-    ue.handle_nas_security_mode().await?;
-    ue.handle_rrc_security_mode().await?;
-    ue.handle_capability_enquiry().await?;
-    ue.handle_nas_registration_accept().await?;
-    ue.handle_nas_configuration_update().await?;
+    let (du, qc, _dn, mut builder, _logger) = init_f1ap2().await?;
+    let mut ue = builder.registered().new_f1ap_ue(&du, &qc).await?;
 
     // In the first variant, the UE message handler is not running.
 

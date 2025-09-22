@@ -1,4 +1,4 @@
-use qcore_tests::{MockUeNgap, framework::*};
+use qcore_tests::framework::*;
 use slog::info;
 
 #[async_std::test]
@@ -8,9 +8,8 @@ async fn deregistration_during_nas_request() -> anyhow::Result<()> {
     // ways for QCore to handle this, but the 'Open5GS-like' model is for QCore to
     // immediately action the deregistration request.
 
-    let (mut gnb, qc, _dn, sims, logger) = init_ngap().await?;
-    gnb.perform_ng_setup(qc.ip_addr()).await?;
-    let mut ue = MockUeNgap::new(nth_imsi(0, &sims), 1, &gnb, qc.ip_addr(), &logger).await?;
+    let (gnb, qc, _dn, builder, logger) = init_ngap().await?;
+    let mut ue = builder.new_ngap_ue(&gnb, &qc).await?;
 
     for variant in 0..1 {
         info!(logger, "Test variant {}", variant);

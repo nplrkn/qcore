@@ -2,12 +2,8 @@ use qcore_tests::{MockUeF1ap, framework::*};
 
 #[async_std::test]
 async fn f1ap_service_request() -> anyhow::Result<()> {
-    let (mut du, qc, dn, sims, logger) = init_f1ap().await?;
-
-    du.perform_f1_setup(qc.ip_addr()).await?;
-    let ue =
-        MockUeF1ap::new_with_session(nth_imsi(0, &sims), 1, &du, qc.ip_addr(), &logger).await?;
-    wait_until_idle(&qc).await?;
+    let (mut du, qc, dn, mut builder, logger) = init_f1ap2().await?;
+    let ue = builder.with_session().new_f1ap_ue(&du, &qc).await?;
 
     let ue_data = ue.into();
 

@@ -23,7 +23,7 @@ async fn main() -> Result<()> {
     const UE_COUNT: usize = 200;
     let sims = generate_load_test_sims(UE_COUNT);
     let logger = init_logging();
-    qcore_tests::load_test::load_test(&IpAddr::V4(args.amf_ip), &sims, &logger).await
+    qcore_tests::load_test::load_test(IpAddr::V4(args.amf_ip), sims, logger).await
 }
 
 // Copy/pasted from qcore/src/main.rs.

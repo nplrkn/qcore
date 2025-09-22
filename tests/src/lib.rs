@@ -12,5 +12,6 @@ pub use data_network::DataNetwork;
 pub use mock_du::{MockDu, UeContext as DuUeContext};
 pub use mock_gnb::{MockGnb, UeContext as GnbUeContext};
 pub use mock_ue::{
-    MockUe, NGKSI_IN_USE, SYNCH_FAILURE, mock_ue_f1ap::MockUeF1ap, mock_ue_ngap::MockUeNgap,
+    MockUe, NGKSI_IN_USE, SYNCH_FAILURE, UeBuilder, mock_ue_f1ap::MockUeF1ap,
+    mock_ue_ngap::MockUeNgap,
 };

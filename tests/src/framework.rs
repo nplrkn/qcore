@@ -1,5 +1,5 @@
 use super::{DataNetwork, MockDu, MockUe};
-use crate::{MockGnb, mock_ue::Transport};
+use crate::{MockGnb, UeBuilder, mock_ue::Transport};
 use anyhow::{Result, bail};
 use pnet_base::MacAddr;
 use qcore::{
@@ -10,18 +10,33 @@ use slog::{Drain, Logger, o};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use xxap::PlmnIdentity;
 
-pub async fn init_f1ap() -> Result<(MockDu, ProgramHandle, DataNetwork, SubscriberDb, Logger)> {
+// pub async fn init_f1ap() -> Result<(MockDu, ProgramHandle, DataNetwork, SubscriberDb, Logger)> {
+//     let logger = init_logging();
+//     let du_ip = "127.0.0.2";
+//     let du = MockDu::new(du_ip, &logger).await?;
+//     init_common(du, false, logger).await
+// }
+
+pub async fn init_f1ap2() -> Result<(MockDu, ProgramHandle, DataNetwork, UeBuilder, Logger)> {
     let logger = init_logging();
     let du_ip = "127.0.0.2";
     let du = MockDu::new(du_ip, &logger).await?;
-    init_common(du, false, logger).await
+    let (mut du, qc, dn, sims, logger) = init_common(du, false, logger).await?;
+    let builder = UeBuilder::new(sims, qc.ip_addr().clone(), logger.clone());
+    du.perform_f1_setup(qc.ip_addr()).await?;
+    Ok((du, qc, dn, builder, logger))
 }
 
-pub async fn init_ngap() -> Result<(MockGnb, ProgramHandle, DataNetwork, SubscriberDb, Logger)> {
+pub async fn init_ngap() -> Result<(MockGnb, ProgramHandle, DataNetwork, UeBuilder, Logger)> {
     let logger = init_logging();
     let gnb_ip = "127.0.0.2";
     let gnb = MockGnb::new(gnb_ip, &logger).await?;
-    init_common(gnb, true, logger).await
+    let (mut gnb, qc, dn, sims, logger) = init_common(gnb, true, logger).await?;
+    let builder = UeBuilder::new(sims, qc.ip_addr().clone(), logger.clone());
+
+    gnb.perform_ng_setup(qc.ip_addr()).await?;
+
+    Ok((gnb, qc, dn, builder, logger))
 }
 
 pub async fn init_ngap_with_subdb(

@@ -1,4 +1,4 @@
-use crate::{MockGnb, MockUeNgap, framework::nth_imsi};
+use crate::{MockGnb, UeBuilder};
 use anyhow::Result;
 use qcore::{SimCreds, Sqn, Subscriber, SubscriberDb};
 use slog::Logger;
@@ -22,13 +22,14 @@ pub fn generate_load_test_sims(count: usize) -> SubscriberDb {
     sub_db
 }
 
-pub async fn load_test(amf_ip: &IpAddr, sims: &SubscriberDb, logger: &Logger) -> Result<()> {
+pub async fn load_test(amf_ip: IpAddr, sims: SubscriberDb, logger: Logger) -> Result<()> {
     let gnb_ip = "127.0.0.2";
-    let mut gnb = MockGnb::new(gnb_ip, logger).await?;
+    let mut gnb = MockGnb::new(gnb_ip, &logger).await?;
+    gnb.perform_ng_setup(&amf_ip).await?;
 
     let ue_count = sims.0.len();
-
-    gnb.perform_ng_setup(amf_ip).await?;
+    let mut builder = UeBuilder::new(sims, amf_ip, logger);
+    builder.with_session();
 
     const RUN_DURATION_SECS: usize = 10;
     let now = std::time::Instant::now();
@@ -39,23 +40,26 @@ pub async fn load_test(amf_ip: &IpAddr, sims: &SubscriberDb, logger: &Logger) ->
             "Run {run_id} starting after {}ms",
             now.elapsed().as_millis()
         );
-        for ue_id in 1..=ue_count {
+        builder.reset_ue_index().await;
+        for _ in 1..=ue_count {
             // Registration + session establishment = 13 messages
-            let mut ue = MockUeNgap::new_with_session(
-                nth_imsi(ue_id - 1, sims),
-                ue_id as u32,
-                &gnb,
-                amf_ip,
-                logger,
-            )
-            .await?;
+            let mut ue = builder.new_ngap_ue_no_wait(&gnb).await?;
+
+            // let mut ue = MockUeNgap::new_with_session(
+            //     nth_imsi(ue_id - 1, sims),
+            //     ue_id as u32,
+            //     &gnb,
+            //     amf_ip,
+            //     logger,
+            // )
+            // .await?;
 
             // Context release = 3 messages.
             gnb.send_ue_context_release_request(ue.gnb_ue_context())
                 .await?;
             gnb.handle_ue_context_release(ue.gnb_ue_context()).await?;
 
-            let _old_ue_context = gnb.reset_ue_context(ue.gnb_ue_context(), amf_ip).await?;
+            let _old_ue_context = gnb.reset_ue_context(ue.gnb_ue_context(), &amf_ip).await?;
 
             // Service procedure = 3 messages.
             // (The NAS service accept is piggybacked on the initial context setup.)

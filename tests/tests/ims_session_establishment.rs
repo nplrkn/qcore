@@ -1,14 +1,10 @@
-use qcore_tests::{MockUeF1ap, framework::*};
+use qcore_tests::framework::*;
 
 #[async_std::test]
 async fn ims_session_establishment() -> anyhow::Result<()> {
-    let (mut du, qc, _dn, sims, logger) = init_f1ap().await?;
+    let (du, qc, _dn, builder, _logger) = init_f1ap2().await?;
+    let mut ue = builder.new_f1ap_ue(&du, &qc).await?;
 
-    // DU connects to CU
-    du.perform_f1_setup(qc.ip_addr()).await?;
-
-    // UE registers
-    let mut ue = MockUeF1ap::new(nth_imsi(0, &sims), 1, &du, qc.ip_addr(), &logger).await?;
     ue.perform_rrc_setup().await?;
     ue.handle_nas_authentication().await?;
     ue.handle_nas_security_mode().await?;

@@ -1,13 +1,12 @@
-use qcore_tests::{MockUeNgap, framework::*};
+use qcore_tests::framework::*;
 
 #[async_std::test]
 async fn parallel_config_update_session_establishment() -> anyhow::Result<()> {
-    let (mut gnb, qc, _dn, sims, logger) = init_ngap().await?;
+    let (gnb, qc, _dn, builder, _logger) = init_ngap().await?;
+    let mut ue = builder.new_ngap_ue(&gnb, &qc).await?;
 
     // See the design doc on 'ue serialization' for some background here.
 
-    gnb.perform_ng_setup(qc.ip_addr()).await?;
-    let mut ue = MockUeNgap::new(nth_imsi(0, &sims), 1, &gnb, qc.ip_addr(), &logger).await?;
     ue.send_nas_register_request().await?;
     ue.handle_nas_authentication().await?;
     ue.handle_nas_security_mode().await?;

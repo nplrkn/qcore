@@ -1,16 +1,13 @@
-use qcore_tests::{MockUeF1ap, framework::*};
+use qcore_tests::framework::*;
 
 #[async_std::test]
 async fn attach() -> anyhow::Result<()> {
-    let (mut du, qc, dn, sims, logger) = init_f1ap().await?;
+    let (du, qc, dn, builder, _logger) = init_f1ap2().await?;
 
     // This test carries out the attach flow - see docs/attach.md.
 
-    // DU connects to CU
-    du.perform_f1_setup(qc.ip_addr()).await?;
-
     // UE registers
-    let mut ue = MockUeF1ap::new(nth_imsi(0, &sims), 1, &du, qc.ip_addr(), &logger).await?;
+    let mut ue = builder.new_f1ap_ue(&du, &qc).await?;
     ue.perform_rrc_setup().await?;
     ue.handle_nas_authentication().await?;
     ue.handle_nas_security_mode().await?;
