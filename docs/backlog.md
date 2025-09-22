@@ -12,7 +12,6 @@
 
 ## Bugs / tech debt
 - "slog-async: logger dropped messages due to channel overflow" - for example, when hitting Ctrl-C at end of PacketRusher test - check out tracing-appender
--  On shutdown, delete rather than deactivate userplane sessions 
 - OAI test broken - simulated UE doesn't send Configuration Update Complete
 
 ## Performance

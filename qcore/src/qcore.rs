@@ -44,6 +44,7 @@ pub struct QCore {
     tmsis: Arc<Mutex<HashMap<[u8; 4], CoreContextLocator>>>,
     served_cells: ServedCellsMap,
     ngap_mode: bool,
+    shutting_down: Arc<Mutex<bool>>,
 }
 
 enum CoreContextLocator {
@@ -121,6 +122,7 @@ impl QCore {
             tmsis: Arc::new(Mutex::new(HashMap::new())),
             served_cells: Arc::new(Mutex::new(HashMap::new())),
             ngap_mode,
+            shutting_down: Arc::new(Mutex::new(false)),
         })
     }
 
@@ -165,6 +167,7 @@ impl QCore {
 
     pub async fn graceful_shutdown(&mut self) {
         info!(&self.logger, "Shutting down");
+        *self.shutting_down.lock().await = true;
         self.stack.reset().await;
         if let Some(h) = self.server_handle.lock().await.take() {
             h.graceful_shutdown().await;
@@ -444,6 +447,14 @@ impl ProcedureBase for QCore {
         paging_info: &UePagingInfo,
         logger: &Logger,
     ) {
+        if *self.shutting_down.lock().await {
+            debug!(
+                logger,
+                "Skipping userplane session deactivation during shutdown"
+            );
+            return;
+        }
+
         self.packet_processor
             .deactivate_userplane_session(session, logger)
             .await;
