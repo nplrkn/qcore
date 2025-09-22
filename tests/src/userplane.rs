@@ -72,7 +72,11 @@ impl MockUserplane {
         remote_gtpu_ip: IpAddr,
         gtp_teid: &[u8; 4],
     ) -> Result<()> {
-        info!(self.logger, "Send N3 data packet with TEID {:?}", gtp_teid);
+        info!(
+            self.logger,
+            "Send N3 data packet with TEID {:08}",
+            GtpTeid(*gtp_teid)
+        );
 
         pkt.prepend(&[
             0,          // Sequence number
@@ -95,7 +99,11 @@ impl MockUserplane {
         remote_gtpu_ip: IpAddr,
         gtp_teid: &[u8; 4],
     ) -> Result<()> {
-        info!(self.logger, "Send F1U data packet with TEID {:?}", gtp_teid);
+        info!(
+            self.logger,
+            "Send F1U data packet with TEID {:08}",
+            GtpTeid(*gtp_teid)
+        );
 
         // Prepend the PDCP and SDAP headers using the provided headroom
         pkt.prepend(&[

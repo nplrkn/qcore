@@ -3,6 +3,48 @@
 ## In progress
 - Ethernet PDU sessions
   - get test framework passing
+    -  offset (-5) >= skb_headlen() (43)
+       [32754.734376] WARNING: CPU: 2 PID: 235294 at net/core/dev.c:3353 skb_checksum_help+0x1b5/0x210
+       if (unlikely(offset >= skb_headlen(skb))) {
+		DO_ONCE_LITE(skb_dump, KERN_ERR, skb, false);
+		WARN_ONCE(true, "offset (%d) >= skb_headlen() (%u)\n",
+			  offset, skb_headlen(skb));
+		goto out;
+	}
+  
+  offset = skb_checksum_start_offset(skb);
+         = skb->csum_start - skb_headroom(skb);
+         = skb->csum_start - (skb->data - skb->head)
+         = -5
+
+  If there is no headroom.
+  Presumably checksum must be in the packet.
+  We have increased the headroom (a lot) by shrinking the uplink packet.
+  Therefore the checksum is somewhere different relative to the packet data.
+  So csum_start needs to be changed by the XDP code.
+  Or by the TC helper?? 
+
+
+                                ---------------
+                               | sk_buff       |
+                                ---------------
+   ,---------------------------  + head
+  /          ,-----------------  + data
+ /          /      ,-----------  + tail
+|          |      |            , + end
+|          |      |           |
+v          v      v           v
+ -----------------------------------------------
+| headroom | data |  tailroom | skb_shared_info |
+ -----------------------------------------------
+                               + [page frag]
+                               + [page frag]
+                               + [page frag]
+                               + [page frag]       ---------
+                               + frag_list    --> | sk_buff |
+                                                   ---------
+
+
   - test case where there are more ethernet sessions than available veth devices
   - commonize downlink to use XDP in both cases
   - try again redirecting to loopback from XDP program by installing dummy XDP programs? (https://ants-gitlab.inf.um.es/jorgegm/xdp-tutorial/-/tree/ae0ad18e1d7cba35cb5afbc8c4dfee2efa72fc38/packet03-redirecting)
@@ -16,7 +58,8 @@
   - "The bpf_redirect helper actually shouldn’t be used in production as it is slow" 
   - write up design notes if not clear from code
   - decide what to do about downlink buffering - issue warning for now?
-
+  - how do we age out learnt MACs - e.g. 23.501 "The UPF reports the removal of a UE MAC address based on the detection of absence of traffic during an inactivity time. The inactivity time value is provided by the SMF to the UPF." (5.8.2.12)
+  - can we use bpf_skb_change_type() "The major use case is to change incoming _skb_s to PACKET_HOST in a programmatic way instead of having to recirculate via redirect(..., BPF_F_INGRESS), for example."
 
 ## Bugs / tech debt
 - "slog-async: logger dropped messages due to channel overflow" - for example, when hitting Ctrl-C at end of PacketRusher test - check out tracing-appender

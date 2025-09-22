@@ -6,7 +6,6 @@ use crate::UserplaneSession;
 use crate::data::{EthernetSesssionParams, Ipv4SessionParams, Payload, PdcpSequenceNumberLength};
 use anyhow::{Result, anyhow, bail, ensure};
 use async_std::{net::IpAddr, sync::Mutex};
-use async_tun::{Tun, TunBuilder};
 use aya::maps::{Array, MapData, PerCpuArray};
 use aya::programs::{SchedClassifier, TcAttachType, Xdp, XdpFlags, tc};
 use aya::{Ebpf, EbpfLoader};

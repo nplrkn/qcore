@@ -39,7 +39,11 @@ pub trait RanUeBase {
 
     fn unexpected_pdu<T: Into<UeMessage>>(&mut self, pdu: T, expected: &str) -> Result<()>;
 
-    async fn allocate_userplane_session(&self, logger: &Logger) -> Result<UserplaneSession>;
+    async fn allocate_userplane_session(
+        &self,
+        ipv4: bool,
+        logger: &Logger,
+    ) -> Result<UserplaneSession>;
     async fn commit_userplane_session(
         &self,
         session: &UserplaneSession,

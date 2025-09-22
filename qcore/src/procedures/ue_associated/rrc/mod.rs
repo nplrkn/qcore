@@ -134,7 +134,7 @@ impl<'a, B: RrcBase> NasBase for &mut RrcProcedure<'a, B> {
     delegate! {
     to self.api {
         fn config(&self) -> &Config;
-        async fn allocate_userplane_session(&self) -> Result<UserplaneSession>;
+        async fn allocate_userplane_session(&self, ipv4: bool) -> Result<UserplaneSession>;
         async fn lookup_subscriber_creds_and_inc_sqn(&self, imsi: &str) -> Option<SubscriberAuthParams>;
         async fn resync_subscriber_sqn(&self, imsi: &str, sqn: [u8; 6]) -> Result<()>;
         async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;

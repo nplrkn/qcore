@@ -328,6 +328,7 @@ impl<T: Transport> MockUe<T> {
         let nas_session_establishment_request = build_nas::pdu_session_establishment_request(
             self.data.dnn,
             &mut self.data.nas_context,
+            self.use_ethernet,
         )?;
         info!(&self.logger, "Nas PduSessionEstablishmentRequest >>");
         self.send_nas(nas_session_establishment_request).await
@@ -412,27 +413,41 @@ impl<T: Transport> MockUe<T> {
     pub async fn receive_nas_session_accept(&mut self) -> Result<()> {
         let nas = self.receive_nas().await?;
         let message = decode_security_protected_sm(nas)?;
+
         let Nas5gsmMessage::PduSessionEstablishmentAccept(NasPduSessionEstablishmentAccept {
-            selected_pdu_session_type: NasPduSessionType { value: 1, .. },
-            pdu_address:
-                Some(NasPduAddress {
-                    value: nas_pdu_address_ie,
+            selected_pdu_session_type:
+                NasPduSessionType {
+                    value: selected_session_type,
                     ..
-                }),
+                },
+            pdu_address,
             ..
         }) = message
         else {
             bail!("Expected NasPduSessionEstablishmentAccept, got {message:?}");
         };
 
+        if self.use_ethernet {
+            assert_eq!(selected_session_type, 0b101);
+            assert_eq!(pdu_address, None);
+        } else {
+            let Some(NasPduAddress {
+                value: nas_pdu_address_ie,
+                ..
+            }) = pdu_address
+            else {
+                bail!("Expected NasPduAddress in PduSessionEstablishmentAccept for IPv4 sessions");
+            };
+            self.data.ipv4_addr = Ipv4Addr::new(
+                nas_pdu_address_ie[1],
+                nas_pdu_address_ie[2],
+                nas_pdu_address_ie[3],
+                nas_pdu_address_ie[4],
+            );
+        }
+
         info!(&self.logger, "Nas PduSessionEstablishmentAccept <<");
 
-        self.data.ipv4_addr = Ipv4Addr::new(
-            nas_pdu_address_ie[1],
-            nas_pdu_address_ie[2],
-            nas_pdu_address_ie[3],
-            nas_pdu_address_ie[4],
-        );
         Ok(())
     }
 

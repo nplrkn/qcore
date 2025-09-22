@@ -37,8 +37,8 @@ impl DataNetwork {
     }
 
     pub async fn send_n6_udp_packet<A: AsyncToSocketAddrs>(&self, ue_addr_port: A) -> Result<()> {
+        info!(self.logger, "Send N6 packet");
         self.udp_socket.send_to(&[0; 10], ue_addr_port).await?;
-        info!(self.logger, "Sent in N6 packet");
         Ok(())
     }
 

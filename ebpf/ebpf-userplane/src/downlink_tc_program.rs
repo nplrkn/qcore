@@ -46,6 +46,7 @@ pub fn tc_downlink_eth_redirect(ctx: TcContext) -> i32 {
 #[inline(always)]
 fn try_tc_downlink_n3(ctx: TcContext) -> Result<i32, i32> {
     unsafe {
+        info!(&ctx, "Downlink N3 packet");
         inc(DlRxPkts);
         let inner_ip_length = (ctx.len() - EthHdr::LEN as u32) as u16;
         let entry = lookup_entry_by_dest_ip(&ctx)?;
@@ -53,6 +54,7 @@ fn try_tc_downlink_n3(ctx: TcContext) -> Result<i32, i32> {
         ensure!(teid != 0, DlDropUnknownUe);
         let remote_ip = (*entry).remote_gtp_addr;
         ensure!(remote_ip != 0, DlDropUnknownUe);
+        info!(&ctx, "Why don't you output something n3");
 
         // Pass the packet up to the controller application if requested to do so.
         if remote_ip == 0xffffffff {
@@ -76,6 +78,7 @@ fn try_tc_downlink_n3(ctx: TcContext) -> Result<i32, i32> {
 #[inline(always)]
 pub fn try_tc_downlink_f1u(ctx: TcContext) -> Result<i32, i32> {
     unsafe {
+        info!(&ctx, "Downlink F1U packet");
         inc(DlRxPkts);
         let entry = lookup_entry_by_dest_ip(&ctx)?;
         let inner_ip_length = (ctx.len() - EthHdr::LEN as u32) as u16;
@@ -86,6 +89,8 @@ pub fn try_tc_downlink_f1u(ctx: TcContext) -> Result<i32, i32> {
         let remote_ip = (*entry).remote_gtp_addr;
         ensure!(remote_ip != 0, DlDropUnknownUe);
         let (pdcp_seq_num, nr_seq_num) = get_pdcp_nr_seq_nums(entry);
+
+        info!(&ctx, "Why don't you output something f1u");
 
         push_common_outer_headers(
             &ctx,

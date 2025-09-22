@@ -17,6 +17,18 @@ Look for kfree_skb_reason().
 tcpdump -i tun
 ```
 
+## View Kernel BUG_ON
+
+dmesg 
+For example a BUG_ON failure, can be seen with dmeg
+
+## Kernel source code
+https://elixir.bootlin.com/linux/v6.6.87/source
+
+
+See https://elixir.bootlin.com/linux/v6.6.87/source/net/core/dev.c.
+
+
 ## Kernel code read
 ip_route_input_slow() + fib_validate_source() drop packets with non specific SKB reasons.  Need to 
 read the Linux source code here.

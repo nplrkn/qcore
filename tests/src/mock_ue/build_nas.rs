@@ -384,7 +384,14 @@ pub fn configuration_update_complete(nas_ctxt: &mut NasContext) -> Result<Vec<u8
 pub fn pdu_session_establishment_request(
     dnn: Option<&[u8]>,
     nas_ctxt: &mut NasContext,
+    ethernet: bool,
 ) -> Result<Vec<u8>> {
+    let pdu_session_type;
+    if ethernet {
+        pdu_session_type = Some(NasPduSessionType::new(0b101));
+    } else {
+        pdu_session_type = Some(NasPduSessionType::new(0b001));
+    }
     // See https://www.sharetechnote.com/html/5G/5G_PDUSessionEstablishment.html for an example.
     let inner_message = Nas5gsMessage::Gsm(
         Nas5gsmHeader {
@@ -397,8 +404,8 @@ pub fn pdu_session_establishment_request(
             integrity_protection_maximum_data_rate: NasIntegrityProtectionMaximumDataRate::new(
                 0xffff,
             ),
-            pdu_session_type: Some(NasPduSessionType::new(0b001)), // IPv4 - 9.11.4.11
-            ssc_mode: Some(NasSscMode::new(0b001)),                // SSC Mode 1 - 9.11.4.16.1
+            pdu_session_type,
+            ssc_mode: Some(NasSscMode::new(0b001)), // SSC Mode 1 - 9.11.4.16.1
             fgsm_capability: Some(NasFGsmCapability::new(
                 vec![0x00], // No reflective QoS, multi-homed IPv6, Ethernet S1, TPMIC
             )),

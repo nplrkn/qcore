@@ -21,7 +21,7 @@ pub trait RrcBase {
     fn ue_rat_capabilities(&self) -> &Option<Vec<u8>>;
     fn ue_tac(&self) -> &[u8; 3];
 
-    async fn allocate_userplane_session(&self) -> Result<UserplaneSession>;
+    async fn allocate_userplane_session(&self, ipv4: bool) -> Result<UserplaneSession>;
     async fn delete_userplane_session(&self, session: &UserplaneSession);
 
     async fn lookup_subscriber_creds_and_inc_sqn(&self, imsi: &str)

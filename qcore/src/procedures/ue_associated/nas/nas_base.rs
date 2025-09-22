@@ -13,7 +13,7 @@ pub trait NasBase {
     async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
     async fn delete_tmsi(&self, tmsi: [u8; 4]);
 
-    async fn allocate_userplane_session(&self) -> Result<UserplaneSession>;
+    async fn allocate_userplane_session(&self, ipv4: bool) -> Result<UserplaneSession>;
     async fn delete_userplane_session(&self, session: &UserplaneSession);
 
     // These must take the sessions as a mut &.  Because the NasProcedure has a borrow on them.

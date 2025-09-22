@@ -398,12 +398,16 @@ impl ProcedureBase for QCore {
         <Stack as IndicationHandler<P>>::handle(&self.stack, *r, logger).await
     }
 
-    async fn allocate_userplane_session(&self, logger: &Logger) -> Result<UserplaneSession> {
+    async fn allocate_userplane_session(
+        &self,
+        ipv4: bool,
+        logger: &Logger,
+    ) -> Result<UserplaneSession> {
         self.packet_processor
             .allocate_userplane_session(
                 self.config().five_qi,
                 self.config().pdcp_sn_length,
-                true,
+                ipv4,
                 logger,
             )
             .await

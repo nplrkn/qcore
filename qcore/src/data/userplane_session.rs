@@ -21,7 +21,7 @@ impl std::fmt::Display for Payload {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Payload::Ipv4(params) => write!(f, "UE IP {}", params.ue_ip_addr),
-            Payload::Ethernet(params) => write!(f, "Ethernet (if-{})", params.if_index),
+            Payload::Ethernet(params) => write!(f, "ethernet interface {}", params.if_index),
         }
     }
 }

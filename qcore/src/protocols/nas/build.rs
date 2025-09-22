@@ -258,12 +258,22 @@ pub fn pdu_session_establishment_accept(
     let dns_primary = &[0x08, 0x08, 0x08, 0x08];
     let dns_secondary = &[0x08, 0x08, 0x04, 0x04];
 
-    let pdu_address = match pdu_session.userplane_info.payload {
+    let pdu_address;
+    let selected_session_type;
+    let extended_protocol_configuration_options;
+    match pdu_session.userplane_info.payload {
         Payload::Ipv4(Ipv4SessionParams { ue_ip_addr }) => {
-            Some(nas_pdu_address(&ue_ip_addr.octets()))
+            pdu_address = Some(nas_pdu_address(&ue_ip_addr.octets()));
+            selected_session_type = 0b001;
+            extended_protocol_configuration_options =
+                Some(extended_pco(dns_primary, dns_secondary, true));
         }
-        Payload::Ethernet { .. } => None,
-    };
+        Payload::Ethernet { .. } => {
+            selected_session_type = 0b101;
+            pdu_address = None;
+            extended_protocol_configuration_options = None;
+        }
+    }
 
     // Work around limitation in NAS library.  SSC Mode and Selected Session Type are
     // half byte V fields (24.501, table 8.3.2.1.1).  NasPduSessionType wrongly includes
@@ -271,7 +281,7 @@ pub fn pdu_session_establishment_accept(
     // the value field we can get the right behaviour by putting the SSC mode in the type field.
     let ssc_mode_and_selected_session_type = NasPduSessionType {
         type_field: 0b0001_0000, // SSC mode 1
-        value: 0b0000_0001,      // session type IPv4
+        value: selected_session_type,
     };
 
     let inner_message = Nas5gsMessage::new_5gsm(
@@ -288,11 +298,7 @@ pub fn pdu_session_establishment_accept(
             mapped_eps_bearer_contexts: None,
             eap_message: None,
             authorized_qos_flow_descriptions: Some(authorized_qos_flow_descriptions(qfi, five_qi)),
-            extended_protocol_configuration_options: Some(extended_protocol_configuration_options(
-                dns_primary,
-                dns_secondary,
-                true,
-            )),
+            extended_protocol_configuration_options,
             dnn: Some(nas_dnn(&pdu_session.dnn)),
             fgsm_network_feature_support: None,
             serving_plmn_rate_control: None,
@@ -349,7 +355,7 @@ fn wrap_in_dl_nas_transport(
     )))
 }
 
-fn extended_protocol_configuration_options(
+fn extended_pco(
     dns_primary: &[u8; 4],
     dns_secondary: &[u8; 4],
     include_ppp_ip_configuration_ack: bool,
