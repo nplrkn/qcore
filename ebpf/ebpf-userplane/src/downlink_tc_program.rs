@@ -1,13 +1,15 @@
 use crate::counters::*;
 use crate::globals::*;
 use crate::headers::*;
+use crate::maps::map_lookup;
 use crate::maps::DL_FORWARDING_TABLE;
-use crate::utils::*;
+use crate::tc_utils::*;
 use aya_ebpf::bindings::bpf_adj_room_mode::BPF_ADJ_ROOM_MAC;
+use aya_ebpf::bindings::TC_ACT_SHOT;
 use aya_ebpf::helpers::r#gen::bpf_csum_diff;
 use aya_ebpf::macros::classifier;
 use aya_ebpf::programs::TcContext;
-use aya_log_ebpf::info;
+
 //use aya_log_ebpf::info;
 use core::intrinsics::{atomic_cxchg, AtomicOrdering};
 use ebpf_common::CounterIndex::*;
@@ -38,23 +40,22 @@ pub fn tc_downlink_n3(ctx: TcContext) -> i32 {
 // This program is installed on a UE veth and runs downstream of the XDP program.  The XDP program is responsible for
 // GTP encapsulation, and this one just redirects the GTP packet to qcoretun for routing.
 #[classifier]
-pub fn tc_downlink_eth_redirect(ctx: TcContext) -> i32 {
-    info!(&ctx, "Redirecting a packet on a veth to Linux routing");
+pub fn tc_downlink_eth_redirect(_ctx: TcContext) -> i32 {
+    //info!(&ctx, "Redirecting a packet on a veth to Linux routing");
     unsafe { redirect_to_linux_routing() }
 }
 
 #[inline(always)]
 fn try_tc_downlink_n3(ctx: TcContext) -> Result<i32, i32> {
     unsafe {
-        info!(&ctx, "Downlink N3 packet");
+        //info!(&ctx, "Downlink N3 packet");
         inc(DlRxPkts);
         let inner_ip_length = (ctx.len() - EthHdr::LEN as u32) as u16;
         let entry = lookup_entry_by_dest_ip(&ctx)?;
         let teid = (*entry).teid;
-        ensure!(teid != 0, DlDropUnknownUe);
+        tc_ensure!(teid != 0, DlDropUnknownUe);
         let remote_ip = (*entry).remote_gtp_addr;
-        ensure!(remote_ip != 0, DlDropUnknownUe);
-        info!(&ctx, "Why don't you output something n3");
+        tc_ensure!(remote_ip != 0, DlDropUnknownUe);
 
         // Pass the packet up to the controller application if requested to do so.
         if remote_ip == 0xffffffff {
@@ -78,19 +79,17 @@ fn try_tc_downlink_n3(ctx: TcContext) -> Result<i32, i32> {
 #[inline(always)]
 pub fn try_tc_downlink_f1u(ctx: TcContext) -> Result<i32, i32> {
     unsafe {
-        info!(&ctx, "Downlink F1U packet");
+        //info!(&ctx, "Downlink F1U packet");
         inc(DlRxPkts);
         let entry = lookup_entry_by_dest_ip(&ctx)?;
         let inner_ip_length = (ctx.len() - EthHdr::LEN as u32) as u16;
 
         let pdcp_header_length = (*entry).pdcp_header_length as usize;
         let teid = (*entry).teid;
-        ensure!(teid != 0, DlDropUnknownUe);
+        tc_ensure!(teid != 0, DlDropUnknownUe);
         let remote_ip = (*entry).remote_gtp_addr;
-        ensure!(remote_ip != 0, DlDropUnknownUe);
+        tc_ensure!(remote_ip != 0, DlDropUnknownUe);
         let (pdcp_seq_num, nr_seq_num) = get_pdcp_nr_seq_nums(entry);
-
-        info!(&ctx, "Why don't you output something f1u");
 
         push_common_outer_headers(
             &ctx,
@@ -154,16 +153,16 @@ fn get_pdcp_nr_seq_nums(entry: *mut DlForwardingEntry) -> (u64, u64) {
 #[inline(always)]
 fn lookup_entry_by_dest_ip(ctx: &TcContext) -> Result<*mut DlForwardingEntry, i32> {
     unsafe {
-        ensure!(
+        tc_ensure!(
             is_long_enough(&ctx, EthHdr::LEN + Ipv4Hdr::LEN),
             DlInternalError
         );
         let ipv4hdr: *const Ipv4Hdr = ptr_at(&ctx, EthHdr::LEN);
-        ensure!((*ipv4hdr).version() == 4, DlDropIpv4Header);
+        tc_ensure!((*ipv4hdr).version() == 4, DlDropIpv4Header);
         let forwarding_idx = (*ipv4hdr).dst_addr[3] as u32;
         let entry: *mut DlForwardingEntry =
             map_lookup(&raw mut DL_FORWARDING_TABLE, forwarding_idx);
-        ensure!(!entry.is_null(), DlDropUnknownUe);
+        tc_ensure!(!entry.is_null(), DlDropUnknownUe);
         Ok(entry)
     }
 }
@@ -181,14 +180,11 @@ fn push_common_outer_headers(
         let outer_header_length = (GTP_EXTENSION_HEADER_OFFSET - EthHdr::LEN) as i32
             + inner_packet_offset_from_gtp_header;
 
-        info!(ctx, "About to adjust room");
-        ensure!(
+        tc_ensure!(
             ctx.adjust_room(outer_header_length, BPF_ADJ_ROOM_MAC, 0)
                 .is_ok(),
             DlInternalError
         );
-
-        info!(ctx, "Adjust room ok");
 
         // Populate the outer IP, UDP, GTP.
         // Optimization: avoid repeating this test by using a single pointer to fill in all of
@@ -196,7 +192,7 @@ fn push_common_outer_headers(
         const COMMON_HEADERS_LEN: usize =
             EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + GtpHdr::LEN + GtpHdrOptionalFields::LEN;
 
-        ensure!(is_long_enough(&ctx, COMMON_HEADERS_LEN), DlInternalError);
+        tc_ensure!(is_long_enough(&ctx, COMMON_HEADERS_LEN), DlInternalError);
         let ipv4hdr: *mut Ipv4Hdr = ptr_at(&ctx, EthHdr::LEN);
         let udphdr: *mut UdpHdr = ptr_at(&ctx, EthHdr::LEN + Ipv4Hdr::LEN);
         let gtphdr: *mut GtpHdr = ptr_at(&ctx, EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN);
@@ -204,8 +200,6 @@ fn push_common_outer_headers(
             ptr_at(&ctx, EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + GtpHdr::LEN);
 
         // The original Ethernet header is still in place at the start of the packet.
-
-        info!(ctx, "ALl good");
 
         (*ipv4hdr).set_version(4);
         (*ipv4hdr).set_ihl(5);
@@ -266,7 +260,7 @@ fn push_common_outer_headers(
 fn add_n3_encapsulation(ctx: &TcContext) -> Result<(), i32> {
     unsafe {
         // --- GTP extension header - Pdu Session Container ---
-        ensure!(
+        tc_ensure!(
             is_long_enough(
                 &ctx,
                 GTP_EXTENSION_HEADER_OFFSET + GtpExtPduSessionContainer::LEN
@@ -297,7 +291,7 @@ fn add_f1u_encapsulation(
 
         // --- GTP extension header - NR RAN Container - Downlink User Data ---
         // See TS29.281, 5.2.2.6 and TS38.425, 5.5.2.1
-        ensure!(is_long_enough(&ctx, REQUIRED_MIN_LEN), DlInternalError);
+        tc_ensure!(is_long_enough(&ctx, REQUIRED_MIN_LEN), DlInternalError);
         let nr_ran_container: *mut GtpExtDlUserData = ptr_at(&ctx, GTP_EXTENSION_HEADER_OFFSET);
 
         (*nr_ran_container).len_div_4 = (GtpExtDlUserData::LEN / 4) as u8;
@@ -313,7 +307,7 @@ fn add_f1u_encapsulation(
         (*nr_ran_container).next_extension_header_type = 0;
 
         // Add a 2 or 3 byte PDCP header.
-        ensure!(is_long_enough(&ctx, REQUIRED_MIN_LEN), DlInternalError);
+        tc_ensure!(is_long_enough(&ctx, REQUIRED_MIN_LEN), DlInternalError);
         if pdcp_header_length == 2 {
             let pdcphdr: *mut PdcpHdr12BitSn =
                 ptr_at(&ctx, GTP_EXTENSION_HEADER_OFFSET + GtpExtDlUserData::LEN);

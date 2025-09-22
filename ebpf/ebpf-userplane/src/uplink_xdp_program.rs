@@ -1,18 +1,18 @@
+use super::xdp_utils::{byte_at, is_long_enough, ptr_at};
 use crate::counters::*;
 use crate::globals::*;
 use crate::headers::*;
-use crate::maps::UL_FORWARDING_TABLE;
-use crate::utils::map_lookup;
+use crate::maps::{map_lookup, UL_FORWARDING_TABLE};
 use aya_ebpf::bindings::xdp_action::XDP_ABORTED;
+use aya_ebpf::bindings::xdp_action::XDP_DROP;
 use aya_ebpf::bindings::xdp_action::XDP_PASS;
-//use crate::utils::*;
 use aya_ebpf::bindings::xdp_md;
 use aya_ebpf::helpers::gen::bpf_xdp_adjust_meta;
 use aya_ebpf::helpers::r#gen::bpf_redirect;
 use aya_ebpf::helpers::r#gen::bpf_xdp_adjust_head;
 use aya_ebpf::macros::xdp;
 use aya_ebpf::programs::XdpContext;
-use aya_log_ebpf::info;
+//use aya_log_ebpf::info;
 use ebpf_common::CounterIndex::*;
 use ebpf_common::*;
 use network_types::{
@@ -20,23 +20,6 @@ use network_types::{
     ip::{IpProto, Ipv4Hdr},
     udp::UdpHdr,
 };
-
-#[inline(always)]
-pub fn is_long_enough(ctx: &XdpContext, length: usize) -> bool {
-    ctx.data() + length <= ctx.data_end()
-}
-
-// Unsafe pointer lookup.  Must be preceded by a call to is_long_enough() otherwise
-// the eBPF verifier will reject the program.
-#[inline(always)]
-pub fn ptr_at<T>(ctx: &XdpContext, offset: usize) -> *mut T {
-    (ctx.data() + offset) as *mut T
-}
-
-#[inline(always)]
-pub unsafe fn byte_at(ctx: &XdpContext, offset: usize) -> u8 {
-    *ptr_at::<u8>(ctx, offset)
-}
 
 const GTP_TEID_OFFSET: usize = EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + 4;
 
@@ -62,7 +45,7 @@ pub fn xdp_uplink_f1u(ctx: XdpContext) -> u32 {
 fn try_uplink_n3(ctx: XdpContext) -> Result<u32, u32> {
     unsafe {
         check_udp_dest_port(&ctx)?;
-        info!(&ctx, "Got a packet to the port");
+        //info!(&ctx, "Got a packet to the GTP port");
         let extension_header_type = parse_gtp_header(&ctx)?;
         let entry = lookup_entry(&ctx)?;
         let payload_offset = parse_gtp_ext_pdu_session_container(&ctx, extension_header_type)?;
@@ -121,13 +104,13 @@ fn check_udp_dest_port(ctx: &XdpContext) -> Result<(), u32> {
 // Returns extension_header_type on success
 fn parse_gtp_header(ctx: &XdpContext) -> Result<u8, u32> {
     unsafe {
-        ensure!(
+        xdp_ensure!(
             is_long_enough(&ctx, GTP_EXTENSION_HEADER_OFFSET),
             UlDropTooShort
         );
 
         let gtphdr: *const GtpExtendedHdr = ptr_at(ctx, EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN);
-        ensure!(
+        xdp_ensure!(
             (*gtphdr).base.message_type == GTP_MESSAGE_TYPE_GPDU,
             UlDropGtpMessageType
         );
@@ -146,7 +129,7 @@ fn parse_gtp_header(ctx: &XdpContext) -> Result<u8, u32> {
 #[inline(always)]
 fn lookup_entry(ctx: &XdpContext) -> Result<*const UlForwardingEntry, u32> {
     unsafe {
-        ensure!(is_long_enough(ctx, GTP_TEID_OFFSET + 3), UlDropTooShort);
+        xdp_ensure!(is_long_enough(ctx, GTP_TEID_OFFSET + 3), UlDropTooShort);
         let teid_byte0 = byte_at(ctx, GTP_TEID_OFFSET + 0);
         let teid_byte1 = byte_at(ctx, GTP_TEID_OFFSET + 1);
         let teid_byte2 = byte_at(ctx, GTP_TEID_OFFSET + 2);
@@ -155,11 +138,11 @@ fn lookup_entry(ctx: &XdpContext) -> Result<*const UlForwardingEntry, u32> {
         // Look up by TEID, using the least significant byte as the index into the forwarding table.
         let entry: *const UlForwardingEntry =
             map_lookup(&raw mut UL_FORWARDING_TABLE, teid_byte3 as u32);
-        ensure!(!entry.is_null(), UlInternalError);
+        xdp_ensure!(!entry.is_null(), UlInternalError);
 
         // Optimization - use u32 operations.
-        ensure!((*entry).teid_top_bytes != [0, 0, 0], UlDropUnknownTeid1);
-        ensure!(
+        xdp_ensure!((*entry).teid_top_bytes != [0, 0, 0], UlDropUnknownTeid1);
+        xdp_ensure!(
             teid_byte0 == (*entry).teid_top_bytes[0]
                 && teid_byte1 == (*entry).teid_top_bytes[1]
                 && teid_byte2 == (*entry).teid_top_bytes[2],
@@ -183,26 +166,26 @@ fn process_gtp_extension_headers(
             return Ok(EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + GtpHdr::LEN);
         };
 
-        ensure!(
+        xdp_ensure!(
             extension_header_type == GTP_EXT_NR_RAN_CONTAINER,
             UlDropUnsupportedExt
         );
 
-        ensure!(is_long_enough(ctx, PDCP_HEADER_OFFSET), UlDropTooShort);
+        xdp_ensure!(is_long_enough(ctx, PDCP_HEADER_OFFSET), UlDropTooShort);
         let delivery_status: *const GtpExtDlDataDeliveryStatus =
             ptr_at(ctx, GTP_EXTENSION_HEADER_OFFSET);
-        ensure!(
+        xdp_ensure!(
             (*delivery_status).len_div_4 == (GtpExtDlDataDeliveryStatus::LEN / 4) as u8,
             UlDropExtLength
         );
-        ensure!(
+        xdp_ensure!(
             (*delivery_status).next_extension_header_type == 0,
             UlDropUnsupportedExt
         );
 
         // If we just reached the end of the packet, then record an status only packet and
         // drop.
-        ensure!(
+        xdp_ensure!(
             is_long_enough(ctx, PDCP_HEADER_OFFSET + 1),
             UlRxStatusOnlyPkts
         );
@@ -219,19 +202,19 @@ fn parse_gtp_ext_pdu_session_container(
     extension_header_type: u8,
 ) -> Result<usize, u32> {
     unsafe {
-        ensure!(
+        xdp_ensure!(
             extension_header_type == GTP_EXT_PDU_SESSION_CONTAINER,
             UlDropGtpExtMissing
         );
 
-        ensure!(is_long_enough(ctx, PAYLOAD_OFFSET), UlDropTooShort);
+        xdp_ensure!(is_long_enough(ctx, PAYLOAD_OFFSET), UlDropTooShort);
         let session_container: *const GtpExtPduSessionContainer =
             ptr_at(ctx, GTP_EXTENSION_HEADER_OFFSET);
-        ensure!(
+        xdp_ensure!(
             (*session_container).len_div_4 == (GtpExtPduSessionContainer::LEN / 4) as u8,
             UlDropExtLength
         );
-        ensure!(
+        xdp_ensure!(
             (*session_container).next_extension_header_type == 0,
             UlDropUnsupportedExt
         );
@@ -246,14 +229,14 @@ fn process_pdcp_and_sdap_headers(
     mut offset: usize,
 ) -> Result<usize, u32> {
     unsafe {
-        ensure!(
+        xdp_ensure!(
             is_long_enough(ctx, offset + PdcpHdr18BitSn::LEN + SDAP_HEADER_LEN),
             UlDropTooShortExt
         );
 
         // Skip over the PDCP header. TS38.323, 6.2.1.
         // This starts with the D/C bit.  PDCP control packets are not implemented.
-        ensure!(byte_at(ctx, offset) & 0x80 != 0, UlDropPdcpControl);
+        xdp_ensure!(byte_at(ctx, offset) & 0x80 != 0, UlDropPdcpControl);
         if pdcp_header_length == 2 {
             offset += PdcpHdr12BitSn::LEN;
         } else {
@@ -263,7 +246,7 @@ fn process_pdcp_and_sdap_headers(
         // Skip over the 1-byte UL SDAP header - TS37.624, 6.2.2.3
         // | D/C |  R  |              QFI                 |
         // SDAP control packets are not implemented
-        ensure!(byte_at(ctx, offset) & 0x80 != 0, UlDropSdapControl);
+        xdp_ensure!(byte_at(ctx, offset) & 0x80 != 0, UlDropSdapControl);
         offset += SDAP_HEADER_LEN;
         Ok(offset)
     }
@@ -275,7 +258,7 @@ pub fn output_inner_packet(ctx: &XdpContext, mut offset: usize, if_index: u32) -
         // If this is an IP packet, add an empty Ethernet header just before the inner packet.
         if if_index == 0 {
             offset = offset - EthHdr::LEN;
-            ensure!(is_long_enough(ctx, offset + EthHdr::LEN), UlDropTooShort);
+            xdp_ensure!(is_long_enough(ctx, offset + EthHdr::LEN), UlDropTooShort);
             let ethhdr: *mut EthHdr = ptr_at(ctx, offset);
             (*ethhdr).dst_addr = [0, 0, 0, 0, 0, 0];
             (*ethhdr).src_addr = [0, 0, 0, 0, 0, 0];
@@ -284,14 +267,7 @@ pub fn output_inner_packet(ctx: &XdpContext, mut offset: usize, if_index: u32) -
 
         // Advance to the start of the inner packet.
         let ret = bpf_xdp_adjust_head(ctx.ctx as *mut xdp_md, offset as i32);
-
-        info!(
-            ctx,
-            "Adjust head ret {}, len now {}, now will emit to device {}",
-            ret,
-            ctx.data_end() - ctx.data(),
-            if_index
-        );
+        xdp_ensure!(ret == 0, UlInternalError);
 
         // In our bandwidth counters we distinguish between
         // - header bytes: the outer IP, UDP, GTP, and PDCP headers - i.e. the overhead that we have just
@@ -313,8 +289,6 @@ pub fn output_inner_packet(ctx: &XdpContext, mut offset: usize, if_index: u32) -
             }
             let meta: *mut u32 = ctx.metadata() as *mut u32;
             *meta = 34759;
-            info!(ctx, "Wrote to meta");
-
             Ok(XDP_PASS)
         } else {
             Ok(bpf_redirect(if_index, 0) as u32)

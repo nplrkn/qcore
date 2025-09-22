@@ -4,8 +4,10 @@
 #![feature(core_intrinsics)]
 
 mod headers;
-mod utils;
 #[macro_use]
+mod tc_utils;
+#[macro_use]
+mod xdp_utils;
 mod counters;
 mod downlink_tc_program;
 mod downlink_xdp_program;

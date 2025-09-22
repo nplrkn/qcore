@@ -1,6 +1,18 @@
-use aya_ebpf::macros::map;
 use aya_ebpf::maps::Array;
+use aya_ebpf::maps::PerCpuArray;
+use aya_ebpf::{helpers::r#gen::bpf_map_lookup_elem, macros::map};
+use ebpf_common::CounterIndex::NumCounters;
 use ebpf_common::{DlForwardingEntry, UlForwardingEntry, FORWARDING_TABLE_SIZE};
+
+#[inline(always)]
+// This avoids the Rust compiler warning from aya-rs's lookup() method.
+pub unsafe fn map_lookup<T, V>(map: *mut T, k: u32) -> *mut V {
+    let ptr = bpf_map_lookup_elem(map as *mut _, &k as *const _ as *const core::ffi::c_void);
+    ptr as *mut V
+}
+
+#[map]
+pub static mut COUNTERS: PerCpuArray<u64> = PerCpuArray::with_max_entries(NumCounters as u32, 0);
 
 // TODO - hide this and provide ul_forwarding_table_lookup()?
 // Move stuff that doesn't require TcContext or XdpContext out - e.g. lookup entry

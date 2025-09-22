@@ -1,19 +1,17 @@
 use crate::counters::*;
 use crate::globals::*;
 use crate::headers::*;
-use crate::maps::DL_ETH_IF_INDEX_LOOKUP;
-use crate::maps::DL_FORWARDING_TABLE;
-use crate::utils::map_lookup;
+use crate::maps::{map_lookup, DL_ETH_IF_INDEX_LOOKUP, DL_FORWARDING_TABLE};
+use crate::xdp_utils::*;
+use aya_ebpf::bindings::xdp_action::XDP_DROP;
 use aya_ebpf::bindings::xdp_action::XDP_PASS;
 use aya_ebpf::bindings::xdp_md;
 use aya_ebpf::helpers::r#gen::bpf_csum_diff;
 use aya_ebpf::helpers::r#gen::bpf_xdp_adjust_head;
 use aya_ebpf::macros::xdp;
 use aya_ebpf::programs::XdpContext;
-use aya_log_ebpf::info;
 use network_types::eth::EtherType;
 //use aya_log_ebpf::info;
-use core::intrinsics::{atomic_cxchg, AtomicOrdering};
 use ebpf_common::CounterIndex::*;
 use ebpf_common::*;
 use network_types::{
@@ -21,23 +19,6 @@ use network_types::{
     ip::{IpProto, Ipv4Hdr},
     udp::UdpHdr,
 };
-
-#[inline(always)]
-fn is_long_enough(ctx: &XdpContext, length: usize) -> bool {
-    ctx.data() + length <= ctx.data_end()
-}
-
-// Unsafe pointer lookup.  Must be preceded by a call to is_long_enough() otherwise
-// the eBPF verifier will reject the program.
-#[inline(always)]
-fn ptr_at<T>(ctx: &XdpContext, offset: usize) -> *mut T {
-    (ctx.data() + offset) as *mut T
-}
-
-#[inline(always)]
-unsafe fn byte_at(ctx: &XdpContext, offset: usize) -> u8 {
-    *ptr_at::<u8>(ctx, offset)
-}
 
 #[xdp]
 pub fn xdp_downlink_n3_eth(ctx: XdpContext) -> u32 {
@@ -53,26 +34,24 @@ fn try_xdp_downlink_n3_eth(ctx: XdpContext) -> Result<u32, u32> {
         inc(DlRxPkts);
         let payload_length = ctx.data_end() - ctx.data();
 
-        info!(
-            &ctx,
-            "Eth frame in on if index {}",
-            (*ctx.ctx).ingress_ifindex
-        );
+        // info!(
+        //     &ctx,
+        //     "Eth frame in on if index {}",
+        //     (*ctx.ctx).ingress_ifindex
+        // );
         let forwarding_idx: *mut u16 =
             map_lookup(&raw mut DL_ETH_IF_INDEX_LOOKUP, (*ctx.ctx).ingress_ifindex);
-        ensure!(!forwarding_idx.is_null(), DlDropUnknownUe);
+        xdp_ensure!(!forwarding_idx.is_null(), DlDropUnknownUe);
 
-        info!(&ctx, "Maps to forwarding index {}", *forwarding_idx);
+        //info!(&ctx, "Maps to forwarding index {}", *forwarding_idx);
         let entry: *mut DlForwardingEntry =
             map_lookup(&raw mut DL_FORWARDING_TABLE, *forwarding_idx as u32);
-        ensure!(!entry.is_null(), DlDropUnknownUe);
+        xdp_ensure!(!entry.is_null(), DlDropUnknownUe);
 
         let teid = (*entry).teid;
-        ensure!(teid != 0, DlDropUnknownUe);
+        xdp_ensure!(teid != 0, DlDropUnknownUe);
         let remote_ip = (*entry).remote_gtp_addr;
-        ensure!(remote_ip != 0, DlDropUnknownUe);
-
-        info!(&ctx, "Proceed with forward to gNB");
+        xdp_ensure!(remote_ip != 0, DlDropUnknownUe);
 
         // Pass the packet up to the controller application if requested to do so.
         // if remote_ip == 0xffffffff {
@@ -107,17 +86,8 @@ fn push_common_outer_headers(
         let outer_header_length =
             GTP_EXTENSION_HEADER_OFFSET as i32 + inner_packet_offset_from_gtp_header;
 
-        let len = ctx.data_end() - ctx.data();
-
-        info!(
-            ctx,
-            "About to rewind head by {} len {}", outer_header_length, len
-        );
         let ret = bpf_xdp_adjust_head(ctx.ctx as *mut xdp_md, -outer_header_length as i32);
-
-        let len = ctx.data_end() - ctx.data();
-
-        info!(ctx, "Adjust head ret {} len {}", ret, len);
+        xdp_ensure!(ret == 0, DlInternalError);
 
         // Populate the outer Ethernet, IP, UDP, GTP.
         // Optimization: avoid repeating this test by using a single pointer to fill in all of
@@ -125,7 +95,7 @@ fn push_common_outer_headers(
         const COMMON_HEADERS_LEN: usize =
             EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + GtpHdr::LEN + GtpHdrOptionalFields::LEN;
 
-        ensure!(is_long_enough(&ctx, COMMON_HEADERS_LEN), DlInternalError);
+        xdp_ensure!(is_long_enough(&ctx, COMMON_HEADERS_LEN), DlInternalError);
         //info!(ctx, "Long enough");
 
         let ethhdr: *mut EthHdr = ptr_at(&ctx, 0);
@@ -202,7 +172,7 @@ fn push_common_outer_headers(
 fn add_n3_encapsulation(ctx: &XdpContext) -> Result<(), u32> {
     unsafe {
         // --- GTP extension header - Pdu Session Container ---
-        ensure!(
+        xdp_ensure!(
             is_long_enough(
                 &ctx,
                 GTP_EXTENSION_HEADER_OFFSET + GtpExtPduSessionContainer::LEN

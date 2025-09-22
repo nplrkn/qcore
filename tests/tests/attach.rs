@@ -27,13 +27,5 @@ async fn attach() -> anyhow::Result<()> {
 
     // Userplane packet passthrough
     pass_through_uplink_ipv4(&ue, &dn).await?;
-
-    // temp code to wait for log output
-    async_std::task::sleep(std::time::Duration::from_secs(2)).await;
-
-    pass_through_downlink_ipv4(&dn, &ue).await?;
-
-    // temp code to wait for stats output
-    async_std::task::sleep(std::time::Duration::from_secs(2)).await;
-    Ok(())
+    pass_through_downlink_ipv4(&dn, &ue).await
 }

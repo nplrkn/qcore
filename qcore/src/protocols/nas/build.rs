@@ -23,7 +23,6 @@ use oxirush_nas::{
     },
 };
 use security::NAS_ABBA;
-use std::net::IpAddr;
 use xxap::PlmnIdentity;
 
 use super::AmfIds;

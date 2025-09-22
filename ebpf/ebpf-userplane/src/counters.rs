@@ -1,9 +1,5 @@
-use super::utils::map_lookup;
-use aya_ebpf::{macros::map, maps::PerCpuArray};
-use ebpf_common::CounterIndex::{self, NumCounters};
-
-#[map]
-static mut COUNTERS: PerCpuArray<u64> = PerCpuArray::with_max_entries(NumCounters as u32, 0);
+use super::maps::{map_lookup, COUNTERS};
+use ebpf_common::CounterIndex::{self};
 
 #[inline(always)]
 pub unsafe fn inc(stat_id: CounterIndex) {
@@ -16,15 +12,4 @@ pub unsafe fn add(stat_id: CounterIndex, amount: u64) {
     if !ptr.is_null() {
         *ptr += amount;
     }
-}
-
-// TODO: need more clarity about whether this drops the packet (TC_ACT_SHOT / XDP_DROP)
-// or passes it.  "drop_unless"?
-macro_rules! ensure {
-    ($cond:expr, $stat:ident) => {
-        if !$cond {
-            inc($stat);
-            return Err(2);
-        }
-    };
 }
