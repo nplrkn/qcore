@@ -12,8 +12,6 @@ pub fn ptr_at<T>(ctx: &TcContext, offset: usize) -> *mut T {
     (ctx.data() + offset) as *mut T
 }
 
-// TODO: need more clarity about whether this drops the packet (TC_ACT_SHOT / XDP_DROP)
-// or passes it.  "drop_unless"?
 macro_rules! tc_ensure {
     ($cond:expr, $stat:ident) => {
         if !$cond {

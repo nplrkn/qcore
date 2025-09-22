@@ -3,6 +3,6 @@ mod packet_processor;
 mod stats;
 pub use downlink_buffer::{DownlinkBufferController, PagingApi};
 pub use packet_processor::PacketProcessor;
-mod aya_log;
+//mod aya_log;
 
 const MAX_UES: usize = 254;

@@ -47,9 +47,10 @@ Before you start, install Rust and read the [section below on the routing setup]
 cargo install bpf-linker
 rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
 
-# Configure QCore routing setup 
+# Configure QCore routing + ethernet setup 
 sudo apt install iptables
 sudo ./setup-routing
+sudo ./setup-ethernet
 ```
 
 #### Packet capture
@@ -98,6 +99,17 @@ The `setup-routing` script sets up NAT connectivity over `eth0` by default (with
 ```sh
 ./setup-routing enp113s0  # Set up iptables NAT for a default route via device enp113s0
 ```
+
+### Ethernet PDU session setup
+
+QCore supports Ethernet PDU sessions.  To enable this support, you must create Linux devices named "veth_ue_1_a", 
+"veth_ue_2_a".. etc..  QCore detects these devices on startup and attaches eBPF programs to each.  When an Ethernet PDU session is set up, QCore assigns it to a device.
+
+Currently, all Ethernet devices are expected to connect to the same switch / Linux bridge.  In future, QCore will support 
+Ethernet device assignment based on DNN.
+
+The [`setup-ethernet` script](./setup-ethernet) shows one way of doing this.
+
 
 ### Linux Permissions
 

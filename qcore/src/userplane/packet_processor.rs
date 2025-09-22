@@ -1,6 +1,6 @@
 #![allow(clippy::unusual_byte_groupings)]
 use super::MAX_UES;
-use super::aya_log::EbpfLogger;
+//use super::aya_log::EbpfLogger;
 use super::stats::dump_stats;
 use crate::UserplaneSession;
 use crate::data::{EthernetSesssionParams, Ipv4SessionParams, Payload, PdcpSequenceNumberLength};
@@ -78,9 +78,9 @@ impl PacketProcessor {
             .set_global("TUN_IF_INDEX", &tun_if_index, true)
             .load(data)?;
 
-        if let Err(e) = EbpfLogger::init_with_logger(&mut ebpf, logger.clone()) {
-            warn!(logger, "failed to initialize eBPF logger: {e}");
-        }
+        // if let Err(e) = EbpfLogger::init_with_logger(&mut ebpf, logger.clone()) {
+        //     warn!(logger, "failed to initialize eBPF logger: {e}");
+        // }
 
         let (uplink_program, ip_downlink_program) = if ngap_mode {
             ("xdp_uplink_n3", "tc_downlink_n3")

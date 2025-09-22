@@ -9,7 +9,6 @@ use aya_ebpf::bindings::TC_ACT_SHOT;
 use aya_ebpf::helpers::r#gen::bpf_csum_diff;
 use aya_ebpf::macros::classifier;
 use aya_ebpf::programs::TcContext;
-
 //use aya_log_ebpf::info;
 use core::intrinsics::{atomic_cxchg, AtomicOrdering};
 use ebpf_common::CounterIndex::*;
@@ -38,7 +37,7 @@ pub fn tc_downlink_n3(ctx: TcContext) -> i32 {
 }
 
 // This program is installed on a UE veth and runs downstream of the XDP program.  The XDP program is responsible for
-// GTP encapsulation, and this one just redirects the GTP packet to qcoretun for routing.
+// GTP encapsulation, and this one just redirects the GTP packet to qcoretun for routing to the RAN.
 #[classifier]
 pub fn tc_downlink_eth_redirect(_ctx: TcContext) -> i32 {
     //info!(&ctx, "Redirecting a packet on a veth to Linux routing");
