@@ -2,14 +2,12 @@
 
 ## In progress
 - Ethernet PDU session
-  - builder pattern in test framework
-    - run load test
   - try again with XDP_PASS, TC_ACT_OK, ? 
     -  in particular, a) why is tc_downlink_eth_redirect() needed?  b) why do try_tc_downlink_n3() / try_tc_downlink_n6() not pass
     -  (https://ants-gitlab.inf.um.es/jorgegm/xdp-tutorial/-/tree/ae0ad18e1d7cba35cb5afbc8c4dfee2efa72fc38/packet03-redirecting)
   - ensure stats give visibility into each arm of ethernet XDP/TC code
   - write up design notes if not clear from code
-  - how do we age out learnt MACs - e.g. 23.501 "The UPF reports the removal of a UE MAC address based on the detection of absence of traffic during an inactivity time. The inactivity time value is provided by the SMF to the UPF." (5.8.2.12)
+ 
 
 ## Bugs / tech debt
 - "slog-async: logger dropped messages due to channel overflow" - for example, when hitting Ctrl-C at end of PacketRusher test - check out tracing-appender

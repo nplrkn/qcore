@@ -103,20 +103,43 @@ The `setup-routing` script sets up NAT connectivity over `eth0` by default (with
 ### Ethernet PDU session setup
 
 QCore supports Ethernet PDU sessions.  To enable this support, you must create Linux devices named "veth_ue_1_a", 
-"veth_ue_2_a".. etc..  QCore detects these devices on startup and attaches eBPF programs to each.  When an Ethernet PDU session is set up, QCore assigns it to a device.
+"veth_ue_2_a".. etc..  The [`setup-ethernet` script](./setup-ethernet) shows how to do this.
 
-Currently, all Ethernet devices are expected to connect to the same switch / Linux bridge.  In future, QCore will support 
-Ethernet device assignment based on DNN.
+Currently, all Ethernet devices are expected to connect to the same switch / Linux bridge.  In future, QCore will support Ethernet device selection based on DNN.
 
-The [`setup-ethernet` script](./setup-ethernet) shows one way of doing this.
+QCore detects these devices on startup and attaches eBPF programs to each.  When an Ethernet PDU session is set up, QCore assigns it to a spare device.  If it runs out of Ethernet devices, it rejects Ethernet PDU session creation.
 
+An Ethernet PDU session may reach multiple MAC addresses.  To see which MAC addresses have been learned over by 
+the bridge over a given UE device / ethernet PDU session, run `bridge fdb show`.  For example
+```sh
+cargo test --test ngap_ethernet_session    # Run test that sends ethernet frames through the bridge
+bridge fdb show br qcore_br0 dynamic       # See which MAC addresses have been learned by the bridge
+                                           # Should include 02:02:02:02:02:01 and 02:02:02:02:02:02.
+```
+
+Linux bridges age out learned MAC addresses.  This is configurable using `brctl setageing`.  Currently, QCore is not smart enough to delete MAC addresses immediately from the bridge when a UE session is deleted.
+
+As with IPv4 PDU sessions, the only way to relate an Ethernet session to a specific UE is by correlating INFO logs using the 'ue_id' as follows.
+
+```
+ue_id: 3921819296
+  ...
+  Sep 23 07:30:50.371 INFO Registering imsi-001011111111111
+  ...
+ue_id: 3921819296
+  ...
+  Sep 23 07:30:50.380 INFO Activate userplane session ethernet interface 9, local teid 0630f803, remote 127.0.0.2-00010001, 5QI=7
+```
+
+This means that the veth with interface index 9 was assigned to the UE with IMSI 001011111111111.  `ip link show` 
+tells you which interface that is.
 
 ### Linux Permissions
 
-QCore installs an eBPF program on startup and needs the relevant Linux permissions to do so.  The easiest way to 
+QCore installs various eBPF programs on startup and needs the relevant Linux permissions to do so.  The easiest way to 
 achieve this is to run it as root.
 
-QCore routing setup also requires elevated permissions. 
+QCore routing and ethernet setup also require elevated permissions. 
 
 
 ## About the routing setup
