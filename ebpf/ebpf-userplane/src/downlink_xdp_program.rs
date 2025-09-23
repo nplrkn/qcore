@@ -53,6 +53,8 @@ fn try_xdp_downlink_n3_eth(ctx: XdpContext) -> Result<u32, u32> {
         let remote_ip = (*entry).remote_gtp_addr;
         xdp_ensure!(remote_ip != 0, DlDropUnknownUe);
 
+        // TODO: Ethernet downlink buffering / paging not currently supported
+
         // Pass the packet up to the controller application if requested to do so.
         // if remote_ip == 0xffffffff {
         //     return Ok(redirect_to_controller());
@@ -90,13 +92,9 @@ fn push_common_outer_headers(
         xdp_ensure!(ret == 0, DlInternalError);
 
         // Populate the outer Ethernet, IP, UDP, GTP.
-        // Optimization: avoid repeating this test by using a single pointer to fill in all of
-        // the new fields.
         const COMMON_HEADERS_LEN: usize =
             EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + GtpHdr::LEN + GtpHdrOptionalFields::LEN;
-
         xdp_ensure!(is_long_enough(&ctx, COMMON_HEADERS_LEN), DlInternalError);
-        //info!(ctx, "Long enough");
 
         let ethhdr: *mut EthHdr = ptr_at(&ctx, 0);
         let ipv4hdr: *mut Ipv4Hdr = ptr_at(&ctx, EthHdr::LEN);
@@ -105,7 +103,7 @@ fn push_common_outer_headers(
         let gtpexthdr: *mut GtpHdrOptionalFields =
             ptr_at(&ctx, EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + GtpHdr::LEN);
 
-        // // We can zero the addresses, as Linux will regenerate them on forward.
+        // We can zero the addresses, as Linux will regenerate them on forward.
         (*ethhdr).dst_addr = [0, 0, 0, 0, 0, 0];
         (*ethhdr).src_addr = [0, 0, 0, 0, 0, 0];
         (*ethhdr).ether_type = EtherType::Ipv4;

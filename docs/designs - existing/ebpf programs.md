@@ -9,16 +9,16 @@ An XDP program is installed on whatever link connects the RAN to QCore.  It look
 ### Uplink Ethernet
 In the case of Ethernet, the packet is injected into the Linux bridge via a redirect to the appropciate veth device egress.
 
-            XDP program does decap and redirect  
-                |                            -------------------
-                v / == veth_ue_1_b egress ==>|                 |
-== eth0 ingress =>- == veth_ue_2_b egress ==>|  qcore_br0      |
-                  \ == veth_ue_3_b egress ==>|                 |
-                                             -------------------
+                XDP program does decap and redirect  
+                |                                             -------------------
+                v   /== veth_ue_1_a egress ==> veth_ue_1_b ==> |                 |
+== eth0 ingress ==> === veth_ue_2_a egress ==> veth_ue_2_b ==> |  qcore_br0      |
+                    \== veth_ue_3_a egress ==> veth_ue_3_b ==> |                 |
+                                                              -------------------
 
 If the RAN is co-located in the same host as qcore, then the ingress interface is lo rather than eth0.
 
-The 'a side' of the veth pair is ignored by QCore and is apparently superfluous.  However, Linux necessarily creates veths in pairs.
+QCore attaches to the opposite side of the veth pair to the veth that is connected to the bridge.  I have not investigated whether it would be possible to use the same veth as the one connected to the bridge.
 
 ### Uplink IP
 
@@ -43,11 +43,11 @@ doing UE to UE routing.
 The Linux bridge transmits a frame out of one of its port devices.  These packets are picked up by XDP program
 `xdp_downlink_n3_eth`, which encapsulates them in GTP.  Immediately afterwards, a TC program (`tc_downlink_eth_redirect`) redirects to qcoretun in order to get the GTP packet into Linux routing.  From there, it will be routed up over lo if the RAN is local, or out over an external link if the RAN is remote.
 
-                               XDP program does encap 
-                                          |  TC program redirects to qcoretun
------------------                         v  v                          ----------------------------
-|  qcore_br0    |== veth_ue_1_b ingress ====>| == qcoretun0 ingress ==> | Linux iptables, FIB, etc |
------------------                                                       ----------------------------
+                                                          XDP program does encap 
+                                                          |  TC program redirects to qcoretun
+-----------------                                         v  v                          ----------------------------
+|  qcore_br0    |== veth_ue_1_b ==> veth_ue_1_a ingress ====>| == qcoretun0 ingress ==> | Linux iptables, FIB, etc |
+-----------------                                                                       ----------------------------
 
 QCore does not currently support F1 mode for this path. 
 
@@ -68,4 +68,3 @@ This is a TC rather than an XDP program for historical reasons.  It may make sen
 -   In three of the four paths above, we make use of TC redirect ingress to qcoretun to pass packets into Linux routing.  Is there the possibility to XDP_PASS into Linux routing instead without ever changing interfaces / going via a TC program, in one or more of these paths?
 
 -  Is it possible to clear the checksum without go via a TC program?  (See 'uplink IP'.)
-

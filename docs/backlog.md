@@ -1,8 +1,6 @@
 # Backlog
 
 ## In progress
-- Ethernet PDU session
-  - ensure stats give visibility into each arm of ethernet XDP/TC code 
 
 ## Bugs / tech debt
 - "slog-async: logger dropped messages due to channel overflow" - for example, when hitting Ctrl-C at end of PacketRusher test - check out tracing-appender
@@ -24,16 +22,16 @@
 - Implement and test NAS procedure interaction table
 - Registration timeout and refresh (+ update parallelization table)
 - Proper handling of deregistration from UE, including sending of Deregistration accept (+ update parallelization table)
-- Idle / paging
+- Ethernet paging
 - Sessions / IP addresses should not persist forever.  Timeout; flush on TMSI register/service request without session reactivation; flush on IMSI registration? 
 - Large SCTP messages - e.g. unfiltered UE Capability Information
 - UE static IP
 - Time out during procedures - e.g. Authentication procedure uses T3560
 - UE AMBR
+- NAS uplink integrity validation
 - Transport key for SIM creds
 - SUCI
 - NEA2 ciphering for NAS
-- NAS uplink integrity validation for NAS
 - TODOs
 - Negative testing of rejections and protocol errors
 - >1 PDU session per UE
@@ -55,19 +53,18 @@
   - RRC Inactive
   - Update / Remove a DU's served cells on Du configuration update, F1 Remove, disconnection
 
-
 ## Error handling
 - Session setup with existing PDU session ID should not leave up old session.  Seen with OnePlus phone which repeated 
   its session setup request (with no intervening delete) after not liking the response.
 
 ## Tidying + refactoring
 - switch to tokio or smol
+- commonize downlink xdp and tc, or reimplement downlink tc logic in a new xdp program
 - review Arc / clone usage
+- struct Config should be split into information that is used on startup (which doesn't need to be visible to procedures), and information that is used by procedures (which does need to be cloned) 
 - uplink information transfer in separate module for F1AP?
 - tests are slow to link
 - use different forwarding tables for NGAP vs F1AP 
-- test scripts - move to builder pattern (new_with_base() etc)?
-- struct Config should be split into information that is used on startup (which doesn't need to be cloned), and information that is used by procedures (which does need to be cloned) 
 
 ## Regression tests
 - should check there are no further messages when a mock is dropped

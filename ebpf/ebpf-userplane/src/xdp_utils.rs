@@ -10,7 +10,7 @@ pub unsafe fn byte_at(ctx: &XdpContext, offset: usize) -> u8 {
     *ptr_at::<u8>(ctx, offset)
 }
 
-// Unsafe pointer lookup.  Must be preceded by a call to is_long_enough() otherwise
+// This must be preceded by a call to is_long_enough() otherwise
 // the eBPF verifier will reject the program.
 #[inline(always)]
 pub fn ptr_at<T>(ctx: &XdpContext, offset: usize) -> *mut T {

@@ -1,5 +1,4 @@
 use core::mem;
-
 use network_types::{eth::EthHdr, ip::Ipv4Hdr, udp::UdpHdr};
 
 // TS29.281, 5.1

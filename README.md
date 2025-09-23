@@ -4,7 +4,7 @@
 
 QCore is a free, ultra-compact private 5G Core, written in Rust, designed to minimise compute and power cost.  
 
-It is simple to use, and significantly outperforms other single-node 5G cores thanks to its monolithic architecture.  
+It is simple to use, and significantly outperforms other single-node 5G cores thanks to its unusual monolithic architecture which reduces internal processing overheads.  
 
 Using a tiny 30MB executable, it can handle 30,000 control plane messages per second on a single CPU core ([details](docs/Open5GS-comparative-load-testing.md)).  The userplane is implemented using eBPF for gigabit/s throughput.
 
@@ -109,8 +109,8 @@ Currently, all Ethernet devices are expected to connect to the same switch / Lin
 
 QCore detects these devices on startup and attaches eBPF programs to each.  When an Ethernet PDU session is set up, QCore assigns it to a spare device.  If it runs out of Ethernet devices, it rejects Ethernet PDU session creation.
 
-An Ethernet PDU session may reach multiple MAC addresses.  To see which MAC addresses have been learned over by 
-the bridge over a given UE device / ethernet PDU session, run `bridge fdb show`.  For example
+An Ethernet PDU session may connect to multiple different MAC addresses on the UE side.  QCore does not allocate
+MAC addresses - that is up to the UE.   To see which MAC addresses have been learned by the bridge from a given UE device / ethernet PDU session, run `bridge fdb show`.  For example
 ```sh
 cargo test --test ngap_ethernet_session    # Run test that sends ethernet frames through the bridge
 bridge fdb show br qcore_br0 dynamic       # See which MAC addresses have been learned by the bridge
@@ -132,7 +132,7 @@ ue_id: 3921819296
 ```
 
 This means that the veth with interface index 9 was assigned to the UE with IMSI 001011111111111.  `ip link show` 
-tells you which interface that is.
+can be used to look up the interface index.
 
 ### Linux Permissions
 

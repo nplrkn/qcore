@@ -140,7 +140,7 @@ dependencies = [
  "asn1-codecs",
  "bitvec",
  "nonempty",
- "num_enum 0.5.11",
+ "num_enum",
 ]
 
 [[package]]
@@ -435,15 +435,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.100",
-]
-
-[[package]]
-name = "aya-log-common"
-version = "0.1.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "befef9fe882e63164a2ba0161874e954648a72b0e1c4b361f532d590638c4eec"
-dependencies = [
- "num_enum 0.7.4",
 ]
 
 [[package]]
@@ -912,7 +903,7 @@ dependencies = [
  "async-trait",
  "hex",
  "nonempty",
- "num_enum 0.5.11",
+ "num_enum",
  "slog",
  "xxap",
 ]
@@ -1473,7 +1464,7 @@ dependencies = [
  "asn1-per",
  "async-trait",
  "hex",
- "num_enum 0.5.11",
+ "num_enum",
  "slog",
  "xxap",
 ]
@@ -1527,17 +1518,7 @@ version = "0.5.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f646caf906c20226733ed5b1374287eb97e3c2a5c227ce668c1f2ce20ae57c9"
 dependencies = [
- "num_enum_derive 0.5.11",
-]
-
-[[package]]
-name = "num_enum"
-version = "0.7.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a973b4e44ce6cad84ce69d797acf9a044532e4184c4f267913d1b546a0727b7a"
-dependencies = [
- "num_enum_derive 0.7.4",
- "rustversion",
+ "num_enum_derive",
 ]
 
 [[package]]
@@ -1550,17 +1531,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
-]
-
-[[package]]
-name = "num_enum_derive"
-version = "0.7.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77e878c846a8abae00dd069496dbe8751b16ac1c3d6bd2a7283a938e8228f90d"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.100",
 ]
 
 [[package]]
@@ -1803,7 +1773,6 @@ dependencies = [
  "async-tun",
  "aya",
  "aya-build",
- "aya-log-common",
  "bytes",
  "clap",
  "delegate",
@@ -2001,7 +1970,7 @@ version = "0.1.0"
 dependencies = [
  "asn1-per",
  "hex",
- "num_enum 0.5.11",
+ "num_enum",
 ]
 
 [[package]]
@@ -2877,7 +2846,7 @@ dependencies = [
  "futures-lite 1.13.0",
  "libc",
  "log",
- "num_enum 0.5.11",
+ "num_enum",
  "os_socketaddr",
  "slog",
  "stop-token",

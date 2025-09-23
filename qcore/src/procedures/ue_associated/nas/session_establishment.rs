@@ -1,3 +1,7 @@
+use crate::protocols::nas::{
+    FGSM_CAUSE_INSUFFICIENT_RESOURCES, FGSM_CAUSE_UNKNOWN_PDU_SESSION_TYPE,
+};
+
 use super::prelude::*;
 use oxirush_nas::{
     NasPduSessionType,
@@ -21,10 +25,14 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
             match value {
                 0b001 => true,  // IPv4
                 0b101 => false, // Ethernet
+                0b111 => {
+                    debug!(self.logger, "UE requested IPv4v6 - accept IPv4 only");
+                    true
+                }
                 _ => {
                     warn!(self.logger, "Unsupported PduSessionType {value:03b}");
-                    // TODO: magic number
-                    self.session_reject(session_id, pti, 28).await?; // unknown PDU session type
+                    self.session_reject(session_id, pti, FGSM_CAUSE_UNKNOWN_PDU_SESSION_TYPE)
+                        .await?;
                     return Ok(());
                 }
             }
@@ -36,8 +44,8 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
             Ok(userplane) => userplane,
             Err(e) => {
                 warn!(self.logger, "{e}");
-                // TODO: magic number
-                self.session_reject(session_id, pti, 26).await?; // unknown PDU session type
+                self.session_reject(session_id, pti, FGSM_CAUSE_INSUFFICIENT_RESOURCES)
+                    .await?;
                 return Ok(());
             }
         };

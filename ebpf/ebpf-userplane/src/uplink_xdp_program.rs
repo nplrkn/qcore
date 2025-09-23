@@ -21,6 +21,7 @@ use network_types::{
     udp::UdpHdr,
 };
 
+pub const XDP_TO_TC_MAGIC_NUMBER: u32 = 34759;
 const GTP_TEID_OFFSET: usize = EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + 4;
 
 /// This classifier is attached to the interface connected to the RAN and handles incoming Ethernet packets
@@ -288,7 +289,7 @@ pub fn output_inner_packet(ctx: &XdpContext, mut offset: usize, if_index: u32) -
                 return Err(XDP_ABORTED);
             }
             let meta: *mut u32 = ctx.metadata() as *mut u32;
-            *meta = 34759;
+            *meta = XDP_TO_TC_MAGIC_NUMBER;
             Ok(XDP_PASS)
         } else {
             Ok(bpf_redirect(if_index, 0) as u32)

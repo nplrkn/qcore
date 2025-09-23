@@ -185,20 +185,17 @@ fn push_common_outer_headers(
             DlInternalError
         );
 
+        // The original Ethernet header is still in place at the start of the packet.
         // Populate the outer IP, UDP, GTP.
-        // Optimization: avoid repeating this test by using a single pointer to fill in all of
-        // the new fields.
         const COMMON_HEADERS_LEN: usize =
             EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + GtpHdr::LEN + GtpHdrOptionalFields::LEN;
-
         tc_ensure!(is_long_enough(&ctx, COMMON_HEADERS_LEN), DlInternalError);
+
         let ipv4hdr: *mut Ipv4Hdr = ptr_at(&ctx, EthHdr::LEN);
         let udphdr: *mut UdpHdr = ptr_at(&ctx, EthHdr::LEN + Ipv4Hdr::LEN);
         let gtphdr: *mut GtpHdr = ptr_at(&ctx, EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN);
         let gtpexthdr: *mut GtpHdrOptionalFields =
             ptr_at(&ctx, EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + GtpHdr::LEN);
-
-        // The original Ethernet header is still in place at the start of the packet.
 
         (*ipv4hdr).set_version(4);
         (*ipv4hdr).set_ihl(5);
