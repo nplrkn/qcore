@@ -87,16 +87,22 @@ impl QCore {
             &config.n6_interface_name,
             &config.tun_interface_name,
             &logger,
-        )?;
+        )
+        .await?;
         info!(
             &logger,
             "Serving network name {}", config.serving_network_name
         );
         info!(&logger, "Supported slice SST {}", config.sst);
 
-        let packet_processor =
-            PacketProcessor::new(config.ue_subnet, &mut ebpf, userplane_stats, veths, &logger)
-                .await?;
+        let packet_processor = PacketProcessor::new(
+            config.ip_allocation_method.clone(),
+            &mut ebpf,
+            userplane_stats,
+            veths,
+            &logger,
+        )
+        .await?;
 
         let mut qc =
             Box::new(Self::new(config, packet_processor, logger, sub_db, ngap_mode).await?);
@@ -451,10 +457,12 @@ impl ProcedureBase for QCore {
         logger: &Logger,
     ) {
         if *self.shutting_down.lock().await {
-            debug!(
-                logger,
-                "Skipping userplane session deactivation during shutdown"
-            );
+            // On shut down, we delete rather than deactivate sessions.  This ensure that we do not leak any
+            // netlink-created Linux routing resources on a normal shutdown.  (On a SIGKILL / crash they will still
+            // be leaked, however.)
+            self.packet_processor
+                .delete_userplane_session(session, logger)
+                .await;
             return;
         }
 

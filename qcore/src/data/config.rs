@@ -41,9 +41,6 @@ pub struct Config {
     // Name of the qcore tun device
     pub tun_interface_name: String,
 
-    // /24 UE subnet.
-    pub ue_subnet: Ipv4Addr,
-
     // PDCP sequence number length
     pub pdcp_sn_length: PdcpSequenceNumberLength,
 
@@ -53,6 +50,18 @@ pub struct Config {
     // The network name sent to the UE in the Nas ConfigurationUpdateCommand
     // (displayed in UE network selection).
     pub network_display_name: NetworkDisplayName,
+
+    // IP allocation mode.
+    pub ip_allocation_method: UeIpAllocationConfig,
+}
+
+#[derive(Debug, Clone)]
+pub enum UeIpAllocationConfig {
+    // Allocate addresses from a /24 IPv4 prefix.
+    RoutedUeSubnet(Ipv4Addr),
+
+    // Obtain addresses using DHCP over the given interface name
+    Dhcp,
 }
 
 /// NetworkDisplayName - UCS2 16-bit format, in network byte order

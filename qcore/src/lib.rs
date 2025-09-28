@@ -13,7 +13,7 @@ pub use crate::nas::AmfIds;
 pub use ::xxap::PlmnIdentity;
 pub use data::{
     Config, NetworkDisplayName, PdcpSequenceNumberLength, SimCreds, Sqn, Subscriber,
-    SubscriberAuthParams,
+    SubscriberAuthParams, UeIpAllocationConfig,
 };
 pub use qcore::{ProgramHandle, QCore};
 pub use subscriber_db::SubscriberDb;

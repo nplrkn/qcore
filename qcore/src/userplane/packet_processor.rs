@@ -3,7 +3,11 @@ use super::MAX_UES;
 //use super::aya_log::EbpfLogger;
 use super::stats::dump_stats;
 use crate::UserplaneSession;
-use crate::data::{EthernetSesssionParams, Ipv4SessionParams, Payload, PdcpSequenceNumberLength};
+use crate::data::{
+    EthernetSesssionParams, Ipv4SessionParams, Payload, PdcpSequenceNumberLength,
+    UeIpAllocationConfig,
+};
+use crate::userplane::ue_ip_allocator::UeIpAllocator;
 use anyhow::{Result, anyhow, bail, ensure};
 use async_std::{net::IpAddr, sync::Mutex};
 use aya::maps::{Array, MapData, PerCpuArray};
@@ -15,18 +19,16 @@ use libc::if_nametoindex;
 use rand::RngCore;
 use slog::{Logger, info, warn};
 use std::ffi::CString;
-use std::net::Ipv4Addr;
 use std::sync::Arc;
 use xxap::GtpTeid;
 
 #[derive(Clone)]
 pub struct PacketProcessor {
     index_pool: Arc<Mutex<IndexPool>>,
-    ue_subnet: Ipv4Addr,
     uplink_forwarding_table: Arc<Mutex<UplinkForwardingTable>>,
     downlink_forwarding_table: Arc<Mutex<DownlinkForwardingTable>>,
     eth_if_index_lookup_table: Arc<Mutex<EthIndexLookupTable>>,
-    //tuns: Arc<Vec<Tun>>,
+    ue_ip_allocator: UeIpAllocator,
 
     // This is a list of available ethernet interface indices for ethernet
     // PDU sessions.  When an ethernet session is allocated, we pop an
@@ -37,13 +39,11 @@ pub struct PacketProcessor {
 type UplinkForwardingTable = Array<MapData, UlForwardingEntry>;
 type DownlinkForwardingTable = Array<MapData, DlForwardingEntry>;
 type EthIndexLookupTable = Array<MapData, u16>;
-
-// // First the if index we will use for transmitting from this UE, then the if index we will
-// // use to detect downlink packets to this UE.
 type InterfaceIndices = Vec<u32>;
 
 impl PacketProcessor {
-    pub fn install_ebpf(
+    // TODO - doesn't need to be async once temp code removed
+    pub async fn install_ebpf(
         ngap_mode: bool,
         local_ip: IpAddr,
         ran_if_name: &str,
@@ -144,6 +144,18 @@ impl PacketProcessor {
             xdp_downlink_eth_program.attach_to_if_index(*if_index, XdpFlags::default())?;
         }
 
+        // // temp code
+        // super::macvlan::create_macvlan().await.unwrap(); // creates "macvlan100"
+        // let macvlan_index = get_if_index("macvlan100").unwrap();
+        // println!("macvlan100 index is {}", macvlan_index);
+        // let xdp_downlink_macvlan_program: &mut Xdp = ebpf
+        //     .program_mut("xdp_downlink_macvlan")
+        //     .unwrap()
+        //     .try_into()?;
+        // xdp_downlink_macvlan_program.load()?;
+        // xdp_downlink_macvlan_program.attach_to_if_index(macvlan_index, XdpFlags::default())?;
+        // println!("Done macvlan xdp attach");
+
         info!(
             logger,
             "Found {} ethernet devices to use for Ethernet PDU sessions",
@@ -154,7 +166,7 @@ impl PacketProcessor {
     }
 
     pub async fn new(
-        ue_subnet: Ipv4Addr,
+        ue_ip_allocation_config: UeIpAllocationConfig,
         ebpf: &mut Ebpf,
         userplane_stats: bool,
         if_indices: InterfaceIndices,
@@ -177,13 +189,17 @@ impl PacketProcessor {
             let _stats_task = async_std::task::spawn(dump_stats(logger.clone(), counters));
         }
 
+        // TODO: don't hardcode name
+        let ue_network_if_index = get_if_index("veth0")?;
+
         Ok(PacketProcessor {
             index_pool,
-            ue_subnet,
             uplink_forwarding_table: Arc::new(Mutex::new(ul_forwarding_table)),
             downlink_forwarding_table: Arc::new(Mutex::new(dl_forwarding_table)),
             eth_if_index_lookup_table: Arc::new(Mutex::new(eth_index_lookup_table)),
             ethernet_interface_indices: Arc::new(Mutex::new(if_indices)),
+            ue_ip_allocator: UeIpAllocator::new(ue_network_if_index, ue_ip_allocation_config)
+                .await?,
         })
     }
 
@@ -194,7 +210,7 @@ impl PacketProcessor {
         five_qi: u8,
         pdcp_sn_length: PdcpSequenceNumberLength,
         ipv4: bool,
-        _logger: &Logger,
+        logger: &Logger,
     ) -> Result<UserplaneSession> {
         let idx = self.index_pool.lock().await.new_id();
         ensure!(idx < MAX_UES, "No more slots available");
@@ -208,14 +224,8 @@ impl PacketProcessor {
         let payload = if ipv4 {
             // IPv4 PDU session
 
-            // Generate a UE IP.  We currently hardcode assumptions of 1 PDU session
-            // per UE, and max 253 UEs.
-            let mut ue_addr_octets = self.ue_subnet.octets();
-            ue_addr_octets[3] = idx;
-            let ue_ipv4_addr = Ipv4Addr::from(ue_addr_octets);
-
             Payload::Ipv4(Ipv4SessionParams {
-                ue_ip_addr: ue_ipv4_addr,
+                ue_ip_addr: self.ue_ip_allocator.allocate(idx, logger).await?,
             })
         } else {
             // Allocate a spare Ethernet interface.
@@ -343,7 +353,9 @@ impl PacketProcessor {
                 // Return the ethernet interface index to the pool of available indices.
                 self.ethernet_interface_indices.lock().await.push(if_index);
             }
-            Payload::Ipv4(_) => {}
+            Payload::Ipv4(Ipv4SessionParams { ue_ip_addr }) => {
+                self.ue_ip_allocator.release(ue_ip_addr, logger).await
+            }
         }
 
         if let Err(e) = self.index_pool.lock().await.return_id(idx as usize) {

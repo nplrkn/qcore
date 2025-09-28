@@ -191,7 +191,7 @@ dependencies = [
  "async-task",
  "concurrent-queue",
  "fastrand 2.3.0",
- "futures-lite 2.6.0",
+ "futures-lite 2.6.1",
  "slab",
 ]
 
@@ -206,7 +206,7 @@ dependencies = [
  "async-io 2.4.0",
  "async-lock 3.4.0",
  "blocking",
- "futures-lite 2.6.0",
+ "futures-lite 2.6.1",
  "once_cell",
 ]
 
@@ -240,7 +240,7 @@ dependencies = [
  "cfg-if",
  "concurrent-queue",
  "futures-io",
- "futures-lite 2.6.0",
+ "futures-lite 2.6.1",
  "parking",
  "polling 3.7.4",
  "rustix 0.38.44",
@@ -295,7 +295,7 @@ dependencies = [
  "futures-channel",
  "futures-core",
  "futures-io",
- "futures-lite 2.6.0",
+ "futures-lite 2.6.1",
  "gloo-timers",
  "kv-log-macro",
  "log",
@@ -530,7 +530,7 @@ dependencies = [
  "async-channel 2.3.1",
  "async-task",
  "futures-io",
- "futures-lite 2.6.0",
+ "futures-lite 2.6.1",
  "piper",
 ]
 
@@ -1006,9 +1006,9 @@ dependencies = [
 
 [[package]]
 name = "futures-lite"
-version = "2.6.0"
+version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5edaec856126859abb19ed65f39e90fea3a9574b9707f13539acf4abf7eb532"
+checksum = "f78e10609fe0e0b3f4157ffab1876319b5b0db102a2c60dc4626306dc46b44ad"
 dependencies = [
  "fastrand 2.3.0",
  "futures-core",
@@ -1451,6 +1451,54 @@ dependencies = [
 ]
 
 [[package]]
+name = "netlink-packet-core"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3463cbb78394cb0141e2c926b93fc2197e473394b761986eca3b9da2c63ae0f4"
+dependencies = [
+ "paste",
+]
+
+[[package]]
+name = "netlink-packet-route"
+version = "0.25.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ec2f5b6839be2a19d7fa5aab5bc444380f6311c2b693551cb80f45caaa7b5ef"
+dependencies = [
+ "bitflags 2.9.0",
+ "libc",
+ "log",
+ "netlink-packet-core",
+]
+
+[[package]]
+name = "netlink-proto"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b65d130ee111430e47eed7896ea43ca693c387f097dd97376bffafbf25812128"
+dependencies = [
+ "bytes",
+ "futures",
+ "log",
+ "netlink-packet-core",
+ "netlink-sys",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "netlink-sys"
+version = "0.8.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16c903aa70590cb93691bf97a767c8d1d6122d2cc9070433deb3bbf36ce8bd23"
+dependencies = [
+ "async-io 2.4.0",
+ "bytes",
+ "futures",
+ "libc",
+ "log",
+]
+
+[[package]]
 name = "network-types"
 version = "0.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1599,6 +1647,12 @@ dependencies = [
  "smallvec",
  "windows-targets 0.52.6",
 ]
+
+[[package]]
+name = "paste"
+version = "1.0.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
 name = "pdcp"
@@ -1778,6 +1832,7 @@ dependencies = [
  "delegate",
  "ebpf-common",
  "f1ap",
+ "futures-lite 2.6.1",
  "hex",
  "index-pool",
  "libc",
@@ -1788,6 +1843,7 @@ dependencies = [
  "pdcp",
  "rand 0.9.1",
  "rrc",
+ "rtnetlink",
  "security",
  "serde",
  "signal-hook",
@@ -1971,6 +2027,23 @@ dependencies = [
  "asn1-per",
  "hex",
  "num_enum",
+]
+
+[[package]]
+name = "rtnetlink"
+version = "0.18.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08fd15aa4c64c34d0b3178e45ec6dad313a9f02b193376d501668a7950264bb7"
+dependencies = [
+ "async-global-executor",
+ "futures",
+ "log",
+ "netlink-packet-core",
+ "netlink-packet-route",
+ "netlink-proto",
+ "netlink-sys",
+ "nix 0.29.0",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

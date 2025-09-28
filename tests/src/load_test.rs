@@ -44,15 +44,6 @@ pub async fn load_test(amf_ip: IpAddr, sims: SubscriberDb, logger: Logger) -> Re
             // Registration + session establishment = 13 messages
             let mut ue = builder.ngap_ue(&gnb).with_session().await?;
 
-            // let mut ue = MockUeNgap::new_with_session(
-            //     nth_imsi(ue_id - 1, sims),
-            //     ue_id as u32,
-            //     &gnb,
-            //     amf_ip,
-            //     logger,
-            // )
-            // .await?;
-
             // Context release = 3 messages.
             gnb.send_ue_context_release_request(ue.gnb_ue_context())
                 .await?;

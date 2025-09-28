@@ -42,6 +42,8 @@ strum = "0.27.1"
 ucs2 = "0.3.3"
 delegate = "0.13.4"
 async-tun = "0.10.1"
+rtnetlink = {version = "0.18.1", default-features=false, features = ["smol_socket"]}
+futures-lite = "2.6.1"
 
 [build-dependencies]
 anyhow = "1.0.97"

@@ -4,67 +4,77 @@ use anyhow::{Result, bail};
 use pnet_base::MacAddr;
 use qcore::{
     AmfIds, Config, NetworkDisplayName, PdcpSequenceNumberLength, ProgramHandle, QCore,
-    SubscriberAuthParams, SubscriberDb,
+    SubscriberAuthParams, SubscriberDb, UeIpAllocationConfig,
 };
 use slog::{Drain, Logger, o};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::{
+    marker::PhantomData,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+};
 use xxap::PlmnIdentity;
 
+pub struct TestFrameworkBuilder<T> {
+    logger: Logger,
+    x: PhantomData<T>,
+}
+
+impl<T> TestFrameworkBuilder<T> {
+    pub fn new() -> Self {
+        Self {
+            logger: init_logging(),
+            x: PhantomData,
+        }
+    }
+
+    async fn build_common(
+        &self,
+        ngap_mode: bool,
+    ) -> Result<(ProgramHandle, DataNetwork, UeBuilder)> {
+        exit_on_panic();
+        let qc_ip = "127.0.0.1";
+        let dn = DataNetwork::new(&self.logger).await;
+        let subs = SubscriberDb::new_from_sim_file("test_sims.toml", &self.logger)?;
+        let config = qcore_default_test_config(qc_ip)?;
+        let qc = QCore::start(
+            config,
+            self.logger.new(o!("qcore"=> 1)),
+            subs.clone(),
+            ngap_mode,
+            true,
+        )
+        .await?;
+
+        let builder = UeBuilder::new(subs, *qc.ip_addr(), self.logger.clone());
+        Ok((qc, dn, builder))
+    }
+}
+
+impl TestFrameworkBuilder<MockDu> {
+    pub async fn build(self) -> Result<(MockDu, ProgramHandle, DataNetwork, UeBuilder, Logger)> {
+        let du_ip = "127.0.0.2";
+        let mut du = MockDu::new(du_ip, &self.logger).await?;
+        let (qc, dn, builder) = self.build_common(false).await?;
+        du.perform_f1_setup(qc.ip_addr()).await?;
+        Ok((du, qc, dn, builder, self.logger))
+    }
+}
+
+impl TestFrameworkBuilder<MockGnb> {
+    pub async fn build(self) -> Result<(MockGnb, ProgramHandle, DataNetwork, UeBuilder, Logger)> {
+        let gnb_ip = "127.0.0.2";
+        let mut gnb = MockGnb::new(gnb_ip, &self.logger).await?;
+        let (qc, dn, builder) = self.build_common(true).await?;
+        gnb.perform_ng_setup(qc.ip_addr()).await?;
+        Ok((gnb, qc, dn, builder, self.logger))
+    }
+}
+
 pub async fn init_f1ap() -> Result<(MockDu, ProgramHandle, DataNetwork, UeBuilder, Logger)> {
-    let logger = init_logging();
-    let du_ip = "127.0.0.2";
-    let du = MockDu::new(du_ip, &logger).await?;
-    let (mut du, qc, dn, sims, logger) = init_common(du, false, logger).await?;
-    let builder = UeBuilder::new(sims, *qc.ip_addr(), logger.clone());
-    du.perform_f1_setup(qc.ip_addr()).await?;
-    Ok((du, qc, dn, builder, logger))
+    TestFrameworkBuilder::<MockDu>::new().build().await
 }
 
 pub async fn init_ngap() -> Result<(MockGnb, ProgramHandle, DataNetwork, UeBuilder, Logger)> {
-    let logger = init_logging();
-    let gnb_ip = "127.0.0.2";
-    let gnb = MockGnb::new(gnb_ip, &logger).await?;
-    let (mut gnb, qc, dn, sims, logger) = init_common(gnb, true, logger).await?;
-    let builder = UeBuilder::new(sims, *qc.ip_addr(), logger.clone());
-
-    gnb.perform_ng_setup(qc.ip_addr()).await?;
-
-    Ok((gnb, qc, dn, builder, logger))
-}
-
-pub async fn init_ngap_with_subdb(
-    sub_db: SubscriberDb,
-) -> Result<(MockGnb, ProgramHandle, DataNetwork, SubscriberDb, Logger)> {
-    let logger = init_logging();
-    let gnb_ip = "127.0.0.2";
-    let gnb = MockGnb::new(gnb_ip, &logger).await?;
-    init_common_with_subdb(gnb, true, sub_db, logger).await
-}
-
-async fn init_common<T>(
-    du_or_gnb: T,
-    ngap_mode: bool,
-    logger: Logger,
-) -> Result<(T, ProgramHandle, DataNetwork, SubscriberDb, Logger)> {
-    exit_on_panic();
-    let qc_ip = "127.0.0.1";
-    let dn = DataNetwork::new(&logger).await;
-    let subs = SubscriberDb::new_from_sim_file("test_sims.toml", &logger)?;
-    let qc = start_qcore(qc_ip, subs.clone(), &logger, ngap_mode).await?;
-    Ok((du_or_gnb, qc, dn, subs, logger))
-}
-
-async fn init_common_with_subdb<T>(
-    du_or_gnb: T,
-    ngap_mode: bool,
-    sub_db: SubscriberDb,
-    logger: Logger,
-) -> Result<(T, ProgramHandle, DataNetwork, SubscriberDb, Logger)> {
-    exit_on_panic();
-    let qc_ip = "127.0.0.1";
-    let dn = DataNetwork::new(&logger).await;
-    let qc = start_qcore(qc_ip, sub_db.clone(), &logger, ngap_mode).await?;
-    Ok((du_or_gnb, qc, dn, sub_db, logger))
+    TestFrameworkBuilder::<MockGnb>::new().build().await
 }
 
 pub async fn wait_until_idle(qc: &QCore) -> Result<()> {
@@ -88,6 +98,25 @@ pub fn init_logging() -> Logger {
     slog::Logger::root(drain, o!())
 }
 
+fn qcore_default_test_config(addr: &str) -> Result<Config> {
+    Ok(Config {
+        ip_addr: addr.parse()?,
+        plmn: PlmnIdentity([0x00, 0xf1, 0x10]),
+        amf_ids: AmfIds([0x01, 0x01, 0x00]),
+        name: Some("QCore".to_string()),
+        serving_network_name: "5G:mnc001.mcc001.3gppnetwork.org".to_string(),
+        skip_ue_auts_check: true, // saves us having to implement AUTS signature in test framework
+        sst: 1,
+        ran_interface_name: "lo".to_string(),
+        n6_interface_name: "veth1".to_string(),
+        tun_interface_name: "qcoretun".to_string(),
+        pdcp_sn_length: PdcpSequenceNumberLength::TwelveBits,
+        five_qi: 7,
+        network_display_name: NetworkDisplayName::new("QCoreTest")?,
+        ip_allocation_method: UeIpAllocationConfig::RoutedUeSubnet(Ipv4Addr::new(10, 255, 0, 0)),
+    })
+}
+
 pub async fn start_qcore(
     addr: &str,
     sub_db: SubscriberDb,
@@ -95,22 +124,7 @@ pub async fn start_qcore(
     ngap_mode: bool,
 ) -> Result<ProgramHandle> {
     QCore::start(
-        Config {
-            ip_addr: addr.parse()?,
-            plmn: PlmnIdentity([0x00, 0xf1, 0x10]),
-            amf_ids: AmfIds([0x01, 0x01, 0x00]),
-            name: Some("QCore".to_string()),
-            serving_network_name: "5G:mnc001.mcc001.3gppnetwork.org".to_string(),
-            skip_ue_auts_check: true, // saves us having to implement AUTS signature in test framework
-            sst: 1,
-            ran_interface_name: "lo".to_string(),
-            n6_interface_name: "veth1".to_string(),
-            tun_interface_name: "qcoretun".to_string(),
-            ue_subnet: Ipv4Addr::new(10, 255, 0, 0),
-            pdcp_sn_length: PdcpSequenceNumberLength::TwelveBits,
-            five_qi: 7,
-            network_display_name: NetworkDisplayName::new("QCoreTest")?,
-        },
+        qcore_default_test_config(addr)?,
         logger.new(o!("qcore"=> 1)),
         sub_db,
         ngap_mode,

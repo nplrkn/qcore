@@ -6,7 +6,8 @@ use async_std::channel::Sender;
 use async_std::prelude::*;
 use clap::Parser;
 use qcore::{
-    AmfIds, Config, NetworkDisplayName, PdcpSequenceNumberLength, PlmnIdentity, QCore, SubscriberDb,
+    AmfIds, Config, NetworkDisplayName, PdcpSequenceNumberLength, PlmnIdentity, QCore,
+    SubscriberDb, UeIpAllocationConfig,
 };
 use signal_hook::consts::signal::*;
 use signal_hook_async_std::Signals;
@@ -45,8 +46,12 @@ struct Args {
     #[arg(long, default_value = "qcoretun")]
     tun_interface_name: String,
 
-    /// UE subnet.  This is the network address of a /24 IPv4 subnet in dotted demical notation.  
-    /// The final byte must be 0.  UEs are allocated host numbers 2-254.
+    /// Whether to use DHCP to obtain UE IP addresses.
+    #[arg(long, default_value_t = true)]
+    use_dhcp: bool,
+
+    /// UE subnet.  Only relevant if use-dhcp is false.  This is the network address of a /24 IPv4
+    /// subnet in dotted demical notation.  The final byte must be 0.  UEs are allocated host numbers 2-254.
     #[arg(long, default_value_t = Ipv4Addr::new(10,255,0,0))]
     ue_subnet: Ipv4Addr,
 
@@ -88,11 +93,16 @@ async fn main() -> Result<()> {
 
     let args = Args::parse();
     let (plmn, serving_network_name) = convert_mcc_mnc(&args.mcc, &args.mnc).unwrap();
-    check_ue_subnet(&args.ue_subnet)?;
     check_local_ip(&args.local_ip)?;
 
     let sub_db = SubscriberDb::new_from_sim_file(&args.sim_cred_file, &logger)?;
 
+    let ip_allocation_method = if args.use_dhcp {
+        UeIpAllocationConfig::Dhcp
+    } else {
+        check_ue_subnet(&args.ue_subnet)?;
+        UeIpAllocationConfig::RoutedUeSubnet(args.ue_subnet)
+    };
     let _qc = QCore::start(
         Config {
             ip_addr: args.local_ip,
@@ -105,7 +115,6 @@ async fn main() -> Result<()> {
             ran_interface_name: args.ran_interface_name,
             n6_interface_name: args.n6_interface_name,
             tun_interface_name: args.tun_interface_name,
-            ue_subnet: args.ue_subnet,
             pdcp_sn_length: if args.pdcp_12bit_sn {
                 PdcpSequenceNumberLength::TwelveBits
             } else {
@@ -113,6 +122,7 @@ async fn main() -> Result<()> {
             },
             five_qi: args.five_qi,
             network_display_name: NetworkDisplayName::new(&args.network_display_name)?,
+            ip_allocation_method,
         },
         logger,
         sub_db,

@@ -1,6 +1,9 @@
 # Backlog
 
 ## In progress
+-  UEs on LAN
+-  Clustering
+-  Is this a better design model for test UEs?: https://docs.rs/rtnetlink/latest/rtnetlink/struct.RouteMessageBuilder.html
 
 ## Bugs / tech debt
 - "slog-async: logger dropped messages due to channel overflow" - for example, when hitting Ctrl-C at end of PacketRusher test - check out tracing-appender
