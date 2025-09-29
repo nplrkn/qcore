@@ -191,6 +191,11 @@ impl PacketProcessor {
 
         // TODO: don't hardcode name
         let ue_network_if_index = get_if_index("veth0")?;
+        let ue_ip_allocator =
+            UeIpAllocator::new(ue_network_if_index, ue_ip_allocation_config, logger).await?;
+
+        // Temp code to test DHCP
+        ue_ip_allocator.allocate(1, logger).await?;
 
         Ok(PacketProcessor {
             index_pool,
@@ -198,8 +203,7 @@ impl PacketProcessor {
             downlink_forwarding_table: Arc::new(Mutex::new(dl_forwarding_table)),
             eth_if_index_lookup_table: Arc::new(Mutex::new(eth_index_lookup_table)),
             ethernet_interface_indices: Arc::new(Mutex::new(if_indices)),
-            ue_ip_allocator: UeIpAllocator::new(ue_network_if_index, ue_ip_allocation_config)
-                .await?,
+            ue_ip_allocator,
         })
     }
 

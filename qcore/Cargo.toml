@@ -44,6 +44,8 @@ delegate = "0.13.4"
 async-tun = "0.10.1"
 rtnetlink = {version = "0.18.1", default-features=false, features = ["smol_socket"]}
 futures-lite = "2.6.1"
+dhcproto = "0.13.0"
+smol = "2.0.2"
 
 [build-dependencies]
 anyhow = "1.0.97"
