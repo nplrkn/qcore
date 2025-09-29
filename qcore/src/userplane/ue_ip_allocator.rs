@@ -119,7 +119,7 @@ impl DhcpClient {
         let pending_requests_clone = pending_requests.clone();
         let logger_clone = logger.clone();
         let _ = async_std::task::spawn(async {
-            dispatch_all(pending_requests_clone, socket_clone, logger_clone)
+            dispatch_all(pending_requests_clone, socket_clone, logger_clone).await
         });
         Ok(Self {
             socket,
@@ -181,9 +181,7 @@ impl DhcpClient {
         //let self_clone = Arc::new(self)
         let logger_clone = logger.clone();
         let self_clone = self.clone();
-        async_std::task::spawn(
-            async move { keep_lease(receiver, ack, self_clone, logger_clone).await },
-        );
+        async_std::task::spawn(async { keep_lease(receiver, ack, self_clone, logger_clone).await });
         Ok(offer.yiaddr())
     }
 
@@ -303,6 +301,9 @@ fn request_from_offer(local_mac: &[u8; 6], offer: &Message) -> Result<Message> {
     msg.opts_mut().insert(server_identifier.clone());
     msg.opts_mut()
         .insert(v4::DhcpOption::RequestedIpAddress(offer.yiaddr()));
+
+    // RFC2131 - the XID must match that set by the server on the offer
+    msg.set_xid(offer.xid());
 
     Ok(msg)
 }
