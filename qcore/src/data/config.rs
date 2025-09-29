@@ -61,7 +61,7 @@ pub enum UeIpAllocationConfig {
     RoutedUeSubnet(Ipv4Addr),
 
     // Obtain addresses using DHCP over the given interface name
-    Dhcp,
+    Dhcp(u32),
 }
 
 /// NetworkDisplayName - UCS2 16-bit format, in network byte order

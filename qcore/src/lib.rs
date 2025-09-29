@@ -17,3 +17,4 @@ pub use data::{
 };
 pub use qcore::{ProgramHandle, QCore};
 pub use subscriber_db::SubscriberDb;
+pub use userplane::get_if_index;

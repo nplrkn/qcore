@@ -8,11 +8,11 @@ use dhcproto::{
     Decodable, Decoder, Encodable, Encoder,
     v4::{self, Message, MessageType},
 };
-use slog::{Logger, debug, warn};
+use slog::{Logger, debug, info, warn};
 use smol::net::UdpSocket;
 use std::{
     collections::HashMap,
-    net::{Ipv4Addr, SocketAddr},
+    net::{Ipv4Addr, SocketAddrV4},
     sync::Arc,
     time::Duration,
 };
@@ -42,32 +42,45 @@ impl UeIpAllocator {
         config: UeIpAllocationConfig,
         logger: &Logger,
     ) -> Result<Self> {
+        let netlink = NetlinkRouteProgrammer::new(ue_network_if_index)?;
+
         let mode = match config {
             UeIpAllocationConfig::RoutedUeSubnet(subnet) => {
                 UeIpAllocationMode::RoutedUeSubnet(subnet)
             }
-            UeIpAllocationConfig::Dhcp => {
+            UeIpAllocationConfig::Dhcp(if_index) => {
                 // Start the DHCP client
-                println!("Using imaginary MAC!");
-                let local_mac = [0x02, 0x02, 0x02, 0x02, 0x02, 0x02];
-                // test with tcpdump -i any port 67 or port 68
-                UeIpAllocationMode::Dhcp(Arc::new(DhcpClient::new(local_mac, logger).await?))
+                info!(
+                    logger,
+                    "DHCP address allocation on LAN connected over if index {}", if_index
+                );
+                let (ip, mac) = netlink.get_link_addr_info(if_index).await?;
+                UeIpAllocationMode::Dhcp(Arc::new(DhcpClient::new(mac, ip, logger).await?))
             }
         };
         Ok(Self {
-            netlink_route_programmer: NetlinkRouteProgrammer::new(ue_network_if_index)?,
+            netlink_route_programmer: netlink,
             mode,
         })
     }
 
-    pub async fn allocate(&self, idx: u8, logger: &Logger) -> Result<Ipv4Addr> {
+    pub async fn allocate(
+        &self,
+        idx: u8,
+        dhcp_client_identifier: Vec<u8>,
+        logger: &Logger,
+    ) -> Result<Ipv4Addr> {
         let addr = match &self.mode {
             UeIpAllocationMode::RoutedUeSubnet(ue_subnet) => {
                 let mut ue_addr_octets = ue_subnet.octets();
                 ue_addr_octets[3] = idx;
                 Ipv4Addr::from(ue_addr_octets)
             }
-            UeIpAllocationMode::Dhcp(dhcp_client) => dhcp_client.obtain_lease(logger).await?,
+            UeIpAllocationMode::Dhcp(dhcp_client) => {
+                dhcp_client
+                    .obtain_lease(dhcp_client_identifier, logger)
+                    .await?
+            }
         };
 
         // Program a host route for it (which enables Linux proxy ARP + UE packet reception by ebpf).
@@ -94,28 +107,42 @@ impl UeIpAllocator {
     }
 }
 
-// The DHCP client owns a UDP socket listening on port 68.
-// It sends requests over its socket and routes responses back to the requester.
+// The DhcpClient appears on the network as a DHCP relay, and need to be configured
+// with an IP address and MAC address of the external interface.
+//
+// It binds a UDP socket listening on port 67, the DHCP server port (because it is a relay, not a client).
+//
+// The reason for QCore to act a a DHCP relay is to make use of the existing IP address.
+// If QCore was a DHCP client it would have to send packets from 0.0.0.0, which is not possible
+// using a UdpSocket.  (RFC2131: " DHCP messages broadcast by a client prior to that client obtaining
+// its IP address must have the source address field in the IP header set to 0.")
+//
+// Addresses obtained with this client should be explicitly released.
+//
 // It can cope with multiple parallel transactions from different clients.
 #[derive(Clone)]
 struct DhcpClient {
     socket: UdpSocket,
     local_mac: [u8; 6],
+    local_ipv4: Ipv4Addr,
     pending_requests: Arc<Mutex<HashMap<Xid, Sender<Message>>>>,
     leases: Arc<Mutex<HashMap<Ipv4Addr, Sender<()>>>>,
 }
 type Xid = u32;
 
 const DHCP_RESPONSE_TIMEOUT_MS: u64 = 1000;
+const DHCP_SERVER_PORT: u16 = 67;
 
 impl DhcpClient {
-    async fn new(local_mac: [u8; 6], logger: &Logger) -> Result<Self> {
-        // Surely this is going to clash with other DHCP clients?  Test
-
-        // This is the DHCP server port - because we are going to act as a DHCP relay.
-        let socket = UdpSocket::bind(" 192.168.1.14:67").await?;
+    async fn new(local_mac: [u8; 6], local_ipv4: Ipv4Addr, logger: &Logger) -> Result<Self> {
+        info!(
+            logger,
+            "Bind DHCP relay socket to {}:{}", local_ipv4, DHCP_SERVER_PORT
+        );
+        let socket = UdpSocket::bind(SocketAddrV4::new(local_ipv4, DHCP_SERVER_PORT)).await?;
         socket.set_broadcast(true)?;
-        println!("Bound DHCP socket to UDP 67 and set broadcast");
+
+        // Spawn the reader task.
         let pending_requests = Arc::new(Mutex::new(HashMap::new()));
         let socket_clone = socket.clone();
         let pending_requests_clone = pending_requests.clone();
@@ -123,16 +150,18 @@ impl DhcpClient {
         let _ = async_std::task::spawn(async {
             dispatch_all(pending_requests_clone, socket_clone, logger_clone).await
         });
+
         Ok(Self {
             socket,
             local_mac,
+            local_ipv4,
             pending_requests,
             leases: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
     // Send a request and get back the response with a given transaction ID, or timeout.
-    pub async fn send(&self, msg: Message) -> Result<Message> {
+    async fn send(&self, msg: Message) -> Result<Message> {
         let xid = msg.xid();
         let mut buf = Vec::new();
         let mut e = Encoder::new(&mut buf);
@@ -140,7 +169,10 @@ impl DhcpClient {
         let (sender, receiver) = async_std::channel::bounded::<Message>(1);
         self.pending_requests.lock().await.insert(xid, sender);
         self.socket
-            .send_to(&buf, SocketAddr::from(([255, 255, 255, 255], 67)))
+            .send_to(
+                &buf,
+                SocketAddrV4::new(Ipv4Addr::BROADCAST, DHCP_SERVER_PORT),
+            )
             .await?;
         let Ok(rcv) = async_std::future::timeout(
             Duration::from_millis(DHCP_RESPONSE_TIMEOUT_MS),
@@ -154,19 +186,34 @@ impl DhcpClient {
     }
 
     // Obtain and hold a DHCP lease until cancelled.
-    pub async fn obtain_lease(&self, logger: &Logger) -> Result<Ipv4Addr> {
-        println!("Sending DHCP discover");
-        let offer = self.send(discover(&self.local_mac)?).await?;
+    pub async fn obtain_lease(
+        &self,
+        client_identifier: Vec<u8>,
+        logger: &Logger,
+    ) -> Result<Ipv4Addr> {
+        let mut base = Message::default();
+        base.set_chaddr(&self.local_mac)
+            .set_giaddr(self.local_ipv4)
+            .opts_mut()
+            // RFC2131: If the client uses a 'client identifier' in one message, it MUST use that
+            // same identifier in all subsequent messages, to ensure that all servers correctly
+            // identify the client.
+            .insert(v4::DhcpOption::ClientIdentifier(client_identifier));
+
+        debug!(logger, ">> DHCPDISCOVER");
+        let discover = discover(base.clone());
+        let offer = self.send(discover).await?;
         if offer.opts().msg_type() != Some(MessageType::Offer) {
             bail!("Expected DHCPOFFER in response to DHCPDISCOVER");
         };
-        println!("Got DHCP offer with IP address {}", offer.yiaddr());
-
-        let request = request_from_offer(&self.local_mac, &offer)?;
+        debug!(logger, "<< DHCPOFFER");
+        let request = request_from_offer(base.clone(), &offer)?;
+        debug!(logger, ">> DHCPREQUEST");
         let ack = self.send(request).await?;
         if ack.opts().msg_type() != Some(MessageType::Ack) {
             bail!("Expected DHCPACK in response to DHCPREQUEST");
         };
+        debug!(logger, "<< DHCPACK");
         let Some(v4::DhcpOption::AddressLeaseTime(lease_time)) =
             ack.opts().get(v4::OptionCode::AddressLeaseTime)
         else {
@@ -206,7 +253,7 @@ async fn dispatch_all(
         let bytes_read = socket.recv(&mut buf).await?;
 
         let Ok(msg) = Message::decode(&mut Decoder::new(&buf[0..bytes_read])) else {
-            warn!(logger, "Failed to decode message to DHCP client port");
+            warn!(logger, "Failed to decode message to DHCP port");
             continue;
         };
 
@@ -216,7 +263,7 @@ async fn dispatch_all(
         } else {
             warn!(
                 logger,
-                "Received DHCP message with unknown transaction {:x}",
+                "Ignoring DHCP message with unknown xid {:x}",
                 msg.xid()
             );
         }
@@ -259,18 +306,9 @@ async fn keep_lease(cancel: Receiver<()>, ack: Message, _client: DhcpClient, log
     }
 }
 
-// TODO - have lease drop() spawn a task to carry out the lease cancel procedure?
-
-fn discover(local_mac: &[u8; 6]) -> Result<Message> {
-    let mut msg = v4::Message::default();
-    msg.set_flags(v4::Flags::default()) //.set_broadcast()) // set broadcast to true
-        .set_chaddr(local_mac) // set chaddr
-        .set_giaddr(Ipv4Addr::new(192, 168, 1, 14))
-        .opts_mut()
-        .insert(v4::DhcpOption::MessageType(v4::MessageType::Discover)); // set msg type
-
+fn discover(mut msg: Message) -> Message {
     msg.opts_mut()
-        .insert(v4::DhcpOption::ClientIdentifier(local_mac.to_vec()));
+        .insert(v4::DhcpOption::MessageType(v4::MessageType::Discover)); // set msg type
 
     msg.opts_mut()
         .insert(v4::DhcpOption::ParameterRequestList(vec![
@@ -279,34 +317,30 @@ fn discover(local_mac: &[u8; 6]) -> Result<Message> {
             v4::OptionCode::DomainNameServer,
             v4::OptionCode::DomainName,
         ]));
-    Ok(msg)
+    msg
 }
 
-fn request_from_offer(local_mac: &[u8; 6], offer: &Message) -> Result<Message> {
+fn request_from_offer(mut msg: Message, offer: &Message) -> Result<Message> {
     // RFC 2131
     // The client broadcasts a DHCPREQUEST message
     // that MUST include the 'server identifier' option to indicate which
     // server it has selected, and that MAY include other options
-    // specifying desired configuration values.  The 'requested IP
-    // address' option MUST be set to the value of 'yiaddr' in the
-    // DHCPOFFER message from the server.
+    // specifying desired configuration values.
     let Some(server_identifier) = offer.opts().get(v4::OptionCode::ServerIdentifier) else {
         // See RFC2131, table 3
         bail!("Mandatory option ServerIdentifier missing from DHCP Offer")
     };
 
-    let mut msg = v4::Message::default();
-    msg.set_flags(v4::Flags::default()) //.set_broadcast())
-        .set_chaddr(local_mac)
-        .set_giaddr(Ipv4Addr::new(192, 168, 1, 14))
-        .opts_mut()
+    msg.opts_mut()
         .insert(v4::DhcpOption::MessageType(v4::MessageType::Request));
 
+    // 3.1 "The 'requested IP address' option MUST be set to the value of 'yiaddr' in the
+    // DHCPOFFER message from the server.
     msg.opts_mut().insert(server_identifier.clone());
     msg.opts_mut()
         .insert(v4::DhcpOption::RequestedIpAddress(offer.yiaddr()));
 
-    // The XID must match that set by the server on the offer
+    // Table 5: "'xid' from server DHCPOFFER message"
     msg.set_xid(offer.xid());
 
     Ok(msg)

@@ -7,6 +7,7 @@ use crate::data::{
     EthernetSesssionParams, Ipv4SessionParams, Payload, PdcpSequenceNumberLength,
     UeIpAllocationConfig,
 };
+use crate::userplane::get_if_index;
 use crate::userplane::ue_ip_allocator::UeIpAllocator;
 use anyhow::{Result, anyhow, bail, ensure};
 use async_std::{net::IpAddr, sync::Mutex};
@@ -15,10 +16,8 @@ use aya::programs::{SchedClassifier, TcAttachType, Xdp, XdpFlags, tc};
 use aya::{Ebpf, EbpfLoader};
 use ebpf_common::*;
 use index_pool::IndexPool;
-use libc::if_nametoindex;
 use rand::RngCore;
 use slog::{Logger, info, warn};
-use std::ffi::CString;
 use std::sync::Arc;
 use xxap::GtpTeid;
 
@@ -194,9 +193,6 @@ impl PacketProcessor {
         let ue_ip_allocator =
             UeIpAllocator::new(ue_network_if_index, ue_ip_allocation_config, logger).await?;
 
-        // Temp code to test DHCP
-        ue_ip_allocator.allocate(1, logger).await?;
-
         Ok(PacketProcessor {
             index_pool,
             uplink_forwarding_table: Arc::new(Mutex::new(ul_forwarding_table)),
@@ -228,8 +224,13 @@ impl PacketProcessor {
         let payload = if ipv4 {
             // IPv4 PDU session
 
+            // TODO - don't use the TEID as the client identifier
+
             Payload::Ipv4(Ipv4SessionParams {
-                ue_ip_addr: self.ue_ip_allocator.allocate(idx, logger).await?,
+                ue_ip_addr: self
+                    .ue_ip_allocator
+                    .allocate(idx, teid.to_vec(), logger)
+                    .await?,
             })
         } else {
             // Allocate a spare Ethernet interface.
@@ -384,17 +385,4 @@ impl PacketProcessor {
             )
         }
     }
-}
-
-fn get_if_index(interface_name: &str) -> Result<u32> {
-    let c_str_if_name = CString::new(interface_name)?;
-    let c_if_name = c_str_if_name.as_ptr();
-    let if_index = unsafe { if_nametoindex(c_if_name) };
-    if if_index == 0 {
-        bail!(
-            "Interface {} does not exist - did you run the setup-routing script?",
-            interface_name
-        )
-    }
-    Ok(if_index)
 }
