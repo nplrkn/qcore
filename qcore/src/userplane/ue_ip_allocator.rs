@@ -12,7 +12,7 @@ use slog::{Logger, debug, warn};
 use smol::net::UdpSocket;
 use std::{
     collections::HashMap,
-    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+    net::{Ipv4Addr, SocketAddr},
     sync::Arc,
     time::Duration,
 };
@@ -48,8 +48,8 @@ impl UeIpAllocator {
             }
             UeIpAllocationConfig::Dhcp => {
                 // Start the DHCP client
-                println!("Using hardcoded local MAC!");
-                let local_mac = [0x48, 0x21, 0x0b, 0x56, 0xfd, 0xe1];
+                println!("Using imaginary MAC!");
+                let local_mac = [0x02, 0x02, 0x02, 0x02, 0x02, 0x02];
                 // test with tcpdump -i any port 67 or port 68
                 UeIpAllocationMode::Dhcp(Arc::new(DhcpClient::new(local_mac, logger).await?))
             }
@@ -111,9 +111,11 @@ const DHCP_RESPONSE_TIMEOUT_MS: u64 = 1000;
 impl DhcpClient {
     async fn new(local_mac: [u8; 6], logger: &Logger) -> Result<Self> {
         // Surely this is going to clash with other DHCP clients?  Test
-        let socket = UdpSocket::bind("255.255.255.255:68").await?;
+
+        // This is the DHCP server port - because we are going to act as a DHCP relay.
+        let socket = UdpSocket::bind(" 192.168.1.14:67").await?;
         socket.set_broadcast(true)?;
-        println!("Bound DHCP socket to UDP 68 and set broadcast");
+        println!("Bound DHCP socket to UDP 67 and set broadcast");
         let pending_requests = Arc::new(Mutex::new(HashMap::new()));
         let socket_clone = socket.clone();
         let pending_requests_clone = pending_requests.clone();
@@ -151,27 +153,6 @@ impl DhcpClient {
         rcv.map_err(|_| anyhow!("Channel receive error"))
     }
 
-    pub async fn send2(&self, msg: Message, socket: &UdpSocket) -> Result<Message> {
-        let xid = msg.xid();
-        let mut buf = Vec::new();
-        let mut e = Encoder::new(&mut buf);
-        msg.encode(&mut e)?;
-        let (sender, receiver) = async_std::channel::bounded::<Message>(1);
-        self.pending_requests.lock().await.insert(xid, sender);
-        socket
-            .send_to(&buf, SocketAddr::from(([255, 255, 255, 255], 67)))
-            .await?;
-        let Ok(rcv) = async_std::future::timeout(
-            Duration::from_millis(DHCP_RESPONSE_TIMEOUT_MS),
-            receiver.recv(),
-        )
-        .await
-        else {
-            bail!("Timeout")
-        };
-        rcv.map_err(|_| anyhow!("Channel receive error"))
-    }
-
     // Obtain and hold a DHCP lease until cancelled.
     pub async fn obtain_lease(&self, logger: &Logger) -> Result<Ipv4Addr> {
         println!("Sending DHCP discover");
@@ -181,12 +162,8 @@ impl DhcpClient {
         };
         println!("Got DHCP offer with IP address {}", offer.yiaddr());
 
-        // Hack to see if source address makes a difference.
-        let socket = UdpSocket::bind(SocketAddrV4::new(offer.yiaddr(), 68)).await?;
-        socket.set_broadcast(true)?;
-
         let request = request_from_offer(&self.local_mac, &offer)?;
-        let ack = self.send2(request, &socket).await?;
+        let ack = self.send(request).await?;
         if ack.opts().msg_type() != Some(MessageType::Ack) {
             bail!("Expected DHCPACK in response to DHCPREQUEST");
         };
@@ -286,8 +263,9 @@ async fn keep_lease(cancel: Receiver<()>, ack: Message, _client: DhcpClient, log
 
 fn discover(local_mac: &[u8; 6]) -> Result<Message> {
     let mut msg = v4::Message::default();
-    msg.set_flags(v4::Flags::default().set_broadcast()) // set broadcast to true
+    msg.set_flags(v4::Flags::default()) //.set_broadcast()) // set broadcast to true
         .set_chaddr(local_mac) // set chaddr
+        .set_giaddr(Ipv4Addr::new(192, 168, 1, 14))
         .opts_mut()
         .insert(v4::DhcpOption::MessageType(v4::MessageType::Discover)); // set msg type
 
@@ -318,8 +296,9 @@ fn request_from_offer(local_mac: &[u8; 6], offer: &Message) -> Result<Message> {
     };
 
     let mut msg = v4::Message::default();
-    msg.set_flags(v4::Flags::default().set_broadcast())
+    msg.set_flags(v4::Flags::default()) //.set_broadcast())
         .set_chaddr(local_mac)
+        .set_giaddr(Ipv4Addr::new(192, 168, 1, 14))
         .opts_mut()
         .insert(v4::DhcpOption::MessageType(v4::MessageType::Request));
 
