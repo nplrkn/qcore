@@ -12,7 +12,7 @@ use slog::{Logger, debug, warn};
 use smol::net::UdpSocket;
 use std::{
     collections::HashMap,
-    net::{Ipv4Addr, SocketAddr},
+    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
     sync::Arc,
     time::Duration,
 };
@@ -151,6 +151,27 @@ impl DhcpClient {
         rcv.map_err(|_| anyhow!("Channel receive error"))
     }
 
+    pub async fn send2(&self, msg: Message, socket: &UdpSocket) -> Result<Message> {
+        let xid = msg.xid();
+        let mut buf = Vec::new();
+        let mut e = Encoder::new(&mut buf);
+        msg.encode(&mut e)?;
+        let (sender, receiver) = async_std::channel::bounded::<Message>(1);
+        self.pending_requests.lock().await.insert(xid, sender);
+        socket
+            .send_to(&buf, SocketAddr::from(([255, 255, 255, 255], 67)))
+            .await?;
+        let Ok(rcv) = async_std::future::timeout(
+            Duration::from_millis(DHCP_RESPONSE_TIMEOUT_MS),
+            receiver.recv(),
+        )
+        .await
+        else {
+            bail!("Timeout")
+        };
+        rcv.map_err(|_| anyhow!("Channel receive error"))
+    }
+
     // Obtain and hold a DHCP lease until cancelled.
     pub async fn obtain_lease(&self, logger: &Logger) -> Result<Ipv4Addr> {
         println!("Sending DHCP discover");
@@ -160,8 +181,12 @@ impl DhcpClient {
         };
         println!("Got DHCP offer with IP address {}", offer.yiaddr());
 
+        // Hack to see if source address makes a difference.
+        let socket = UdpSocket::bind(SocketAddrV4::new(offer.yiaddr(), 68)).await?;
+        socket.set_broadcast(true)?;
+
         let request = request_from_offer(&self.local_mac, &offer)?;
-        let ack = self.send(request).await?;
+        let ack = self.send2(request, &socket).await?;
         if ack.opts().msg_type() != Some(MessageType::Ack) {
             bail!("Expected DHCPACK in response to DHCPREQUEST");
         };
@@ -214,7 +239,7 @@ async fn dispatch_all(
         } else {
             warn!(
                 logger,
-                "Received DHCP message with unknown transaction {}",
+                "Received DHCP message with unknown transaction {:x}",
                 msg.xid()
             );
         }
@@ -302,7 +327,7 @@ fn request_from_offer(local_mac: &[u8; 6], offer: &Message) -> Result<Message> {
     msg.opts_mut()
         .insert(v4::DhcpOption::RequestedIpAddress(offer.yiaddr()));
 
-    // RFC2131 - the XID must match that set by the server on the offer
+    // The XID must match that set by the server on the offer
     msg.set_xid(offer.xid());
 
     Ok(msg)
