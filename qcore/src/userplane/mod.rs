@@ -1,5 +1,6 @@
 mod dhcp;
 mod downlink_buffer;
+mod freebind_socket;
 mod netlink;
 mod packet_processor;
 mod stats;

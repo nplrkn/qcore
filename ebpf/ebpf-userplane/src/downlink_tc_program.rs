@@ -5,6 +5,7 @@ use crate::maps::map_lookup;
 use crate::maps::DL_FORWARDING_TABLE;
 use crate::tc_utils::*;
 use aya_ebpf::bindings::bpf_adj_room_mode::BPF_ADJ_ROOM_MAC;
+//use aya_ebpf::bindings::TC_ACT_OK;
 use aya_ebpf::bindings::TC_ACT_SHOT;
 use aya_ebpf::helpers::r#gen::bpf_csum_diff;
 use aya_ebpf::macros::classifier;
@@ -55,6 +56,17 @@ fn try_tc_downlink_n3(ctx: TcContext) -> Result<i32, i32> {
         tc_ensure!(teid != 0, DlDropUnknownUe);
         let remote_ip = (*entry).remote_gtp_addr;
         tc_ensure!(remote_ip != 0, DlDropUnknownUe);
+
+        // If this is a DHCP packet to a UE, let it continue to the local IP stack where it can be
+        // received by one of QCore's freebind sockets.
+        // if is_long_enough(&ctx, EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN) {
+        //     let udphdr: *const UdpHdr = ptr_at(&ctx, EthHdr::LEN + Ipv4Hdr::LEN);
+        //     if (*udphdr).dest() == 68 {
+        //         add(DlSeqNumContention, 100);
+
+        //         return Ok(TC_ACT_OK);
+        //     }
+        // }
 
         // Pass the packet up to the controller application if requested to do so.
         if remote_ip == 0xffffffff {

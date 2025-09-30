@@ -2135,6 +2135,7 @@ dependencies = [
  "local-ip-address",
  "nas",
  "ngap",
+ "os_socketaddr",
  "oxirush-nas",
  "pdcp",
  "rand 0.9.1",

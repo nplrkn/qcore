@@ -16,6 +16,8 @@ use std::{
     time::Duration,
 };
 
+use crate::userplane::freebind_socket::new_freebind_udp_socket;
+
 // The DhcpClient appears on the network as a DHCP relay, and need to be configured
 // with an IP address and MAC address of the external interface.
 //
@@ -46,6 +48,7 @@ type Transactions = Arc<Mutex<HashMap<Xid, Sender<Message>>>>;
 
 const DHCP_RESPONSE_TIMEOUT_MS: u64 = 1000;
 const DHCP_SERVER_PORT: u16 = 67;
+const DHCP_CLIENT_PORT: u16 = 68;
 
 impl DhcpClient {
     pub async fn new(
@@ -83,6 +86,8 @@ impl DhcpClient {
         });
     }
 
+    // TODO factor out the encode and socket send for use by lease task.  similarly with receive.
+    // this is "relay_send" (?)
     async fn send(&self, msg: Message) -> Result<Message> {
         let xid = msg.xid();
 
@@ -96,6 +101,9 @@ impl DhcpClient {
         self.socket
             .send_to(&buf, SocketAddrV4::new(self.server, DHCP_SERVER_PORT))
             .await?;
+
+        // TODO: retransmision on timeout. See RFC2131 4.1 para
+        // beginning "DHCP clients are responsible for all message retransmission"
 
         let Ok(rcv) = async_std::future::timeout(
             Duration::from_millis(DHCP_RESPONSE_TIMEOUT_MS),
@@ -118,7 +126,7 @@ impl DhcpClient {
             .set_chaddr(&self.local_mac)
             .set_giaddr(self.local_ipv4)
             .opts_mut()
-            .insert(v4::DhcpOption::ClientIdentifier(client_identifier));
+            .insert(v4::DhcpOption::ClientIdentifier(client_identifier.clone()));
 
         debug!(logger, "Dhcp Discover >>");
         let discover = discover(common.clone());
@@ -132,7 +140,7 @@ impl DhcpClient {
         self.check_ack(&ack)?;
         debug!(logger, "Dhcp Ack <<");
 
-        let lease = self.keep_lease(ack, logger).await;
+        let lease = self.keep_lease(ack, client_identifier, logger).await;
         let existing_lease = self.leases.lock().await.insert(offer.yiaddr(), lease);
         if existing_lease.is_some() {
             warn!(logger, "Lease already existed for {}", offer.yiaddr())
@@ -141,12 +149,21 @@ impl DhcpClient {
         Ok(offer.yiaddr())
     }
 
-    async fn keep_lease(&self, ack: Message, logger: &Logger) -> Sender<()> {
+    async fn keep_lease(
+        &self,
+        ack: Message,
+        client_identifier: Vec<u8>,
+        logger: &Logger,
+    ) -> Sender<()> {
         let (sender, receiver) = async_std::channel::bounded::<()>(1);
         let logger_clone = logger.clone();
         let self_clone = self.clone();
-        async_std::task::spawn(async {
-            keep_lease_task(receiver, ack, self_clone, logger_clone).await
+        async_std::task::spawn(async move {
+            if let Err(e) =
+                keep_lease_task(receiver, ack, client_identifier, self_clone, &logger_clone).await
+            {
+                warn!(logger_clone, "Lease task exited with error {e}");
+            }
         });
         sender
     }
@@ -185,6 +202,11 @@ impl DhcpClient {
     }
 }
 
+async fn receive_and_decode(socket: &UdpSocket, buf: &mut Vec<u8>) -> Result<Message> {
+    let bytes_read = socket.recv(buf).await?;
+    Ok(Message::decode(&mut Decoder::new(&buf[0..bytes_read]))?)
+}
+
 async fn dhcp_receive_task(
     socket: UdpSocket,
     pending_requests: Arc<Mutex<HashMap<u32, Sender<Message>>>>,
@@ -192,9 +214,7 @@ async fn dhcp_receive_task(
 ) -> Result<()> {
     let mut buf = vec![0; 1024];
     loop {
-        let bytes_read = socket.recv(&mut buf).await?;
-
-        let Ok(msg) = Message::decode(&mut Decoder::new(&buf[0..bytes_read])) else {
+        let Ok(msg) = receive_and_decode(&socket, &mut buf).await else {
             warn!(logger, "Failed to decode message to DHCP port");
             continue;
         };
@@ -212,7 +232,14 @@ async fn dhcp_receive_task(
     }
 }
 
-async fn keep_lease_task(cancel: Receiver<()>, ack: Message, _client: DhcpClient, logger: Logger) {
+async fn keep_lease_task(
+    cancel: Receiver<()>,
+    ack: Message,
+    client_identifier: Vec<u8>,
+    client: DhcpClient,
+    logger: &Logger,
+) -> Result<()> {
+    let addr = ack.yiaddr();
     let mut lease_time_secs = match ack.opts().get(v4::OptionCode::AddressLeaseTime) {
         Some(v4::DhcpOption::AddressLeaseTime(lease_time)) => *lease_time,
         _ => 0,
@@ -223,21 +250,54 @@ async fn keep_lease_task(cancel: Receiver<()>, ack: Message, _client: DhcpClient
         lease_time_secs = 3600;
     }
 
+    let Some(v4::DhcpOption::ServerIdentifier(server_ip)) =
+        ack.opts().get(v4::OptionCode::ServerIdentifier)
+    else {
+        // See RFC2131, table 3
+        bail!("Mandatory option ServerIdentifier missing from DHCP Ack")
+    };
+
     // Renew when half the time is up (DHCP timer T1)
     let renewal_interval = Duration::from_millis(lease_time_secs as u64 * 500);
     debug!(
         logger,
         "DHCP renewal interval for leased address {} = {}ms",
-        ack.yiaddr(),
+        addr,
         lease_time_secs as u64 * 500
     );
+
+    // let Ok(socket) = UdpSocket::bind(SocketAddrV4::new(addr, DHCP_CLIENT_PORT)).await
+    // //let Ok(socket) = new_freebind_udp_socket(SocketAddrV4::new(addr, DHCP_CLIENT_PORT).into())
+    // else {
+    //     bail!("Failed to bind DHCP socket to UE address - can't hold DHCP lease")
+    // };
+    // println!("Done free bind socket on {addr} {DHCP_CLIENT_PORT}");
 
     loop {
         match async_std::future::timeout(renewal_interval, cancel.recv()).await {
             Err(_) => {
                 // Timeout - renew lease
-                // TODO - note this is unicast and is going to be sent to the UE if we're not careful
-                println!("Lease renewal not yet implemented!!!")
+                println!("Renewal needed");
+
+                let mut request =
+                    renewal_request(&ack, client_identifier.clone(), &client.local_mac);
+
+                // TODO illegal to use gi addr on a renewal but maybe server will tolerate it
+                request.set_giaddr(client.local_ipv4);
+                let _response = client.send(request).await?;
+
+                // // TODO: this goes out from the wrong address.  It should use the UE IP address as the source IP.
+                // client
+                //     .socket
+                //     .send_to(&buf, SocketAddrV4::new(*server_ip, DHCP_SERVER_PORT))
+                //     .await?;
+
+                // // TODO - the response is going to the UE address - can we intercept?
+                // let Ok(ack) = receive_and_decode(&socket, &mut buf).await else {
+                //     bail!("Failed to decode message to DHCP port");
+                // };
+
+                println!("Got response ok")
 
                 // TODO see RFC2131 4.4.5 which has some quite complex behavior around retrying + rebinding
                 // if the ACK does not arrive.
@@ -246,8 +306,7 @@ async fn keep_lease_task(cancel: Receiver<()>, ack: Message, _client: DhcpClient
                 // Cancel future completed - end lease + exit task
                 // TODO: explicitly release lease via DHCPRELEASE.  Right now, we just let it time out.
                 debug!(logger, "Exit DHCP lease task for {}", ack.yiaddr());
-
-                break;
+                return Ok(());
             }
         }
     }
@@ -291,4 +350,17 @@ fn request_from_offer(mut msg: Message, offer: &Message) -> Result<Message> {
     msg.set_xid(offer.xid());
 
     Ok(msg)
+}
+
+fn renewal_request(ack: &Message, client_identifier: Vec<u8>, chaddr: &[u8]) -> Message {
+    let mut msg = Message::default();
+    msg.set_chaddr(chaddr).set_ciaddr(ack.yiaddr());
+
+    msg.opts_mut()
+        .insert(v4::DhcpOption::ClientIdentifier(client_identifier));
+
+    msg.opts_mut()
+        .insert(v4::DhcpOption::MessageType(v4::MessageType::Request));
+
+    msg
 }

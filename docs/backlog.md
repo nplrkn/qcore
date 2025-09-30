@@ -3,6 +3,7 @@
 ## In progress
 -  UEs on LAN
    -  hold lease
+      -  can we get away with wrong source IP?
    -  UE IP allocator strategy pattern
    -  catch + fail in situation where e.g. we are in a /20 and the low byte of two UE addresses comes back as the same
    -  setup-routing

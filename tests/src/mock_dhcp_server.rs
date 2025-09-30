@@ -1,11 +1,14 @@
-use anyhow::{Result, bail, ensure};
+use anyhow::{Result, ensure};
 use async_net::UdpSocket;
 use dhcproto::{
     Decodable, Decoder, Encodable, Encoder,
     v4::{self, Message, MessageType, OptionCode},
 };
 use slog::{Logger, info};
-use std::net::{Ipv4Addr, SocketAddrV4};
+use std::{
+    net::{Ipv4Addr, SocketAddrV4},
+    time::Duration,
+};
 
 pub struct MockDhcpServer {
     socket: UdpSocket,
@@ -14,6 +17,7 @@ pub struct MockDhcpServer {
 }
 
 const DHCP_SERVER_PORT: u16 = 67;
+const DHCP_CLIENT_PORT: u16 = 68;
 
 impl MockDhcpServer {
     pub async fn new(ip: Ipv4Addr, logger: Logger) -> Result<Self> {
@@ -21,16 +25,23 @@ impl MockDhcpServer {
         Ok(Self { socket, ip, logger })
     }
 
-    pub async fn hand_out_address(&self, addr: Ipv4Addr) -> Result<()> {
+    pub async fn hand_out_address(&self, addr: Ipv4Addr, lease_time_secs: u32) -> Result<()> {
         let discover = self.receive_discover().await?;
         self.send_offer(addr, &discover).await?;
         let request = self.receive_request().await?;
-        self.send_ack(&request).await
+        self.send_ack(&request, lease_time_secs).await
+    }
+
+    pub async fn handle_renewal(&self, _addr: Ipv4Addr) -> Result<()> {
+        let request = self.receive_request().await?;
+        self.send_ack(&request, 30).await
     }
 
     async fn receive(&self) -> Result<Message> {
         let mut buf = vec![0; 1024];
-        let bytes_read = self.socket.recv(&mut buf).await?;
+        let bytes_read =
+            async_std::future::timeout(Duration::from_millis(500), self.socket.recv(&mut buf))
+                .await??;
         Ok(Message::decode(&mut Decoder::new(&buf[0..bytes_read]))?)
     }
 
@@ -38,9 +49,16 @@ impl MockDhcpServer {
         let mut buf = Vec::new();
         let mut e = Encoder::new(&mut buf);
         msg.encode(&mut e)?;
-        let dst_ip = msg.giaddr();
+
+        let (dst_ip, port) = if msg.giaddr().is_unspecified() {
+            (msg.yiaddr(), DHCP_CLIENT_PORT) // renewal case, which is direct from client
+        } else {
+            (msg.giaddr(), DHCP_SERVER_PORT) // initial discovery case, where QCore acts as relay
+        };
+
+        //println!("Sending to {} {}", dst_ip, port);
         self.socket
-            .send_to(&buf, SocketAddrV4::new(dst_ip, DHCP_SERVER_PORT))
+            .send_to(&buf, SocketAddrV4::new(dst_ip, port))
             .await?;
         Ok(())
     }
@@ -59,7 +77,7 @@ impl MockDhcpServer {
         let msg = self.receive().await?;
         ensure!(
             msg.opts().msg_type() == Some(MessageType::Request),
-            "Not DHCPDISCOVER"
+            "Not Request"
         );
         info!(self.logger, ">> Dhcp Request");
         Ok(msg)
@@ -71,8 +89,8 @@ impl MockDhcpServer {
         self.send(offer).await
     }
 
-    async fn send_ack(&self, request: &Message) -> Result<()> {
-        let ack = self.build_ack_from_request(request)?;
+    async fn send_ack(&self, request: &Message, lease_time_secs: u32) -> Result<()> {
+        let ack = self.build_ack_from_request(request, lease_time_secs)?;
         info!(self.logger, "<< Dhcp Ack");
         self.send(ack).await
     }
@@ -80,6 +98,7 @@ impl MockDhcpServer {
     fn build_offer_from_discover(&self, yiaddr: Ipv4Addr, discover: &Message) -> Message {
         let mut offer = Message::default();
         offer
+            .set_opcode(v4::Opcode::BootReply)
             .set_chaddr(discover.chaddr())
             .set_giaddr(discover.giaddr())
             .set_yiaddr(yiaddr)
@@ -100,15 +119,17 @@ impl MockDhcpServer {
         offer
     }
 
-    fn build_ack_from_request(&self, request: &Message) -> Result<Message> {
-        let Some(v4::DhcpOption::RequestedIpAddress(requested_address)) =
-            request.opts().get(OptionCode::RequestedIpAddress)
-        else {
-            bail!("Missing Requested Ip Address on DHCPREQUEST");
+    fn build_ack_from_request(&self, request: &Message, lease_time_secs: u32) -> Result<Message> {
+        // This covers both the initial discovery case, where the requested address is an option, and
+        // the renewal case, where the client puts their existing address in ciaddr.
+        let requested_address = match request.opts().get(OptionCode::RequestedIpAddress) {
+            Some(v4::DhcpOption::RequestedIpAddress(requested_address)) => requested_address,
+            _ => &request.ciaddr(),
         };
 
         let mut ack = Message::default();
-        ack.set_chaddr(request.chaddr())
+        ack.set_opcode(v4::Opcode::BootReply)
+            .set_chaddr(request.chaddr())
             .set_giaddr(request.giaddr())
             .set_yiaddr(*requested_address)
             .set_xid(request.xid());
@@ -119,7 +140,8 @@ impl MockDhcpServer {
         ack.opts_mut()
             .insert(v4::DhcpOption::ServerIdentifier(self.ip));
 
-        ack.opts_mut().insert(v4::DhcpOption::AddressLeaseTime(30));
+        ack.opts_mut()
+            .insert(v4::DhcpOption::AddressLeaseTime(lease_time_secs));
 
         Ok(ack)
     }

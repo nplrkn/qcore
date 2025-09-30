@@ -43,7 +43,7 @@ impl<T> TestFrameworkBuilder<T> {
         let subs = SubscriberDb::new_from_sim_file("test_sims.toml", &self.logger)?;
         let mut config = qcore_default_test_config(qc_ip)?;
         if self.use_dhcp {
-            config.ip_allocation_method = UeIpAllocationConfig::Dhcp(2, Some(dn.dhcp_server().ip));
+            config.ip_allocation_method = UeIpAllocationConfig::Dhcp(13, Some(dn.dhcp_server().ip));
         }
         let qc = QCore::start(
             config,

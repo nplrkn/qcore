@@ -17,7 +17,7 @@ pub struct DataNetwork {
 }
 
 impl DataNetwork {
-    const DHCP_SERVER_ADDRESS: Ipv4Addr = Ipv4Addr::new(127, 0, 1, 5);
+    const DHCP_SERVER_ADDRESS: Ipv4Addr = Ipv4Addr::new(10, 255, 0, 1);
 
     pub async fn new(logger: &Logger) -> Result<Self> {
         // Mock up a UDP server running in the DN for UEs to send packets to.
