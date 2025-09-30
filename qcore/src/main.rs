@@ -112,7 +112,8 @@ async fn main() -> Result<()> {
             2
         };
 
-        UeIpAllocationConfig::Dhcp(lan_if_index)
+        // The 'None' here means that QCore will broadcast its DHCP requests.
+        UeIpAllocationConfig::Dhcp(lan_if_index, None)
     } else {
         check_ue_subnet(&args.ue_subnet)?;
         UeIpAllocationConfig::RoutedUeSubnet(args.ue_subnet)

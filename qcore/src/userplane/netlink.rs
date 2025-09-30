@@ -14,12 +14,12 @@ use rtnetlink::{
 use slog::{Logger, debug, warn};
 
 #[derive(Clone)]
-pub struct NetlinkRouteProgrammer {
+pub struct Netlink {
     netlink_handle: Handle,
     ue_if_index: u32,
 }
 
-impl NetlinkRouteProgrammer {
+impl Netlink {
     pub fn new(ue_if_index: u32) -> Result<Self> {
         let (connection, handle, _) = new_connection_with_socket::<SmolSocket>()?;
         async_std::task::spawn(connection);

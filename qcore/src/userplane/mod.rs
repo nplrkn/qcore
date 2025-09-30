@@ -1,5 +1,6 @@
+mod dhcp;
 mod downlink_buffer;
-mod netlink_route;
+mod netlink;
 mod packet_processor;
 mod stats;
 mod ue_ip_allocator;
