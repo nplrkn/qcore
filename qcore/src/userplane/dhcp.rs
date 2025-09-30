@@ -133,7 +133,10 @@ impl DhcpClient {
         debug!(logger, "Dhcp Ack <<");
 
         let lease = self.keep_lease(ack, logger).await;
-        self.leases.lock().await.insert(offer.yiaddr(), lease);
+        let existing_lease = self.leases.lock().await.insert(offer.yiaddr(), lease);
+        if existing_lease.is_some() {
+            warn!(logger, "Lease already existed for {}", offer.yiaddr())
+        }
 
         Ok(offer.yiaddr())
     }

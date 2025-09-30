@@ -33,12 +33,17 @@ impl UeIpAllocator {
 
         let mode = match config {
             UeIpAllocationConfig::RoutedUeSubnet(subnet) => {
+                info!(
+                    logger,
+                    "UE address allocation model: /24 addresses on {}", subnet
+                );
+
                 UeIpAllocationMode::RoutedUeSubnet(subnet)
             }
             UeIpAllocationConfig::Dhcp(if_index, server) => {
                 info!(
                     logger,
-                    "DHCP address allocation on LAN connected over if index {}", if_index
+                    "UE address allocation model: DHCP on LAN connected over if index {}", if_index
                 );
                 let (ip, mac) = netlink.get_link_addr_info(if_index).await?;
                 let dhcp_client = DhcpClient::new(mac, ip, server, logger).await?;

@@ -222,16 +222,14 @@ impl PacketProcessor {
         teid[3] = idx as u8;
 
         let payload = if ipv4 {
-            // IPv4 PDU session
+            // Get an IP address for the UE
+            // TODO - don't use the TEID as the client identifier - IMSI + session ID?
+            let ue_ip_addr = self
+                .ue_ip_allocator
+                .allocate(idx, teid.to_vec(), logger)
+                .await?;
 
-            // TODO - don't use the TEID as the client identifier
-
-            Payload::Ipv4(Ipv4SessionParams {
-                ue_ip_addr: self
-                    .ue_ip_allocator
-                    .allocate(idx, teid.to_vec(), logger)
-                    .await?,
-            })
+            Payload::Ipv4(Ipv4SessionParams { ue_ip_addr })
         } else {
             // Allocate a spare Ethernet interface.
             let Some(if_index) = self.ethernet_interface_indices.lock().await.pop() else {
@@ -275,8 +273,8 @@ impl PacketProcessor {
             bail!("IPv6 not implemented for GTP");
         };
 
-        // The least significant byte of the TEID is the forwarding table index.
-        let forwarding_idx = session.uplink_gtp_teid.0[3];
+        // We use the least significant byte of the TEID as the uplink forwarding table index.
+        let uplink_forwarding_idx = session.uplink_gtp_teid.0[3];
 
         let pdcp_header_length = match session.pdcp_sn_length {
             PdcpSequenceNumberLength::TwelveBits => 2,
@@ -294,7 +292,7 @@ impl PacketProcessor {
             egress_if_index: eth_if_idx,
         };
         let mut array = self.uplink_forwarding_table.lock().await;
-        array.set(forwarding_idx as u32, v, 0)?;
+        array.set(uplink_forwarding_idx as u32, v, 0)?;
 
         let remote_gtp_addr = u32::from_be_bytes(gtp_remote_ipv4.octets());
         // TODO: broaden this to check for more invalid addresses.
@@ -302,6 +300,15 @@ impl PacketProcessor {
             remote_gtp_addr != 0xffffffff,
             "All 1s address not allowed for remote GTP address"
         );
+
+        // For IP, we use the low byte of the IP address as the index.  Otherwise we will indirect
+        // via the ethernet if index lookup and we can just reuse the uplink idx.
+        let downlink_forwarding_idx =
+            if let Payload::Ipv4(Ipv4SessionParams { ue_ip_addr }) = session.payload {
+                ue_ip_addr.octets()[3]
+            } else {
+                uplink_forwarding_idx
+            };
 
         let v = DlForwardingEntry {
             next_pdcp_seq_num: 0,
@@ -311,17 +318,17 @@ impl PacketProcessor {
             pdcp_header_length,
         };
         let mut array = self.downlink_forwarding_table.lock().await;
-        if let Err(e) = array.set(forwarding_idx as u32, v, 0) {
+        if let Err(e) = array.set(downlink_forwarding_idx as u32, v, 0) {
             warn!(
                 logger,
-                "Failed to set downlink forwarding {} - {}", forwarding_idx, e
+                "Failed to set downlink forwarding {} - {}", downlink_forwarding_idx, e
             )
         }
 
         // For an Ethernet PDU session, set up the interface lookup table to point to the forwarding table entry.
         if eth_if_idx != 0 {
             let mut array = self.eth_if_index_lookup_table.lock().await;
-            if let Err(e) = array.set(eth_if_idx, forwarding_idx as u16, 0) {
+            if let Err(e) = array.set(eth_if_idx, downlink_forwarding_idx as u16, 0) {
                 warn!(logger, "Failed to set eth lookup {} - {}", eth_if_idx, e)
             }
         }

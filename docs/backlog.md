@@ -2,9 +2,12 @@
 
 ## In progress
 -  UEs on LAN
-   -  userplane sessions can no longer equate IP address - UE ID - TEID
    -  hold lease
    -  UE IP allocator strategy pattern
+   -  catch + fail in situation where e.g. we are in a /20 and the low byte of two UE addresses comes back as the same
+   -  setup-routing
+   -  self-review / todos
+   -  readme
 -  Clustering
 -  Is this a better design model for test UEs?: https://docs.rs/rtnetlink/latest/rtnetlink/struct.RouteMessageBuilder.html
 
