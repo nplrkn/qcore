@@ -1,5 +1,5 @@
 use std::{
-    net::{IpAddr, SocketAddr},
+    net::{IpAddr, Ipv4Addr, SocketAddr},
     time::Duration,
 };
 
@@ -8,28 +8,38 @@ use async_net::{AsyncToSocketAddrs, UdpSocket};
 use async_std::future;
 use slog::{Logger, info, o};
 
+use crate::mock_dhcp_server::MockDhcpServer;
+
 pub struct DataNetwork {
     logger: Logger,
     udp_socket: UdpSocket,
+    dhcp_server: MockDhcpServer,
 }
 
 impl DataNetwork {
-    pub async fn new(logger: &Logger) -> Self {
+    const DHCP_SERVER_ADDRESS: Ipv4Addr = Ipv4Addr::new(127, 0, 1, 5);
+
+    pub async fn new(logger: &Logger) -> Result<Self> {
         // Mock up a UDP server running in the DN for UEs to send packets to.
-        // For this purpose we can't use a 127.0.0.0/8 address, because from the
-        // p.o.v. of Linux routing UE packets arrive over the UE tun interface and are treated as if they come
-        // from a remote host - which is not allowed to talk to loopback addresses.
         let Ok(IpAddr::V4(udp_server_ip)) = local_ip_address::local_ip() else {
             panic!("Couldn't get local IPv4");
         };
         let udp_server_port = 23215;
         let bind_addr = SocketAddr::new(IpAddr::V4(udp_server_ip), udp_server_port);
-        let udp_socket = UdpSocket::bind(&bind_addr).await.unwrap();
+        let udp_socket = UdpSocket::bind(&bind_addr).await?;
 
-        DataNetwork {
+        // Have the mock DHCP server listen on an arbitrary local address.
+        let dhcp_server = MockDhcpServer::new(Self::DHCP_SERVER_ADDRESS, logger.clone()).await?;
+
+        Ok(DataNetwork {
             logger: logger.new(o!("dn" => 1)),
             udp_socket,
-        }
+            dhcp_server,
+        })
+    }
+
+    pub fn dhcp_server(&self) -> &MockDhcpServer {
+        &self.dhcp_server
     }
 
     pub fn udp_server_addr(&self) -> SocketAddr {

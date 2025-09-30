@@ -2,7 +2,6 @@
 
 ## In progress
 -  UEs on LAN
-   -  DHCP in test framework
    -  userplane sessions can no longer equate IP address - UE ID - TEID
    -  hold lease
    -  UE IP allocator strategy pattern

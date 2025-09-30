@@ -2,6 +2,7 @@ mod data_network;
 pub mod framework;
 pub mod load_test;
 mod mock;
+mod mock_dhcp_server;
 mod mock_du;
 mod mock_gnb;
 mod mock_ue;

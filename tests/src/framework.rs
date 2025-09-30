@@ -15,6 +15,7 @@ use xxap::PlmnIdentity;
 
 pub struct TestFrameworkBuilder<T> {
     logger: Logger,
+    use_dhcp: bool,
     x: PhantomData<T>,
 }
 
@@ -22,8 +23,14 @@ impl<T> TestFrameworkBuilder<T> {
     pub fn new() -> Self {
         Self {
             logger: init_logging(),
+            use_dhcp: false,
             x: PhantomData,
         }
+    }
+
+    pub fn use_dhcp(mut self) -> Self {
+        self.use_dhcp = true;
+        self
     }
 
     async fn build_common(
@@ -32,9 +39,12 @@ impl<T> TestFrameworkBuilder<T> {
     ) -> Result<(ProgramHandle, DataNetwork, UeBuilder)> {
         exit_on_panic();
         let qc_ip = "127.0.0.1";
-        let dn = DataNetwork::new(&self.logger).await;
+        let dn = DataNetwork::new(&self.logger).await?;
         let subs = SubscriberDb::new_from_sim_file("test_sims.toml", &self.logger)?;
-        let config = qcore_default_test_config(qc_ip)?;
+        let mut config = qcore_default_test_config(qc_ip)?;
+        if self.use_dhcp {
+            config.ip_allocation_method = UeIpAllocationConfig::Dhcp(2, Some(dn.dhcp_server().ip));
+        }
         let qc = QCore::start(
             config,
             self.logger.new(o!("qcore"=> 1)),

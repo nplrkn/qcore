@@ -120,17 +120,17 @@ impl DhcpClient {
             .opts_mut()
             .insert(v4::DhcpOption::ClientIdentifier(client_identifier));
 
-        debug!(logger, ">> DHCPDISCOVER");
+        debug!(logger, "Dhcp Discover >>");
         let discover = discover(common.clone());
         let offer = self.send(discover).await?;
         self.check_offer(&offer)?;
-        debug!(logger, "<< DHCPOFFER");
+        debug!(logger, "Dhcp Offer <<");
 
         let request = request_from_offer(common.clone(), &offer)?;
-        debug!(logger, ">> DHCPREQUEST");
+        debug!(logger, "Dhcp Request >>");
         let ack = self.send(request).await?;
         self.check_ack(&ack)?;
-        debug!(logger, "<< DHCPACK");
+        debug!(logger, "Dhcp Ack <<");
 
         let lease = self.keep_lease(ack, logger).await;
         self.leases.lock().await.insert(offer.yiaddr(), lease);
@@ -224,7 +224,8 @@ async fn keep_lease_task(cancel: Receiver<()>, ack: Message, _client: DhcpClient
     let renewal_interval = Duration::from_millis(lease_time_secs as u64 * 500);
     debug!(
         logger,
-        "DHCP renewal interval {}ms",
+        "DHCP renewal interval for leased address {} = {}ms",
+        ack.yiaddr(),
         lease_time_secs as u64 * 500
     );
 
@@ -241,6 +242,7 @@ async fn keep_lease_task(cancel: Receiver<()>, ack: Message, _client: DhcpClient
             Ok(_) => {
                 // Cancel future completed - end lease + exit task
                 // TODO: explicitly release lease via DHCPRELEASE.  Right now, we just let it time out.
+                debug!(logger, "Exit DHCP lease task for {}", ack.yiaddr());
 
                 break;
             }
@@ -250,7 +252,7 @@ async fn keep_lease_task(cancel: Receiver<()>, ack: Message, _client: DhcpClient
 
 fn discover(mut msg: Message) -> Message {
     msg.opts_mut()
-        .insert(v4::DhcpOption::MessageType(v4::MessageType::Discover)); // set msg type
+        .insert(v4::DhcpOption::MessageType(v4::MessageType::Discover));
 
     msg.opts_mut()
         .insert(v4::DhcpOption::ParameterRequestList(vec![
