@@ -230,6 +230,26 @@ impl QCore {
             _ => {}
         }
     }
+    pub async fn test_dhcp(&self) -> Result<()> {
+        info!(self.logger, "-------------DHCP SELFTEST------------- ");
+        let ip = self
+            .packet_processor
+            .ue_ip_allocator
+            .allocate(1, b"QCORE TEST".to_vec(), &self.logger)
+            .await?;
+
+        info!(
+            self.logger,
+            "-------------SUCCESFULLY OBTAINED IP {}------------- ", ip
+        );
+
+        self.packet_processor
+            .ue_ip_allocator
+            .release(ip, &self.logger)
+            .await;
+
+        Ok(())
+    }
 }
 
 #[async_trait]

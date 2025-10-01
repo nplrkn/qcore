@@ -89,6 +89,10 @@ impl DhcpClient {
     // TODO factor out the encode and socket send for use by lease task.  similarly with receive.
     // this is "relay_send" (?)
     async fn send(&self, msg: Message) -> Result<Message> {
+        self.send_to(msg, &self.server).await
+    }
+
+    async fn send_to(&self, msg: Message, ip: &Ipv4Addr) -> Result<Message> {
         let xid = msg.xid();
 
         let mut buf = Vec::new();
@@ -99,7 +103,7 @@ impl DhcpClient {
         self.pending_requests.lock().await.insert(xid, sender);
 
         self.socket
-            .send_to(&buf, SocketAddrV4::new(self.server, DHCP_SERVER_PORT))
+            .send_to(&buf, SocketAddrV4::new(*ip, DHCP_SERVER_PORT))
             .await?;
 
         // TODO: retransmision on timeout. See RFC2131 4.1 para
@@ -232,6 +236,7 @@ async fn dhcp_receive_task(
     }
 }
 
+// TODO: since this has a DhcpClient, it might as well be a method
 async fn keep_lease_task(
     cancel: Receiver<()>,
     ack: Message,
@@ -256,6 +261,28 @@ async fn keep_lease_task(
         // See RFC2131, table 3
         bail!("Mandatory option ServerIdentifier missing from DHCP Ack")
     };
+
+    if client_identifier == b"QCORE TEST" {
+        info!(logger, "DHCP renewal test");
+        let mut request = renewal_request(&ack, client_identifier.clone(), &client.local_mac);
+
+        // TODO illegal to use gi addr on a renewal but maybe server will tolerate it
+        request.set_giaddr(client.local_ipv4);
+        let _response = client.send_to(request, server_ip).await?;
+
+        // // TODO: this goes out from the wrong address.  It should use the UE IP address as the source IP.
+        // client
+        //     .socket
+        //     .send_to(&buf, SocketAddrV4::new(*server_ip, DHCP_SERVER_PORT))
+        //     .await?;
+
+        // // TODO - the response is going to the UE address - can we intercept?
+        // let Ok(ack) = receive_and_decode(&socket, &mut buf).await else {
+        //     bail!("Failed to decode message to DHCP port");
+        // };
+
+        println!("Got response ok")
+    }
 
     // Renew when half the time is up (DHCP timer T1)
     let renewal_interval = Duration::from_millis(lease_time_secs as u64 * 500);

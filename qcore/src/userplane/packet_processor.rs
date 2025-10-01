@@ -27,7 +27,7 @@ pub struct PacketProcessor {
     uplink_forwarding_table: Arc<Mutex<UplinkForwardingTable>>,
     downlink_forwarding_table: Arc<Mutex<DownlinkForwardingTable>>,
     eth_if_index_lookup_table: Arc<Mutex<EthIndexLookupTable>>,
-    ue_ip_allocator: UeIpAllocator,
+    pub ue_ip_allocator: UeIpAllocator,
 
     // This is a list of available ethernet interface indices for ethernet
     // PDU sessions.  When an ethernet session is allocated, we pop an

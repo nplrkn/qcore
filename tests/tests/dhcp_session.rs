@@ -4,8 +4,15 @@ use qcore_tests::{MockGnb, framework::*};
 
 #[async_std::test]
 async fn dhcp_session() -> anyhow::Result<()> {
+    // This test makes use of 'veth2' set up by setup-routing script.
+    // The script sets two addresses
+    //  - 10.255.0.1 for the mock DHCP server
+    //  - 10.255.0.200 for the QCore DHCP relay.
+    //
+    // The 10.255.0.1 address is currently hardcoded in the test framework but could easily be made configurable.
+    // The address 10.255.0.200 will be found programmatically by QCore when it queries netlink for the IP address of veth2.
     let (gnb, qc, dn, builder, _logger) = TestFrameworkBuilder::<MockGnb>::new()
-        .use_dhcp()
+        .use_dhcp("veth2")
         .build()
         .await?;
     let dhcp_server = dn.dhcp_server();

@@ -28,7 +28,7 @@ cp ~/qcore/docs/srsRAN-testing/ue.conf ~/srsRAN_4G/build/srsue/src
 
 ```sh
 cd ~/qcore
-RUST_LOG=debug cargo run -- --mcc 001 --mnc 01 --local-ip 127.0.0.1  --ran-interface-name lo --sim-cred-file docs/srsRAN-testing/srs-sim.toml
+RUST_LOG=debug cargo run -- --mcc 001 --mnc 01 --local-ip 127.0.0.1  --ran-interface-name lo --sim-cred-file docs/srsRAN-testing/srs-sim.toml --userplane-stats
 ```
 
 ### Terminal 3 - gNB

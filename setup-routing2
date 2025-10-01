@@ -5,6 +5,7 @@ QCORE_TUN=qcoretun
 # Enable IPv4 forwarding
 sudo sysctl -w net.ipv4.ip_forward=1               
 
+# THIS IS ONLY NEEDED IF use-dhcp IS SPECIFIED 
 # Enable proxy ARP
 sudo sysctl -w net.ipv4.conf.$EXTERNAL_LINK.proxy_arp=1
 
@@ -31,4 +32,16 @@ sudo sysctl -w net.ipv4.conf.all.rp_filter=0
 sudo sysctl -w net.ipv4.conf.$QCORE_TUN.accept_local=1     
 sudo sysctl -w net.ipv4.conf.$QCORE_TUN.route_localnet=1
 
+# THIS IS NOT NEEDED IF use-dhcp IS SPECIFIED 
+# Allow UE packets to flow over the external link to the outside world.
+# Enable NAT on the way out and accept them on the way back in
+sudo iptables -t nat -A POSTROUTING -o $EXTERNAL_LINK -s $UE_SUBNET -j MASQUERADE
+sudo iptables -A FORWARD -i $EXTERNAL_LINK -j ACCEPT -d $UE_SUBNET
 
+# QCore test link - only needed for cargo test --test dhcp-session
+sudo ip link add veth2 type veth peer veth3
+sudo ip link set veth2 up
+sudo ip link set veth3 up
+sudo ip addr add 10.255.0.1/24 dev veth2
+sudo ip addr add 10.255.0.200/24 dev veth2
+sudo sysctl -w net.ipv4.conf.veth2.proxy_arp=1

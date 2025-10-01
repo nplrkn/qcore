@@ -1,7 +1,7 @@
 //! main - starts a single-instance combined CU-CP and CU-UP
 
 #![allow(unused_parens)]
-use anyhow::{Result, anyhow, ensure};
+use anyhow::{Result, anyhow, bail, ensure};
 use async_std::channel::Sender;
 use async_std::prelude::*;
 use clap::Parser;
@@ -11,7 +11,7 @@ use qcore::{
 };
 use signal_hook::consts::signal::*;
 use signal_hook_async_std::Signals;
-use slog::{Drain, Logger, o};
+use slog::{Drain, Logger, o, warn};
 use std::net::{IpAddr, Ipv4Addr};
 
 #[derive(Parser, Debug)]
@@ -46,9 +46,8 @@ struct Args {
     #[arg(long, default_value = "qcoretun")]
     tun_interface_name: String,
 
-    // TODO - help text doesn't clarify that this default to true.  Invert.
     /// Whether to use DHCP to obtain UE IP addresses.
-    #[arg(long, default_value_t = true)]
+    #[arg(long, default_value_t = false)]
     use_dhcp: bool,
 
     // TODO - use same model for RAN interface
@@ -118,7 +117,7 @@ async fn main() -> Result<()> {
         check_ue_subnet(&args.ue_subnet)?;
         UeIpAllocationConfig::RoutedUeSubnet(args.ue_subnet)
     };
-    let _qc = QCore::start(
+    let qc = QCore::start(
         Config {
             ip_addr: args.local_ip,
             plmn: PlmnIdentity(plmn),
@@ -139,13 +138,19 @@ async fn main() -> Result<()> {
             network_display_name: NetworkDisplayName::new(&args.network_display_name)?,
             ip_allocation_method,
         },
-        logger,
+        logger.clone(),
         sub_db,
         !args.f1_mode,
         args.userplane_stats,
     )
     .await?;
 
+    if args.use_dhcp {
+        if let Err(e) = (*qc).test_dhcp().await {
+            warn!(logger, "DHCP self test failed - {e}");
+            bail!("Self test failure");
+        }
+    }
     wait_for_signal().await?;
 
     Ok(())

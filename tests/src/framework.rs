@@ -4,7 +4,7 @@ use anyhow::{Result, bail};
 use pnet_base::MacAddr;
 use qcore::{
     AmfIds, Config, NetworkDisplayName, PdcpSequenceNumberLength, ProgramHandle, QCore,
-    SubscriberAuthParams, SubscriberDb, UeIpAllocationConfig,
+    SubscriberAuthParams, SubscriberDb, UeIpAllocationConfig, get_if_index,
 };
 use slog::{Drain, Logger, o};
 use std::{
@@ -15,7 +15,7 @@ use xxap::PlmnIdentity;
 
 pub struct TestFrameworkBuilder<T> {
     logger: Logger,
-    use_dhcp: bool,
+    use_dhcp: Option<&'static str>,
     x: PhantomData<T>,
 }
 
@@ -23,13 +23,13 @@ impl<T> TestFrameworkBuilder<T> {
     pub fn new() -> Self {
         Self {
             logger: init_logging(),
-            use_dhcp: false,
+            use_dhcp: None,
             x: PhantomData,
         }
     }
 
-    pub fn use_dhcp(mut self) -> Self {
-        self.use_dhcp = true;
+    pub fn use_dhcp(mut self, if_name: &'static str) -> Self {
+        self.use_dhcp = Some(if_name);
         self
     }
 
@@ -42,8 +42,10 @@ impl<T> TestFrameworkBuilder<T> {
         let dn = DataNetwork::new(&self.logger).await?;
         let subs = SubscriberDb::new_from_sim_file("test_sims.toml", &self.logger)?;
         let mut config = qcore_default_test_config(qc_ip)?;
-        if self.use_dhcp {
-            config.ip_allocation_method = UeIpAllocationConfig::Dhcp(13, Some(dn.dhcp_server().ip));
+        if let Some(if_name) = &self.use_dhcp {
+            let if_index = get_if_index(if_name)?;
+            config.ip_allocation_method =
+                UeIpAllocationConfig::Dhcp(if_index, Some(dn.dhcp_server().ip));
         }
         let qc = QCore::start(
             config,
