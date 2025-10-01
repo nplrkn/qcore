@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use async_std::{
     channel::{Receiver, Sender},
     sync::Mutex,
@@ -16,7 +16,7 @@ use std::{
     time::Duration,
 };
 
-use crate::userplane::freebind_socket::new_freebind_udp_socket;
+//use crate::userplane::freebind_socket::new_freebind_udp_socket;
 
 // The DhcpClient appears on the network as a DHCP relay, and need to be configured
 // with an IP address and MAC address of the external interface.
@@ -46,9 +46,10 @@ pub struct DhcpClient {
 type Xid = u32;
 type Transactions = Arc<Mutex<HashMap<Xid, Sender<Message>>>>;
 
-const DHCP_RESPONSE_TIMEOUT_MS: u64 = 1000;
+// DHCP server have been seen to have very slow response times.
+const DHCP_RESPONSE_TIMEOUT_MS: u64 = 4000;
 const DHCP_SERVER_PORT: u16 = 67;
-const DHCP_CLIENT_PORT: u16 = 68;
+//const DHCP_CLIENT_PORT: u16 = 68;
 
 impl DhcpClient {
     pub async fn new(
@@ -125,6 +126,25 @@ impl DhcpClient {
         client_identifier: Vec<u8>,
         logger: &Logger,
     ) -> Result<Ipv4Addr> {
+        let ack = self
+            .get_address_from_server(client_identifier.clone(), logger)
+            .await?;
+        let address = ack.yiaddr();
+
+        let lease = self.keep_lease(ack, client_identifier, logger).await;
+        let existing_lease = self.leases.lock().await.insert(address, lease);
+        if existing_lease.is_some() {
+            warn!(logger, "Lease already existed for {}", address)
+        }
+
+        Ok(address)
+    }
+
+    async fn get_address_from_server(
+        &self,
+        client_identifier: Vec<u8>,
+        logger: &Logger,
+    ) -> Result<Message> {
         let mut common = Message::default();
         common
             .set_chaddr(&self.local_mac)
@@ -134,23 +154,64 @@ impl DhcpClient {
 
         debug!(logger, "Dhcp Discover >>");
         let discover = discover(common.clone());
-        let offer = self.send(discover).await?;
+        let offer = self.send(discover).await.context("waiting for DHCPOFFER")?;
         self.check_offer(&offer)?;
         debug!(logger, "Dhcp Offer <<");
 
         let request = request_from_offer(common.clone(), &offer)?;
         debug!(logger, "Dhcp Request >>");
-        let ack = self.send(request).await?;
+        let ack = self.send(request).await.context("waiting for DHCPACK")?;
         self.check_ack(&ack)?;
         debug!(logger, "Dhcp Ack <<");
+        Ok(ack)
+    }
 
-        let lease = self.keep_lease(ack, client_identifier, logger).await;
-        let existing_lease = self.leases.lock().await.insert(offer.yiaddr(), lease);
-        if existing_lease.is_some() {
-            warn!(logger, "Lease already existed for {}", offer.yiaddr())
-        }
+    // Sanity check the allocation and renewal flows with the DHCP server
+    // Notably this validates whether the server tolerates our nonstandard behaviour
+    // of supplying a giaddr on a renewal.
+    pub async fn self_test(&self, logger: &Logger) -> Result<()> {
+        let client_identifier = b"QCORE TEST".to_vec();
+        let ack = self
+            .get_address_from_server(client_identifier.clone(), logger)
+            .await?;
+        info!(
+            logger,
+            "------ DHCP ADDRESS ALLOCATION OK (got {})",
+            ack.yiaddr()
+        );
 
-        Ok(offer.yiaddr())
+        let _ack = self.renew(&ack, client_identifier, logger).await?;
+        info!(logger, "------ DHCP RENEWAL OK");
+
+        // TODO relinquish the address here
+        Ok(())
+    }
+
+    pub async fn renew(
+        &self,
+        ack: &Message,
+        client_identifier: Vec<u8>,
+        logger: &Logger,
+    ) -> Result<Message> {
+        let Some(v4::DhcpOption::ServerIdentifier(server_ip)) =
+            ack.opts().get(v4::OptionCode::ServerIdentifier)
+        else {
+            // See RFC2131, table 3
+            bail!("Mandatory option ServerIdentifier missing from DHCP Ack")
+        };
+
+        let mut request = renewal_request(&ack, client_identifier.clone(), &self.local_mac);
+
+        // TODO illegal to use gi addr on a renewal but maybe server will tolerate it
+        request.set_giaddr(self.local_ipv4);
+        debug!(logger, "Dhcp Request (renew) >>");
+        let ack = self
+            .send_to(request, server_ip)
+            .await
+            .context("waiting for renewal DHCPACK")?;
+        self.check_ack(&ack)?;
+        debug!(logger, "Dhcp Ack <<");
+        Ok(ack)
     }
 
     async fn keep_lease(
@@ -239,60 +300,11 @@ async fn dhcp_receive_task(
 // TODO: since this has a DhcpClient, it might as well be a method
 async fn keep_lease_task(
     cancel: Receiver<()>,
-    ack: Message,
+    mut ack: Message,
     client_identifier: Vec<u8>,
     client: DhcpClient,
     logger: &Logger,
 ) -> Result<()> {
-    let addr = ack.yiaddr();
-    let mut lease_time_secs = match ack.opts().get(v4::OptionCode::AddressLeaseTime) {
-        Some(v4::DhcpOption::AddressLeaseTime(lease_time)) => *lease_time,
-        _ => 0,
-    };
-
-    if lease_time_secs == 0 {
-        warn!(logger, "DHCP server supplied 0s lease time - use 1hr");
-        lease_time_secs = 3600;
-    }
-
-    let Some(v4::DhcpOption::ServerIdentifier(server_ip)) =
-        ack.opts().get(v4::OptionCode::ServerIdentifier)
-    else {
-        // See RFC2131, table 3
-        bail!("Mandatory option ServerIdentifier missing from DHCP Ack")
-    };
-
-    if client_identifier == b"QCORE TEST" {
-        info!(logger, "DHCP renewal test");
-        let mut request = renewal_request(&ack, client_identifier.clone(), &client.local_mac);
-
-        // TODO illegal to use gi addr on a renewal but maybe server will tolerate it
-        request.set_giaddr(client.local_ipv4);
-        let _response = client.send_to(request, server_ip).await?;
-
-        // // TODO: this goes out from the wrong address.  It should use the UE IP address as the source IP.
-        // client
-        //     .socket
-        //     .send_to(&buf, SocketAddrV4::new(*server_ip, DHCP_SERVER_PORT))
-        //     .await?;
-
-        // // TODO - the response is going to the UE address - can we intercept?
-        // let Ok(ack) = receive_and_decode(&socket, &mut buf).await else {
-        //     bail!("Failed to decode message to DHCP port");
-        // };
-
-        println!("Got response ok")
-    }
-
-    // Renew when half the time is up (DHCP timer T1)
-    let renewal_interval = Duration::from_millis(lease_time_secs as u64 * 500);
-    debug!(
-        logger,
-        "DHCP renewal interval for leased address {} = {}ms",
-        addr,
-        lease_time_secs as u64 * 500
-    );
-
     // let Ok(socket) = UdpSocket::bind(SocketAddrV4::new(addr, DHCP_CLIENT_PORT)).await
     // //let Ok(socket) = new_freebind_udp_socket(SocketAddrV4::new(addr, DHCP_CLIENT_PORT).into())
     // else {
@@ -301,30 +313,28 @@ async fn keep_lease_task(
     // println!("Done free bind socket on {addr} {DHCP_CLIENT_PORT}");
 
     loop {
+        let mut lease_time_secs = match ack.opts().get(v4::OptionCode::AddressLeaseTime) {
+            Some(v4::DhcpOption::AddressLeaseTime(lease_time)) => *lease_time,
+            _ => 0,
+        };
+        if lease_time_secs == 0 {
+            warn!(logger, "DHCP server supplied 0s lease time - use 1hr");
+            lease_time_secs = 3600;
+        }
+        let renewal_interval = Duration::from_millis(lease_time_secs as u64 * 500);
+        debug!(
+            logger,
+            "DHCP renewal interval for leased address {} = {}ms",
+            ack.yiaddr(),
+            lease_time_secs as u64 * 500
+        );
+
         match async_std::future::timeout(renewal_interval, cancel.recv()).await {
             Err(_) => {
                 // Timeout - renew lease
-                println!("Renewal needed");
-
-                let mut request =
-                    renewal_request(&ack, client_identifier.clone(), &client.local_mac);
-
-                // TODO illegal to use gi addr on a renewal but maybe server will tolerate it
-                request.set_giaddr(client.local_ipv4);
-                let _response = client.send(request).await?;
-
-                // // TODO: this goes out from the wrong address.  It should use the UE IP address as the source IP.
-                // client
-                //     .socket
-                //     .send_to(&buf, SocketAddrV4::new(*server_ip, DHCP_SERVER_PORT))
-                //     .await?;
-
-                // // TODO - the response is going to the UE address - can we intercept?
-                // let Ok(ack) = receive_and_decode(&socket, &mut buf).await else {
-                //     bail!("Failed to decode message to DHCP port");
-                // };
-
-                println!("Got response ok")
+                ack = client
+                    .renew(&ack, client_identifier.clone(), logger)
+                    .await?;
 
                 // TODO see RFC2131 4.4.5 which has some quite complex behavior around retrying + rebinding
                 // if the ACK does not arrive.

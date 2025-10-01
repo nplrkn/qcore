@@ -231,22 +231,13 @@ impl QCore {
         }
     }
     pub async fn test_dhcp(&self) -> Result<()> {
-        info!(self.logger, "-------------DHCP SELFTEST------------- ");
-        let ip = self
-            .packet_processor
-            .ue_ip_allocator
-            .allocate(1, b"QCORE TEST".to_vec(), &self.logger)
-            .await?;
-
-        info!(
-            self.logger,
-            "-------------SUCCESFULLY OBTAINED IP {}------------- ", ip
-        );
-
+        info!(self.logger, "------ DHCP SELF TEST");
         self.packet_processor
             .ue_ip_allocator
-            .release(ip, &self.logger)
-            .await;
+            .dhcp_self_test(&self.logger)
+            .await?;
+
+        info!(self.logger, "------ DHCP SELF TEST OK");
 
         Ok(())
     }

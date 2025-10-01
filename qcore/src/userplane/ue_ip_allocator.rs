@@ -83,6 +83,14 @@ impl UeIpAllocator {
         Ok(addr)
     }
 
+    pub async fn dhcp_self_test(&self, logger: &Logger) -> Result<()> {
+        match &self.mode {
+            UeIpAllocationMode::Dhcp(dhcp_client) => dhcp_client.self_test(logger).await?,
+            _ => {}
+        };
+        Ok(())
+    }
+
     pub async fn release(&self, addr: Ipv4Addr, logger: &Logger) {
         match &self.mode {
             UeIpAllocationMode::RoutedUeSubnet(_ue_subnet) => {}

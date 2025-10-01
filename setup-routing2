@@ -1,5 +1,6 @@
 #!/bin/sh
 EXTERNAL_LINK=${1:-eth0}
+UE_SUBNET="10.255.0.0/24"
 QCORE_TUN=qcoretun
 
 # Enable IPv4 forwarding

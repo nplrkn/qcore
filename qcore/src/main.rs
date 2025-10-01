@@ -147,7 +147,7 @@ async fn main() -> Result<()> {
 
     if args.use_dhcp {
         if let Err(e) = (*qc).test_dhcp().await {
-            warn!(logger, "DHCP self test failed - {e}");
+            warn!(logger, "DHCP self test failed - {:#}", e);
             bail!("Self test failure");
         }
     }
