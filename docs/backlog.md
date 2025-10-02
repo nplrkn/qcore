@@ -2,10 +2,8 @@
 
 ## In progress
 -  UEs on LAN
-   -  fix dhcp_session test - do we need extra link?
-   -  test dhcp option
-   -  hold lease
-      -  can we get away with giaddr set?
+   -  flip default again?
+   -  test DHCP with real phone
    -  UE IP allocator strategy pattern
    -  catch + fail in situation where e.g. we are in a /20 and the low byte of two UE addresses comes back as the same
    -  setup-routing 

@@ -180,38 +180,42 @@ impl DhcpClient {
             ack.yiaddr()
         );
 
-        let _ack = self.renew(&ack, client_identifier, logger).await?;
+        let _ack = self
+            .renew_lease(&ack, client_identifier.clone(), logger)
+            .await?;
         info!(logger, "------ DHCP RENEWAL OK");
 
-        // TODO relinquish the address here
+        self.relinquish_lease(&ack, client_identifier, logger).await;
         Ok(())
     }
 
-    pub async fn renew(
+    pub async fn renew_lease(
         &self,
         ack: &Message,
         client_identifier: Vec<u8>,
         logger: &Logger,
     ) -> Result<Message> {
-        let Some(v4::DhcpOption::ServerIdentifier(server_ip)) =
-            ack.opts().get(v4::OptionCode::ServerIdentifier)
-        else {
-            // See RFC2131, table 3
-            bail!("Mandatory option ServerIdentifier missing from DHCP Ack")
-        };
-
+        let server_ip = server_ip_from_ack(ack)?;
         let mut request = renewal_request(&ack, client_identifier.clone(), &self.local_mac);
 
-        // TODO illegal to use gi addr on a renewal but maybe server will tolerate it
+        // We are not meant to set giaddr() on a renewal but, from experimentation, DHCP servers will cope with this.
+        // The correct alternative - sending and receiving DHCP on the UE's IP address - is quite difficult.
         request.set_giaddr(self.local_ipv4);
         debug!(logger, "Dhcp Request (renew) >>");
         let ack = self
-            .send_to(request, server_ip)
+            .send_to(request, &server_ip)
             .await
             .context("waiting for renewal DHCPACK")?;
         self.check_ack(&ack)?;
         debug!(logger, "Dhcp Ack <<");
         Ok(ack)
+    }
+
+    async fn relinquish_lease(&self, ack: &Message, client_identifier: Vec<u8>, logger: &Logger) {
+        let mut release = release(&ack, client_identifier.clone(), &self.local_mac);
+
+        // Same comment as above about giaddr.
+        release.set_giaddr(self.local_ipv4);
     }
 
     async fn keep_lease(
@@ -333,16 +337,20 @@ async fn keep_lease_task(
             Err(_) => {
                 // Timeout - renew lease
                 ack = client
-                    .renew(&ack, client_identifier.clone(), logger)
+                    .renew_lease(&ack, client_identifier.clone(), logger)
                     .await?;
 
                 // TODO see RFC2131 4.4.5 which has some quite complex behavior around retrying + rebinding
                 // if the ACK does not arrive.
             }
             Ok(_) => {
-                // Cancel future completed - end lease + exit task
-                // TODO: explicitly release lease via DHCPRELEASE.  Right now, we just let it time out.
+                // Cancel future completed - exit task
                 debug!(logger, "Exit DHCP lease task for {}", ack.yiaddr());
+
+                // It is debatable whether we should relinquish the lease here. From RFC2131:
+                // "Only in the case where the client explicitly needs to relinquish its lease, e.g., the client
+                //  is about to be moved to a different subnet, will the client send a DHCPRELEASE message"
+
                 return Ok(());
             }
         }
@@ -400,4 +408,27 @@ fn renewal_request(ack: &Message, client_identifier: Vec<u8>, chaddr: &[u8]) -> 
         .insert(v4::DhcpOption::MessageType(v4::MessageType::Request));
 
     msg
+}
+
+fn release(ack: &Message, client_identifier: Vec<u8>, chaddr: &[u8]) -> Message {
+    let mut msg = Message::default();
+    msg.set_chaddr(chaddr).set_ciaddr(ack.yiaddr());
+
+    msg.opts_mut()
+        .insert(v4::DhcpOption::ClientIdentifier(client_identifier));
+
+    msg.opts_mut()
+        .insert(v4::DhcpOption::MessageType(v4::MessageType::Release));
+
+    msg
+}
+
+fn server_ip_from_ack(ack: &Message) -> Result<Ipv4Addr> {
+    let Some(v4::DhcpOption::ServerIdentifier(server_ip)) =
+        ack.opts().get(v4::OptionCode::ServerIdentifier)
+    else {
+        // See RFC2131, table 3
+        bail!("Mandatory option ServerIdentifier missing from DHCP Ack")
+    };
+    Ok(*server_ip)
 }
