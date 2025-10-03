@@ -4,8 +4,6 @@ use anyhow::Result;
 use slog::{Logger, info, warn};
 use std::{net::Ipv4Addr, sync::Arc};
 
-// The UeIpAllocator obtains IP address for PDU sesions, either using DHCP
-// or by allocating addresses from a configured /24 subnet.
 #[derive(Clone)]
 pub struct UeIpAllocator {
     netlink_route_programmer: Netlink,
@@ -62,11 +60,13 @@ impl UeIpAllocator {
     ) -> Result<Ipv4Addr> {
         let addr = match &self.mode {
             UeIpAllocationMode::RoutedUeSubnet(ue_subnet) => {
+                // Calculate an address ourselves
                 let mut ue_addr_octets = ue_subnet.octets();
                 ue_addr_octets[3] = idx;
                 Ipv4Addr::from(ue_addr_octets)
             }
             UeIpAllocationMode::Dhcp(dhcp_client) => {
+                // Ask the DHCP server for an address
                 dhcp_client
                     .obtain_lease(dhcp_client_identifier, logger)
                     .await?

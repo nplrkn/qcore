@@ -51,12 +51,11 @@ impl MockDhcpServer {
         msg.encode(&mut e)?;
 
         let (dst_ip, port) = if msg.giaddr().is_unspecified() {
-            (msg.yiaddr(), DHCP_CLIENT_PORT) // renewal case, which is direct from client
+            (msg.yiaddr(), DHCP_CLIENT_PORT) // not actually hittable with current QCore implementation
         } else {
-            (msg.giaddr(), DHCP_SERVER_PORT) // initial discovery case, where QCore acts as relay
+            (msg.giaddr(), DHCP_SERVER_PORT) // case where QCore is acting as a relay
         };
 
-        //println!("Sending to {} {}", dst_ip, port);
         self.socket
             .send_to(&buf, SocketAddrV4::new(dst_ip, port))
             .await?;

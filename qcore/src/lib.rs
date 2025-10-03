@@ -22,12 +22,10 @@ pub use userplane::get_if_index;
 
 pub fn ue_dhcp_identifier(imsi: &str) -> Result<Vec<u8>> {
     // When getting a DHCP address, we need to provide a client identifier that is unique on the
-    // subnet (RFC2131, section 2).
-    // We want this to be transferable to another QCore instance in the case of handover/failover.
-    // An IP UE does not have a MAC address.
-    // Finally, we want to support static IPs via a DHCP reservation (rather than via a special QCore
-    // per UE configuraiton.)  This means we have to use a deterministic ID that can be configured
-    // ahead of time in DHCP reservation.
+    // subnet (RFC2131, section 2).  An IP UE does not have a MAC address.
+    // We want the client identifier to be transferable to another QCore instance in the case of handover/failover.
+    // Finally, we want to support static IPs via a DHCP reservation.  This means we have to use a deterministic and
+    // easily derivable ID that can be configured ahead of time in the DHCP reservation.
     //
     // Some valid options might be:
     // -  IMSI

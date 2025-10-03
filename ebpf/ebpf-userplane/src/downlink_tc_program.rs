@@ -57,17 +57,6 @@ fn try_tc_downlink_n3(ctx: TcContext) -> Result<i32, i32> {
         let remote_ip = (*entry).remote_gtp_addr;
         tc_ensure!(remote_ip != 0, DlDropUnknownUe);
 
-        // If this is a DHCP packet to a UE, let it continue to the local IP stack where it can be
-        // received by one of QCore's freebind sockets.
-        // if is_long_enough(&ctx, EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN) {
-        //     let udphdr: *const UdpHdr = ptr_at(&ctx, EthHdr::LEN + Ipv4Hdr::LEN);
-        //     if (*udphdr).dest() == 68 {
-        //         add(DlSeqNumContention, 100);
-
-        //         return Ok(TC_ACT_OK);
-        //     }
-        // }
-
         // Pass the packet up to the controller application if requested to do so.
         if remote_ip == 0xffffffff {
             return Ok(redirect_to_controller());

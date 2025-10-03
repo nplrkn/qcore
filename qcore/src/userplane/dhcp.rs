@@ -17,18 +17,16 @@ use std::{
 };
 
 // The DhcpClient appears on the network as a DHCP relay, and need to be configured
-// with an IP address and MAC address of the external interface.
+// with the local IP address and MAC address of the external interface.
 //
 // It binds a UDP socket listening on port 67, the DHCP server port (because it is a relay, not a client).
 //
 // The reason for QCore to act a a DHCP relay is to make use of the existing IP address.
 // If QCore was a DHCP client it would have to send packets from 0.0.0.0, which is not possible
-// using a UdpSocket.  (RFC2131: " DHCP messages broadcast by a client prior to that client obtaining
+// using a UdpSocket.  (RFC2131: "DHCP messages broadcast by a client prior to that client obtaining
 // its IP address must have the source address field in the IP header set to 0.")
 //
 // Addresses obtained with this client should be explicitly released.
-//
-// It can cope with multiple parallel transactions from different clients.
 #[derive(Clone)]
 pub struct DhcpClient {
     socket: UdpSocket,
@@ -98,8 +96,12 @@ impl DhcpClient {
             .await?;
         let address = ack.yiaddr();
 
-        let lease = self.keep_lease(ack, client_identifier, logger).await;
-        let existing_lease = self.leases.lock().await.insert(address, lease);
+        let lease_cancel_handle = self.keep_lease(ack, client_identifier, logger).await;
+        let existing_lease = self
+            .leases
+            .lock()
+            .await
+            .insert(address, lease_cancel_handle);
         if existing_lease.is_some() {
             warn!(logger, "Lease already existed for {}", address)
         }
@@ -110,7 +112,7 @@ impl DhcpClient {
     pub async fn cancel_lease(&self, addr: &Ipv4Addr) -> Result<()> {
         match self.leases.lock().await.remove(addr) {
             None => bail!("Lease not found"),
-            Some(sender) => sender.send(()).await?,
+            Some(lease_cancel_handle) => lease_cancel_handle.send(()).await?,
         }
         Ok(())
     }
@@ -138,6 +140,7 @@ impl DhcpClient {
             .await
     }
 
+    // Send a message and get back a reply with the same Xid.
     async fn send_req(&self, msg: Message, ip: &Ipv4Addr) -> Result<Message> {
         let xid = msg.xid();
         let (sender, receiver) = async_std::channel::bounded::<Message>(1);
@@ -164,7 +167,7 @@ impl DhcpClient {
         let mut e = Encoder::new(&mut buf);
         msg.encode(&mut e)?;
 
-        let _ = self
+        let _bytes_sent = self
             .socket
             .send_to(&buf, SocketAddrV4::new(*ip, DHCP_SERVER_PORT))
             .await;
@@ -172,8 +175,8 @@ impl DhcpClient {
         Ok(())
     }
 
-    // This long-running task monitors the DhcpClient's socket and sends transaction responses down the
-    // appropriate channel back to whichever task send the request.
+    // This long-running task reads from the DhcpClient's socket and sends transaction responses down the
+    // appropriate channel back to whichever task sent the request.
     async fn dhcp_receive_task(self, logger: Logger) -> Result<()> {
         let mut buf = vec![0; 1024];
         loop {
@@ -323,9 +326,12 @@ impl DhcpClient {
 
                     // TODO see RFC2131 4.4.5 which has some quite complex behavior around retrying + rebinding
                     // if the ACK does not arrive.
+
+                    // TODO cope with the case where the server does not renew.  This ought to provoke network initiated
+                    // session teardown (TS29.561).
                 }
                 Ok(_) => {
-                    // Cancel future completed - exit task
+                    // Cancellation received
                     debug!(logger, "Exit DHCP lease task for {}", ack.yiaddr());
 
                     // It is debatable whether we should relinquish the lease here. From RFC2131:

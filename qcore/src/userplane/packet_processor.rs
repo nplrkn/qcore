@@ -41,8 +41,7 @@ type EthIndexLookupTable = Array<MapData, u16>;
 type InterfaceIndices = Vec<u32>;
 
 impl PacketProcessor {
-    // TODO - doesn't need to be async once temp code removed
-    pub async fn install_ebpf(
+    pub fn install_ebpf(
         ngap_mode: bool,
         local_ip: IpAddr,
         ran_if_name: &str,
@@ -143,18 +142,6 @@ impl PacketProcessor {
             xdp_downlink_eth_program.attach_to_if_index(*if_index, XdpFlags::default())?;
         }
 
-        // // temp code
-        // super::macvlan::create_macvlan().await.unwrap(); // creates "macvlan100"
-        // let macvlan_index = get_if_index("macvlan100").unwrap();
-        // println!("macvlan100 index is {}", macvlan_index);
-        // let xdp_downlink_macvlan_program: &mut Xdp = ebpf
-        //     .program_mut("xdp_downlink_macvlan")
-        //     .unwrap()
-        //     .try_into()?;
-        // xdp_downlink_macvlan_program.load()?;
-        // xdp_downlink_macvlan_program.attach_to_if_index(macvlan_index, XdpFlags::default())?;
-        // println!("Done macvlan xdp attach");
-
         info!(
             logger,
             "Found {} ethernet devices to use for Ethernet PDU sessions",
@@ -213,18 +200,18 @@ impl PacketProcessor {
         ue_dhcp_identifier: Vec<u8>,
         logger: &Logger,
     ) -> Result<UserplaneSession> {
+        // Allocate a UE index
         let idx = self.index_pool.lock().await.new_id();
         ensure!(idx < MAX_UES, "No more slots available");
         let idx = idx as u8;
 
-        // Randomize the top part of the TEID.  It is meant to be unpredictable.
+        // Create a TEID - randomized, since it is meant to be unpredictable.
         let mut teid = (idx as u32).to_be_bytes();
         rand::rng().fill_bytes(&mut teid[0..3]);
         teid[3] = idx as u8;
 
         let payload = if ipv4 {
             // Get an IP address for the UE
-            // TODO - don't use the TEID as the client identifier - IMSI + session ID?
             let ue_ip_addr = self
                 .ue_ip_allocator
                 .allocate(idx, ue_dhcp_identifier, logger)
@@ -254,10 +241,9 @@ impl PacketProcessor {
         session: &UserplaneSession,
         logger: &Logger,
     ) -> Result<()> {
-        let remote_tunnel_info = session
-            .remote_tunnel_info
-            .clone()
-            .ok_or(anyhow!("Missing tunnel info"))?;
+        let Some(remote_tunnel_info) = session.remote_tunnel_info.clone() else {
+            bail!("Missing tunnel info");
+        };
 
         info!(
             logger,
@@ -269,14 +255,6 @@ impl PacketProcessor {
             session.five_qi,
         );
 
-        let gtp_remote_ip: IpAddr = remote_tunnel_info.transport_layer_address.try_into()?;
-        let IpAddr::V4(gtp_remote_ipv4) = gtp_remote_ip else {
-            bail!("IPv6 not implemented for GTP");
-        };
-
-        // We use the least significant byte of the TEID as the uplink forwarding table index.
-        let uplink_forwarding_idx = session.uplink_gtp_teid.0[3];
-
         let pdcp_header_length = match session.pdcp_sn_length {
             PdcpSequenceNumberLength::TwelveBits => 2,
             PdcpSequenceNumberLength::EighteenBits => 3,
@@ -287,6 +265,11 @@ impl PacketProcessor {
             _ => 0,
         };
 
+        // Program the uplink pipeline.
+
+        // We use the least significant byte of the TEID as the uplink forwarding table index.
+        let uplink_forwarding_idx = session.uplink_gtp_teid.0[3];
+
         let v = UlForwardingEntry {
             teid_top_bytes: session.uplink_gtp_teid.0[0..3].try_into().unwrap(),
             pdcp_header_length,
@@ -295,12 +278,7 @@ impl PacketProcessor {
         let mut array = self.uplink_forwarding_table.lock().await;
         array.set(uplink_forwarding_idx as u32, v, 0)?;
 
-        let remote_gtp_addr = u32::from_be_bytes(gtp_remote_ipv4.octets());
-        // TODO: broaden this to check for more invalid addresses.
-        ensure!(
-            remote_gtp_addr != 0xffffffff,
-            "All 1s address not allowed for remote GTP address"
-        );
+        // Program the downlink pipeline.
 
         // For IP, we use the low byte of the IP address as the index.  Otherwise we will indirect
         // via the ethernet if index lookup and we can just reuse the uplink idx.
@@ -310,6 +288,17 @@ impl PacketProcessor {
             } else {
                 uplink_forwarding_idx
             };
+
+        let gtp_remote_ip: IpAddr = remote_tunnel_info.transport_layer_address.try_into()?;
+        let IpAddr::V4(gtp_remote_ipv4) = gtp_remote_ip else {
+            bail!("IPv6 not implemented for GTP");
+        };
+        let remote_gtp_addr = u32::from_be_bytes(gtp_remote_ipv4.octets());
+        // TODO: broaden this to check for more invalid addresses.
+        ensure!(
+            remote_gtp_addr != 0xffffffff,
+            "All 1s address not allowed for remote GTP address"
+        );
 
         let v = DlForwardingEntry {
             next_pdcp_seq_num: 0,
@@ -339,7 +328,7 @@ impl PacketProcessor {
 
     // Deactivating the userplane session returns it to the reserved state.  It can be
     // reactivated by calling commit_userplane_session().
-    // Currently the local TEID of the session is retained across de/reactivation.
+    // Currently, the local TEID of the session is retained across de/reactivation.
     pub async fn deactivate_userplane_session(&self, session: &UserplaneSession, logger: &Logger) {
         let idx = session.uplink_gtp_teid.0[3] as u32;
 
