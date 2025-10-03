@@ -2,8 +2,6 @@
 
 ## In progress
 -  UEs on LAN
-   -  catch + fail in situation where e.g. we are in a /20 and the low byte of two UE addresses comes back as the same
-   -  client identifier
    -  self-review / todos
    -  check DHCPRELEASE in tcpdump 
    -  readme
@@ -34,7 +32,8 @@
 - DHCP gaps
   -  retries
   -  PDU session should be terminated by network on lease expiry, or lease renewal reject, or change of address on lease renewal (TS29.561)
-  -  Pass through of DNS server name (+ MTU?) from DHCP in NAS extended PCOs 
+  -  case where the subnet is not a /24 and the DHCP could allocate addresses with the same low byte
+  -  pass through of DNS server name (+ MTU?) from DHCP in NAS extended PCOs 
 - Ethernet paging
 - Sessions / IP addresses should not persist forever.  Timeout; flush on TMSI register/service request without session reactivation; flush on IMSI registration? 
 - Large SCTP messages - e.g. unfiltered UE Capability Information

@@ -1,20 +1,6 @@
 # Clustering
 ## Implementation plan
 -  Simultaneous operation of two nodes on same network without allocating clashing IP addresseses
-   -  via new feature 'on LAN UEs' 
-   -  this means /32 routes, ARP proxy and DHCP address allocation (prototyping notes below)
-   -  eBPF packet interception should be same as before
-   -  keep existing 'routed' mode - good for test scripts and possibly some users 
-      -  test this in a way that doesn't use actual external LAN.  i.e. a mock external interface with a DHCP server??
-      -  do we keep original setup-routing (for use with dhcp_mode = no?)
-      -  clarify that it will break to set this to the external subnet because QCore will create clashing addresses that Linux will ARP
-   -  DHCP
-      -  is it viable to bind 0.0.0.0:68?  will this stop Linux from renewing its lease on eth0?
-      -  get lease on session establishment
-      -  clear leases on session release
-   -  we need watchdog / systemd script that cleans up routing if QCore dies
-      -  otherwise its UE host routes will remain in routing table, meaning Linux will proxy arp them, meaning we will get duplicate addresses on LAN
-   -  write up new model
 
 -  SUPI registration on first node followed by TMSI reregistration on second node
 -  Activity on second node takes over PDU session IP from first node 

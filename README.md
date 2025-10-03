@@ -6,7 +6,7 @@ QCore is a free, ultra-compact private 5G Core, written in Rust, designed to min
 
 It is simple to use, and significantly outperforms other single-node 5G cores thanks to its unusual monolithic architecture which reduces internal processing overheads.  
 
-Using a tiny 30MB executable, it can handle 30,000 control plane messages per second on a single CPU core ([details](docs/Open5GS-comparative-load-testing.md)).  The userplane is implemented using eBPF for gigabit/s throughput.
+Using a tiny 32MB executable, it can handle 30,000 control plane messages per second on a single CPU core ([details](docs/Open5GS-comparative-load-testing.md)).  The userplane is implemented using eBPF for gigabit/s throughput.
 
 It has been tested and works well with several Android phones (Samsung, OnePlus and Oppo) but remains at an early stage of maturity.  
 
@@ -24,11 +24,13 @@ Whereas most 5G cores consist of many different services, QCore is a single Linu
 The motivation for the monolithic approach is to minimize control plane processing cost.  QCore avoids a lot of the usual network hops, context switches, database accesses and (de)serialization.  As well as performance, its minimalist design also has major benefits in the areas of ease of orchestration, security, and simplicity / speed of development. 
 
 
-## F1 mode
+## Notable features
 
-QCore supports "F1 mode", in which it takes on the role of a gNB-CU in addition to the 5G Core.  The idea is to allow an organization with an existing gNB-DU appliance to extend their solution to offer a complete private 5G in a box by running QCore on the same node.
+-  **DHCP UE address management**.  QCore sends DHCP requests on behalf of UEs.  This means each UE has an address on the LAN, without any local NAT.  DHCP address reservations can be used to give a UE a static IP.  (For cases where DHCP is not available or you don't want UEs on your LAN, QCore can also manage a /24 UE address space, with Linux NAT configured if required.)
 
-When running in F1 mode, QCore exposes the F1-C and F1-U interfaces, instead of N2 and N3.
+-  **F1 mode**.  QCore can take on the role of a gNB-CU in addition to the 5G Core.  The idea is to allow an organization with an existing gNB-DU appliance to extend their solution to offer a complete private 5G in a box by running QCore on the same node.  When running in F1 mode, QCore exposes the F1-C and F1-U interfaces, instead of N2 and N3.
+
+-  **Ethernet PDU sessions**.  You can configure QCore with a pool of Linux veths, and it will allocate a veth to any 5G UE that requests an Ethernet PDU session.
 
 
 ## Quickstart
@@ -40,7 +42,7 @@ You might also want to try the [srsRAN demo](./docs/srsRAN-testing/README.md).
 ### Run the mainline test
 
 #### Set up environment
-Before you start, install Rust and read the [section below on the routing setup](#about-the-routing-setup).
+Before you start, install Rust and read the [section below on the routing setup](#Interface-and-routing-setup).
 
 ```sh
 # Install build dependencies
@@ -69,15 +71,37 @@ Once the test has finished, hit Ctrl-C to exit tcpdump, then open `qcore.pcap` i
 
 ## Configuring and running QCore
 
+### Linux Permissions
+
+QCore installs various eBPF programs on startup and needs the relevant Linux permissions to do so.  QCore routing and ethernet setup also require elevated permissions. The easiest way to achieve this is to run it as root.
+
+
 ### sims.toml
 
 QCore reads SIM credentials from a file.  By default it uses `sims.toml` in the current working directory - see the [sample file](./sims.toml) in the root of this project.  
 
 Pass `--sim-cred-file` to read from a different file location.
 
+
+### Interface and routing setup
+
+QCore needs various Linux interfaces to be set up in advance for it to use.  
+
+The [`setup-routing`](./setup-routing) script is the reference setup.  You should review this script and may need to adapt it for your purposes.  
+
+If your LAN interface is not called `eth0`, you must specify the relevant device name, for example:
+```sh
+./setup-routing enp113s0
+```
+
+In addition to the comments in [`setup-routing`](./setup-routing), QCore interface use is documented in more depth in the [eBPF program design](./docs/designs%20-%20existing/ebpf%20programs.md).
+
+
 ### Command-line configuration
 
-The command line options `local-ip` and `ran-interface-name` govern the connection with the RAN. By default, QCore assumes the gNB / DU will connect over `eth0`.  
+The command line options `local-ip` and `ran-interface-name` govern the connection with the RAN. 
+
+By default, QCore assumes the gNB / DU will connect over `eth0`.
 
 ```sh
 # By default QCore communicates with gNB over eth0.  
@@ -91,14 +115,6 @@ qcore --mcc 001 --mnc 06 --local-ip 127.0.0.1 --ran-interface-name lo
 
 Run with the `--help` argument to see all the command-line configuration options.
 
-### Selection of external DN interface
-
-QCore itself is not aware of the interface used to reach the outside world (that is, the Data Network, in 5G terms).  It injects all UE packets into Linux routing over `qcoretun`, and Linux routing then forwards each packet.  This includes UE-to-UE packets.
-
-The `setup-routing` script sets up NAT connectivity over `eth0` by default (with an assumption that the default gateway is connected on this interface).  You can pass a different device name, for example:
-```sh
-./setup-routing enp113s0  # Set up iptables NAT for a default route via device enp113s0
-```
 
 ### Ethernet PDU session setup
 
@@ -110,7 +126,7 @@ Currently, all Ethernet devices are expected to connect to the same switch / Lin
 QCore detects these devices on startup and attaches eBPF programs to each.  When an Ethernet PDU session is set up, QCore assigns it to a spare device.  If it runs out of Ethernet devices, it rejects Ethernet PDU session creation.
 
 An Ethernet PDU session may connect to multiple different MAC addresses on the UE side.  QCore does not allocate
-MAC addresses - that is up to the UE.   To see which MAC addresses have been learned by the bridge from a given UE device / ethernet PDU session, run `bridge fdb show`.  For example
+MAC addresses.  To see which MAC addresses have been learned by the bridge from a given UE device / ethernet PDU session, run `bridge fdb show`.  For example
 ```sh
 cargo test --test ngap_ethernet_session    # Run test that sends ethernet frames through the bridge
 bridge fdb show br qcore_br0 dynamic       # See which MAC addresses have been learned by the bridge
@@ -134,23 +150,6 @@ ue_id: 3921819296
 This means that the veth with interface index 9 was assigned to the UE with IMSI 001011111111111.  `ip link show` 
 can be used to look up the interface index.
 
-### Linux Permissions
-
-QCore installs various eBPF programs on startup and needs the relevant Linux permissions to do so.  The easiest way to 
-achieve this is to run it as root.
-
-QCore routing and ethernet setup also require elevated permissions. 
-
-
-## About the routing setup
-
-The [`setup-routing`](./setup-routing) script makes several Linux routing changes with root permissions.  Please check that it is not going to interfere with your routing setup.
-
-The purpose of these changes is to 
--  Create a separate private IP subnet for 5G UEs.  The script enables forwarding to/from this subnet over the 'ue' tun interface, including NAT for packets leaving out of eth0.
--  Enable the QCore eBPF code to flexibly inject packets into Linux routing.  
-
-For more details, see [routing.md](./docs/routing.md).
 
 ## Licence
 
@@ -159,6 +158,7 @@ The majority of code in this project is copyright (C) 2025 Nic Larkin and licens
 AGPL is a copyleft licence.  If it doesn't suit your needs, please connect with me on LinkedIn and we can look into getting you a licence agreement which does not place you under copyleft obligations.
 
 The eBPF program code is licensed under the GPL.  
+
 
 ## Contributions
 

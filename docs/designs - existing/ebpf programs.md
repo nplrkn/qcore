@@ -9,12 +9,14 @@ An XDP program is installed on whatever link connects the RAN to QCore.  It look
 ### Uplink Ethernet
 In the case of Ethernet, the packet is injected into the Linux bridge via a redirect to the appropciate veth device egress.
 
+```
                 XDP program does decap and redirect  
-                |                                             -------------------
+                |                                              -------------------
                 v   /== veth_ue_1_a egress ==> veth_ue_1_b ==> |                 |
 == eth0 ingress ==> === veth_ue_2_a egress ==> veth_ue_2_b ==> |  qcore_br0      |
                     \== veth_ue_3_a egress ==> veth_ue_3_b ==> |                 |
-                                                              -------------------
+                                                               -------------------
+```
 
 If the RAN is co-located in the same host as qcore, then the ingress interface is lo rather than eth0.
 
@@ -25,11 +27,13 @@ QCore attaches to the opposite side of the veth pair to the veth that is connect
 In the case of IP, the packet is injected into Linux routing.  The only way I have 
 found to do this so far is to go via a TC program (`tc_uplink_redirect`), which redirect's to `qcoretun`'s ingress.  The XDP program sets a magic value in the packet metadata to allow TC program to quickly find the packets it needs to act on.
 
+```
             XDP program does decap and sets magic metadata value  
                 |   TC program picks up magic metadata value and redirects to qcoretun
                 v   v                             ----------------------------
 == eth0 ingress =====> | == qcoretun0 ingress ==> | Linux iptables, FIB, etc |
                                                   ----------------------------
+```
 
 If the RAN is co-located in the same host as qcore, then the ingress interface is lo rather than eth0.
 
@@ -43,11 +47,13 @@ doing UE to UE routing.
 The Linux bridge transmits a frame out of one of its port devices.  These packets are picked up by XDP program
 `xdp_downlink_n3_eth`, which encapsulates them in GTP.  Immediately afterwards, a TC program (`tc_downlink_eth_redirect`) redirects to qcoretun in order to get the GTP packet into Linux routing.  From there, it will be routed up over lo if the RAN is local, or out over an external link if the RAN is remote.
 
+```
                                                           XDP program does encap 
                                                           |  TC program redirects to qcoretun
 -----------------                                         v  v                          ----------------------------
 |  qcore_br0    |== veth_ue_1_b ==> veth_ue_1_a ingress ====>| == qcoretun0 ingress ==> | Linux iptables, FIB, etc |
 -----------------                                                                       ----------------------------
+```
 
 QCore does not currently support F1 mode for this path. 
 
@@ -55,11 +61,13 @@ QCore does not currently support F1 mode for this path.
 
 In this case, Linux routes packets to the UE IP subnet.  In the default `setup-routing` script, this subnet is via veth0.  We pick them up via a TC program attached to that link (`tc_downlink_f1u` or `tc_downlink_n3`).
 
+```
                                     TC program does encap and redirects to qcoretun
                                       |
 -----------------                     v                         ----------------------------
 | Linux routing |== veth0 ingress ===>|== qcoretun0 ingress ==> | Linux iptables, FIB, etc |
 -----------------                                               ----------------------------
+```
 
 This is a TC rather than an XDP program for historical reasons.  It may make sense to change to a pair of XDP / TC programs, like the Ethernet case.
 
