@@ -1,5 +1,6 @@
-use crate::protocols::nas::{
-    FGSM_CAUSE_INSUFFICIENT_RESOURCES, FGSM_CAUSE_UNKNOWN_PDU_SESSION_TYPE,
+use crate::{
+    protocols::nas::{FGSM_CAUSE_INSUFFICIENT_RESOURCES, FGSM_CAUSE_UNKNOWN_PDU_SESSION_TYPE},
+    ue_dhcp_identifier,
 };
 
 use super::prelude::*;
@@ -40,7 +41,11 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
             true
         };
 
-        let userplane = match self.api.allocate_userplane_session(ipv4).await {
+        let userplane = match self
+            .api
+            .allocate_userplane_session(ipv4, ue_dhcp_identifier(&self.ue.imsi)?)
+            .await
+        {
             Ok(userplane) => userplane,
             Err(e) => {
                 warn!(self.logger, "{e}");

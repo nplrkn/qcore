@@ -2,12 +2,10 @@
 
 ## In progress
 -  UEs on LAN
-   -  flip default again?
-   -  test DHCP with real phone
-   -  UE IP allocator strategy pattern
    -  catch + fail in situation where e.g. we are in a /20 and the low byte of two UE addresses comes back as the same
-   -  setup-routing 
+   -  client identifier
    -  self-review / todos
+   -  check DHCPRELEASE in tcpdump 
    -  readme
 -  Clustering
 -  Is this a better design model for test UEs?: https://docs.rs/rtnetlink/latest/rtnetlink/struct.RouteMessageBuilder.html
@@ -27,11 +25,16 @@
 
 ## Usability
 - Reduce number of mandatory command line arguments (e.g. derive IP address from interface, derive MNC/MCC from sims.toml)
+- flip use-dhcp default?
+- Ugly startup log: print out RAN node ID properly (GNB global RAN node id:GlobalGnbId(GlobalGnbId { plmn_identity: PlmnIdentity([0, 241, 96]), gnb_id: GnbId(BitVec<u8, bitvec::order::Msb0> { addr: 0x7d66a40088c0, head: 000, bits: 22, capacity: 64 } [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1]) }))
 
 ## Function gaps
 - Implement and test NAS procedure interaction table
 - Registration timeout and refresh (+ update parallelization table)
-- Proper handling of deregistration from UE, including sending of Deregistration accept (+ update parallelization table)
+- DHCP gaps
+  -  retries
+  -  PDU session should be terminated by network on lease expiry, or lease renewal reject, or change of address on lease renewal (TS29.561)
+  -  Pass through of DNS server name (+ MTU?) from DHCP in NAS extended PCOs 
 - Ethernet paging
 - Sessions / IP addresses should not persist forever.  Timeout; flush on TMSI register/service request without session reactivation; flush on IMSI registration? 
 - Large SCTP messages - e.g. unfiltered UE Capability Information
@@ -67,7 +70,7 @@
 - Session setup with existing PDU session ID should not leave up old session.  Seen with OnePlus phone which repeated 
   its session setup request (with no intervening delete) after not liking the response.
 
-## Tidying + refactoring
+## Code cleanliness + refactoring
 - switch to tokio or smol
 - commonize downlink xdp and tc, or reimplement downlink tc logic in a new xdp program
 - review Arc / clone usage

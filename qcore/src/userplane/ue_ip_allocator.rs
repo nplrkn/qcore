@@ -21,8 +21,6 @@ enum UeIpAllocationMode {
     Dhcp(Arc<DhcpClient>),
 }
 
-// TODO move to strategy pattern
-
 impl UeIpAllocator {
     pub async fn new(
         ue_network_if_index: u32,
@@ -75,7 +73,7 @@ impl UeIpAllocator {
             }
         };
 
-        // Program a host route for it (which enables Linux proxy ARP + UE packet reception by ebpf).
+        // Program a host route for it (which enables Linux proxy ARP + UE packet reception by eBPF).
         self.netlink_route_programmer
             .add_host_route(addr, logger)
             .await?;

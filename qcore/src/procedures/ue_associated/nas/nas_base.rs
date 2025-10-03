@@ -13,19 +13,12 @@ pub trait NasBase {
     async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
     async fn delete_tmsi(&self, tmsi: [u8; 4]);
 
-    async fn allocate_userplane_session(&self, ipv4: bool) -> Result<UserplaneSession>;
+    async fn allocate_userplane_session(
+        &self,
+        ipv4: bool,
+        ue_dhcp_identifier: Vec<u8>,
+    ) -> Result<UserplaneSession>;
     async fn delete_userplane_session(&self, session: &UserplaneSession);
-
-    // These must take the sessions as a mut &.  Because the NasProcedure has a borrow on them.
-    // So if the NasProcedure continues to exist, it must lend them.
-
-    // The underlying layer cannot simultaneously know about them implicitly.
-    // This models an exchange over a network API.
-
-    // What the underlying layer _can_ know about its own UE context.
-    // Conclusion - sessions get passed as parameter?
-
-    // Solve that problem, implement this trait and them come back to the take() of the Ue5GCContext.
 
     async fn ran_session_setup(&mut self, pdu_session: &mut PduSession, nas: Vec<u8>)
     -> Result<()>;

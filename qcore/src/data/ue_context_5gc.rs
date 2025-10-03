@@ -4,6 +4,7 @@ use nas::NasContext;
 
 #[derive(Debug, Default)]
 pub struct UeContext5GC {
+    pub imsi: String,
     pub tmsi: Option<Tmsi>,
 
     // 5G Core UE context data, indexed by TMSI

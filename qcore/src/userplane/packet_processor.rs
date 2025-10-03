@@ -210,6 +210,7 @@ impl PacketProcessor {
         five_qi: u8,
         pdcp_sn_length: PdcpSequenceNumberLength,
         ipv4: bool,
+        ue_dhcp_identifier: Vec<u8>,
         logger: &Logger,
     ) -> Result<UserplaneSession> {
         let idx = self.index_pool.lock().await.new_id();
@@ -226,7 +227,7 @@ impl PacketProcessor {
             // TODO - don't use the TEID as the client identifier - IMSI + session ID?
             let ue_ip_addr = self
                 .ue_ip_allocator
-                .allocate(idx, teid.to_vec(), logger)
+                .allocate(idx, ue_dhcp_identifier, logger)
                 .await?;
 
             Payload::Ipv4(Ipv4SessionParams { ue_ip_addr })

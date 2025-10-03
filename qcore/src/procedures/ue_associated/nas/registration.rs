@@ -186,6 +186,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
     ) -> Result<NasMessageContainer, NasProcedureError> {
         info!(self.logger, "Registering imsi-{imsi}");
         self.authentication(imsi).await?;
+        self.ue.imsi = imsi.to_string();
         self.activate_nas_security(ue_security_capability)
             .await
             .map_err(|e| NasProcedureError::Abort(e.context("activating NAS security")))

@@ -1,14 +1,15 @@
 mod dhcp;
 mod downlink_buffer;
-mod freebind_socket;
 mod netlink;
 mod packet_processor;
 mod stats;
 mod ue_ip_allocator;
 
+//mod aya_log;
+//mod freebind_socket;
+
 pub use downlink_buffer::{DownlinkBufferController, PagingApi};
 pub use packet_processor::PacketProcessor;
-//mod aya_log;
 
 use anyhow::{Result, bail};
 use libc::if_nametoindex;

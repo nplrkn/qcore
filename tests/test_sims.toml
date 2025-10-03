@@ -5,14 +5,14 @@
 #
 # The IMSI is a string of 13 digits that identifies a mobile subscriber.
 # The KI + OPC are the secret credentials that are burnt into the SIM card.
-[imsi-001011111111111]
+[imsi-001011234500001]
 ki = "5122250214c33e723a5dd523fc145fc0"
 opc = "981d464c7c52eb6e5036234984ad0bcf"
 
-[imsi-001012222222222]
+[imsi-001011234500002]
 ki = "1111250214c33e723a5dd523fc145fc0"
 opc = "1111464c7c52eb6e5036234984ad0bcf"
 
-[imsi-001013333333333]
+[imsi-001011234500003]
 ki = "1111250214c33e723a5dd523fc145fc0"
 opc = "1111464c7c52eb6e5036234984ad0bcf"

@@ -51,6 +51,7 @@ pub trait ProcedureBase: Send + Sync + Clone + 'static {
     async fn allocate_userplane_session(
         &self,
         ipv4: bool,
+        ue_dhcp_identifier: Vec<u8>,
         logger: &Logger,
     ) -> Result<UserplaneSession>;
     async fn commit_userplane_session(

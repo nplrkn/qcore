@@ -424,6 +424,7 @@ impl ProcedureBase for QCore {
     async fn allocate_userplane_session(
         &self,
         ipv4: bool,
+        ue_dhcp_identifier: Vec<u8>,
         logger: &Logger,
     ) -> Result<UserplaneSession> {
         self.packet_processor
@@ -431,6 +432,7 @@ impl ProcedureBase for QCore {
                 self.config().five_qi,
                 self.config().pdcp_sn_length,
                 ipv4,
+                ue_dhcp_identifier,
                 logger,
             )
             .await

@@ -1,3 +1,11 @@
+// This file is not currently used but kept around as a reference just in case.
+// It shows how to get a UDP IP_FREEBIND socket.  This might be an option for
+// intercepting packets sent to UEs (e.g. DHCP).
+//
+// Initial testing with the eBPF downlink program set to return ACT_TC_OK for the packets
+// of interest showed the kernel dropping these packets because they were labelled with
+// OTHERHOST.  To fix this it might work to use bpf_skb_change_type().
+
 use anyhow::{Result, anyhow};
 use libc::{AF_INET, IP_FREEBIND, IPPROTO_UDP, SOCK_DGRAM, SOL_IP, bind, setsockopt, socket};
 use os_socketaddr::OsSocketAddr;
@@ -14,7 +22,7 @@ macro_rules! try_io {
         let rc = unsafe { $x };
         if rc < 0 {
             Err(anyhow!(format!(
-                "{} during SCTP {}",
+                "{} during {}",
                 Error::last_os_error(),
                 $operation_name
             )))

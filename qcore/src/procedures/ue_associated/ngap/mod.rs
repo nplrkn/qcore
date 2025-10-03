@@ -114,7 +114,7 @@ impl<'a, B: RanUeBase> NasBase for &mut NgapUeProcedure<'a, B> {
             async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
             #[call(unexpected_pdu)]
             fn unexpected_nas_pdu(&mut self, pdu: DecodedNas, expected: &str) -> Result<()>;
-            async fn allocate_userplane_session(&self, ipv4: bool, [&self.logger]) -> Result<UserplaneSession>;
+            async fn allocate_userplane_session(&self, ipv4: bool, ue_dhcp_identifier: Vec<u8>, [&self.logger]) -> Result<UserplaneSession>;
             async fn delete_userplane_session(
                 &self,
                 session: &UserplaneSession,
