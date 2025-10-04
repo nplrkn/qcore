@@ -67,7 +67,7 @@ cd && sudo tcpdump -w srsran_test.pcap -i any sctp or port 2152 or host 10.255.0
 
 ```sh
 cd ~/qcore
-RUST_LOG=debug cargo run -- --f1-mode --mcc 001 --mnc 01 --local-ip 127.0.0.1  --ran-interface-name lo --sim-cred-file docs/srsRAN-testing/srs-sim.toml
+RUST_LOG=debug cargo run -- --f1-mode --local-ip 127.0.0.1  --no-dhcp --sim-cred-file docs/srsRAN-testing/srs-sim.toml
 ```
 
 #### Terminal 3 - DU

@@ -19,6 +19,7 @@ pub use data::{
 pub use qcore::{ProgramHandle, QCore};
 pub use subscriber_db::SubscriberDb;
 pub use userplane::get_if_index;
+pub use userplane::netlink::Netlink;
 
 pub fn ue_dhcp_identifier(imsi: &str) -> Result<Vec<u8>> {
     // When getting a DHCP address, we need to provide a client identifier that is unique on the

@@ -11,7 +11,7 @@ use qcore::{
 };
 use signal_hook::consts::signal::*;
 use signal_hook_async_std::Signals;
-use slog::{Drain, Logger, o, warn};
+use slog::{Drain, Logger, info, o, warn};
 use std::net::{IpAddr, Ipv4Addr};
 
 #[derive(Parser, Debug)]
@@ -25,18 +25,22 @@ struct Args {
 
     /// Mobile Country Code part of the PLMN ID (Public Land Mobile Network ID).  
     /// A string of three decimal digits.
+    /// If this parameter is not supplied, then QCore will derive MCC from the lowest
+    /// numbered IMSI in the SIM file.
     #[arg(long)]
-    mcc: String,
+    mcc: Option<String>,
 
     /// Mobile Network Code part of the PLMN ID (Public Land Mobile Network ID).  
     /// A string of two or three decimal digits.
+    /// If this parameter is not supplied, then QCore will derive a 2-digit MNC from the lowest
+    /// numbered IMSI in the SIM file.
     #[arg(long)]
-    mnc: String,
+    mnc: Option<String>,
 
     /// Name of the Linux Ethernet device on which uplink packets from UEs will arrive via the DU or gNB.  
-    /// If you are running the gNB/DU locally, this should be set to "lo".
-    #[arg(long, default_value = "eth0")]
-    ran_interface_name: String,
+    /// If not set, QCore will look up this link based on the value of local-ip.
+    #[arg(long)]
+    ran_interface_name: Option<String>,
 
     /// Name of the Linux Ethernet device on which downlink packets to UEs will arrive.  
     #[arg(long, default_value = "veth1")]
@@ -46,18 +50,20 @@ struct Args {
     #[arg(long, default_value = "qcoretun")]
     tun_interface_name: String,
 
-    /// Whether to use DHCP to obtain UE IP addresses.
+    /// Whether to disable DHCP.  By default, DHCP is enabled over the --lan-interface-name.
+    /// When disabled, QCore will allocate UE addresses from the the --ue-subnet.
     #[arg(long, default_value_t = false)]
-    use_dhcp: bool,
+    no_dhcp: bool,
 
-    // TODO - use same model for RAN interface
-    /// Name of the Linux Ethernet device that connects to the LAN on which UEs should appear.  This is
-    /// only used if use-dhcp is true.  If unspecified, this will be set to whatever interface is index 2
-    /// in `ip link show` (often eth0).
+    /// Name of the Linux Ethernet device that connects to the LAN on which UEs should appear.  Only
+    /// relevant if DHCP is enabled (that is, --no-dhcp is not specified).  If unspecified, this will
+    /// be set to whatever interface is index 2 in `ip link show` (often eth0).
+    ///
+    /// Linux Proxy ARP must be enabled on this interface (see the `setup-routing` script).
     #[arg(long)]
     lan_interface_name: Option<String>,
 
-    /// UE subnet.  Only relevant if use-dhcp is false.  This is the network address of a /24 IPv4
+    /// UE subnet.  Only relevant if --no-dhcp is specified.  This is the network address of a /24 IPv4
     /// subnet in dotted demical notation.  The final byte must be 0.  UEs are allocated host numbers 2-254.
     #[arg(long, default_value_t = Ipv4Addr::new(10,255,0,0))]
     ue_subnet: Ipv4Addr,
@@ -93,18 +99,32 @@ struct Args {
     userplane_stats: bool,
 }
 
+const DEFAULT_MCC_MNC: &str = "00101";
+
 #[async_std::main]
 async fn main() -> Result<()> {
     exit_on_panic();
     let logger = init_logging();
 
     let args = Args::parse();
-    let (plmn, serving_network_name) = convert_mcc_mnc(&args.mcc, &args.mnc).unwrap();
-    check_local_ip(&args.local_ip)?;
 
-    let sub_db = SubscriberDb::new_from_sim_file(&args.sim_cred_file, &logger)?;
+    let (sub_db, first_imsi) = SubscriberDb::new_from_sim_file(&args.sim_cred_file, &logger)?;
 
-    let ip_allocation_method = if args.use_dhcp {
+    let (plmn, serving_network_name) = pick_mcc_mnc(
+        args.mcc.as_deref(),
+        args.mnc.as_deref(),
+        first_imsi.as_deref(),
+        &logger,
+    )
+    .unwrap();
+
+    let local_ip = check_local_ip(args.local_ip)?;
+    info!(logger, "Local IP            : {local_ip}");
+    let ran_interface_name =
+        pick_ran_interface(&local_ip, args.ran_interface_name, &logger).await?;
+
+    let use_dhcp = !args.no_dhcp;
+    let ip_allocation_method = if use_dhcp {
         let lan_if_index = if let Some(lan_interface_name) = args.lan_interface_name {
             qcore::get_if_index(&lan_interface_name)?
         } else {
@@ -119,14 +139,14 @@ async fn main() -> Result<()> {
     };
     let qc = QCore::start(
         Config {
-            ip_addr: args.local_ip,
+            ip_addr: IpAddr::V4(local_ip),
             plmn: PlmnIdentity(plmn),
             amf_ids: AmfIds([0x01, 0x00, 0x80]),
             name: Some("QCore".to_string()),
             serving_network_name,
             skip_ue_auts_check: false,
             sst: args.sst,
-            ran_interface_name: args.ran_interface_name,
+            ran_interface_name,
             n6_interface_name: args.n6_interface_name,
             tun_interface_name: args.tun_interface_name,
             pdcp_sn_length: if args.pdcp_12bit_sn {
@@ -145,9 +165,13 @@ async fn main() -> Result<()> {
     )
     .await?;
 
-    if args.use_dhcp {
+    if use_dhcp {
         if let Err(e) = (*qc).test_dhcp().await {
-            warn!(logger, "DHCP self test failed - {:#}", e);
+            warn!(
+                logger,
+                "DHCP self test failed.  Paas --no-dhcp to switch to QCore-managed UE IP addresses"
+            );
+            warn!(logger, "Error occurred {:#}", e);
             bail!("Self test failure");
         }
     }
@@ -184,12 +208,75 @@ fn check_ue_subnet(ue_subnet: &Ipv4Addr) -> Result<()> {
     Ok(())
 }
 
-fn check_local_ip(ip: &IpAddr) -> Result<()> {
+fn check_local_ip(ip: IpAddr) -> Result<Ipv4Addr> {
     ensure!(
         !ip.is_unspecified(),
         "Unspecific IP address 0.0.0.0 not allowed for local IP - this must be an address that the DU can send to"
     );
-    Ok(())
+    let IpAddr::V4(ip) = ip else {
+        bail!("Local IP must be IPv4")
+    };
+    Ok(ip)
+}
+
+async fn pick_ran_interface(
+    local_ip: &Ipv4Addr,
+    ran_interface_name_arg: Option<String>,
+    logger: &Logger,
+) -> Result<String> {
+    let (name, source) = match ran_interface_name_arg {
+        Some(name) => (name, "from command line"),
+        None => {
+            if local_ip.is_loopback() {
+                ("lo".to_string(), "local IP is loopback")
+            } else {
+                let netlink = qcore::Netlink::new(0)?;
+                match netlink.get_if_name_from_ipv4(local_ip).await {
+                    Some(name) => (name, "from local IP"),
+                    None => {
+                        warn!(
+                            logger,
+                            "Failed to look up interface name from local IP {}", local_ip
+                        );
+                        bail!("RAN inteface name could not be identified")
+                    }
+                }
+            }
+        }
+    };
+    info!(logger, "Interface to RAN    : {name} ({source})");
+    Ok(name)
+}
+
+fn pick_mcc_mnc(
+    mcc_arg: Option<&str>,
+    mnc_arg: Option<&str>,
+    first_imsi: Option<&str>,
+    logger: &Logger,
+) -> Result<([u8; 3], String)> {
+    let imsi = first_imsi.unwrap_or(DEFAULT_MCC_MNC);
+    let mcc = mcc_arg.unwrap_or(&imsi[0..3]);
+    let mnc = mnc_arg.unwrap_or(&imsi[3..5]);
+
+    let source = |x: Option<&str>| match (x.is_some(), first_imsi.is_some()) {
+        (false, true) => "from SIM file",
+        (false, false) => "defaulted",
+        (true, _) => "from command line",
+    };
+    info!(
+        logger,
+        "MCC                 : {} ({})",
+        mcc,
+        source(mcc_arg)
+    );
+    info!(
+        logger,
+        "MNC                 : {} ({})",
+        mnc,
+        source(mnc_arg)
+    );
+
+    convert_mcc_mnc(mcc, mnc)
 }
 
 fn convert_mcc_mnc(mcc: &str, mnc: &str) -> Result<([u8; 3], String)> {

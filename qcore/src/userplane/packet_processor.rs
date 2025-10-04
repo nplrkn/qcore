@@ -47,7 +47,7 @@ impl PacketProcessor {
         ran_if_name: &str,
         n6_if_name: &str,
         tun_if_name: &str,
-        logger: &Logger,
+        _logger: &Logger,
     ) -> Result<(Ebpf, InterfaceIndices)> {
         let gtpu_local_ipv4 = match local_ip {
             IpAddr::V4(addr) => addr.octets(),
@@ -142,12 +142,6 @@ impl PacketProcessor {
             xdp_downlink_eth_program.attach_to_if_index(*if_index, XdpFlags::default())?;
         }
 
-        info!(
-            logger,
-            "Found {} ethernet devices to use for Ethernet PDU sessions",
-            ethernet_session_if_indices.len()
-        );
-
         Ok((ebpf, ethernet_session_if_indices))
     }
 
@@ -179,6 +173,8 @@ impl PacketProcessor {
         let ue_network_if_index = get_if_index("veth0")?;
         let ue_ip_allocator =
             UeIpAllocator::new(ue_network_if_index, ue_ip_allocation_config, logger).await?;
+
+        info!(logger, "Ethernet PDU devices: {}", if_indices.len());
 
         Ok(PacketProcessor {
             index_pool,

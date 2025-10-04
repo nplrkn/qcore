@@ -31,15 +31,14 @@ impl UeIpAllocator {
             UeIpAllocationConfig::RoutedUeSubnet(subnet) => {
                 info!(
                     logger,
-                    "UE address allocation model: /24 addresses on {}", subnet
+                    "IP allocation model : QCore-managed on {}/24", subnet
                 );
-
                 UeIpAllocationMode::RoutedUeSubnet(subnet)
             }
             UeIpAllocationConfig::Dhcp(if_index, server) => {
                 info!(
                     logger,
-                    "UE address allocation model: DHCP on LAN connected over if index {}", if_index
+                    "IP allocation model : DHCP on LAN over if index {}", if_index
                 );
                 let (ip, mac) = netlink.get_link_addr_info(if_index).await?;
                 let dhcp_client = DhcpClient::new(mac, ip, server, logger).await?;

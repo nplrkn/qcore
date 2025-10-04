@@ -1,8 +1,6 @@
 # Backlog
 
 ## In progress
--  UEs on LAN
-   -  self-review / todos
 -  Clustering
 -  Is this a better design model for test UEs?: https://docs.rs/rtnetlink/latest/rtnetlink/struct.RouteMessageBuilder.html
 
@@ -20,8 +18,6 @@
 - Reduce memcpy?
 
 ## Usability
-- Reduce number of mandatory command line arguments (e.g. derive IP address from interface, derive MNC/MCC from sims.toml)
-- flip use-dhcp default?
 
 ## Function gaps
 - Implement and test NAS procedure interaction table

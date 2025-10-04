@@ -40,7 +40,7 @@ impl<T> TestFrameworkBuilder<T> {
         exit_on_panic();
         let qc_ip = "127.0.0.1";
         let dn = DataNetwork::new(&self.logger).await?;
-        let subs = SubscriberDb::new_from_sim_file("test_sims.toml", &self.logger)?;
+        let (subs, _) = SubscriberDb::new_from_sim_file("test_sims.toml", &self.logger)?;
         let mut config = qcore_default_test_config(qc_ip)?;
         if let Some(if_name) = &self.use_dhcp {
             let if_index = get_if_index(if_name)?;

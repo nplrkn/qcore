@@ -29,6 +29,61 @@ impl Netlink {
         })
     }
 
+    pub async fn get_if_name_from_ipv4(&self, addr: &Ipv4Addr) -> Option<String> {
+        let mut interfaces = self
+            .netlink_handle
+            .link()
+            .get()
+            .set_filter_mask(AddressFamily::Inet, vec![])
+            .execute();
+
+        while let Some(Ok(interface)) = interfaces.next().await {
+            if let Ok(ipv4) = self.first_ipv4_address_of(interface.header.index).await {
+                if ipv4 == *addr {
+                    for attr in interface.attributes {
+                        if let LinkAttribute::IfName(name) = attr {
+                            return Some(name);
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        None
+    }
+
+    async fn first_ipv4_address_of(&self, if_index: u32) -> Result<Ipv4Addr> {
+        let mut address_stream = self
+            .netlink_handle
+            .address()
+            .get()
+            .set_link_index_filter(if_index)
+            .execute();
+
+        let mut ipv4 = None;
+        while let Some(x) = address_stream.next().await {
+            match x {
+                Ok(AddressMessage {
+                    header, attributes, ..
+                }) => {
+                    if header.family != AddressFamily::Inet {
+                        continue;
+                    }
+                    for attr in attributes.iter() {
+                        if let AddressAttribute::Address(IpAddr::V4(addr)) = attr {
+                            ipv4 = Some(*addr);
+                        }
+                    }
+                }
+                Err(e) => bail!("Netlink error {e} getting addresses for if index {if_index}"),
+            }
+        }
+        let Some(ipv4) = ipv4 else {
+            bail!("Couldn't find IPv4 address on interface index {}", if_index);
+        };
+        Ok(ipv4)
+    }
+
     pub async fn get_link_addr_info(&self, if_index: u32) -> Result<(Ipv4Addr, [u8; 6])> {
         let Some(link_info) = self
             .netlink_handle
@@ -59,34 +114,7 @@ impl Netlink {
             bail!("Interface hardware address isn't 6 bytes");
         };
 
-        let mut address_stream = self
-            .netlink_handle
-            .address()
-            .get()
-            .set_link_index_filter(if_index)
-            .execute();
-
-        let mut ipv4 = None;
-        while let Some(x) = address_stream.next().await {
-            match x {
-                Ok(AddressMessage {
-                    header, attributes, ..
-                }) => {
-                    if header.family != AddressFamily::Inet {
-                        continue;
-                    }
-                    for attr in attributes.iter() {
-                        if let AddressAttribute::Address(IpAddr::V4(addr)) = attr {
-                            ipv4 = Some(*addr);
-                        }
-                    }
-                }
-                Err(e) => bail!("Netlink error {e} getting addresses for if index {if_index}"),
-            }
-        }
-        let Some(ipv4) = ipv4 else {
-            bail!("Couldn't find IPv4 address on interface index {}", if_index);
-        };
+        let ipv4 = self.first_ipv4_address_of(if_index).await?;
 
         Ok((ipv4, mac))
     }

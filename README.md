@@ -99,21 +99,25 @@ In addition to the comments in [`setup-routing`](./setup-routing), QCore interfa
 
 ### Command-line configuration
 
-The command line options `local-ip` and `ran-interface-name` govern the connection with the RAN. 
+If you run QCore without any arguments, it will read the SIM file from the current directory, derive its MCC / MNC 
+from the SIM file, communicate with the RAN over eth0, and perform DHCP UE address allocation over eth0. 
 
-By default, QCore assumes the gNB / DU will connect over `eth0`.
+Run with `--help` to see the full list of command line options.
 
+Some common scenarios for needing to specify command line options are as follows:
+
+-  If you want QCore to talk to the RAN using a loopback address, pass `local-ip` and `ran-interface-name`. 
 ```sh
-# By default QCore communicates with gNB over eth0.  
-# In this case the gNB AMF address config should be set to the IP address of eth0. 
-qcore --mcc 001 --mnc 06   
-
 # For the case where the gNB is running in the same machine and network namespace as QCore.
 # In this case, the gNB AMF address config should be set to 127.0.0.1.
-qcore --mcc 001 --mnc 06 --local-ip 127.0.0.1 --ran-interface-name lo
+qcore --local-ip 127.0.0.1 --ran-interface-name lo
 ```
 
-Run with the `--help` argument to see all the command-line configuration options.
+-  To disable DHCP, pass `--no-dhcp` and potentially `--ue-subnet`. 
+
+-  To enable userplane stat logging, pass `--userplane-stats`.
+
+-  To add high volume debug logging, set environment variable `RUST_LOG=debug`.
 
 
 ### Ethernet PDU session setup

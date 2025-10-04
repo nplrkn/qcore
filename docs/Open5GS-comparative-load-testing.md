@@ -84,7 +84,7 @@ sudo systemctl stop open5gs-amfd
 
 # (Separate terminal) Run QCore
 cd qcore
-taskset --cpu-list 7 sudo ./target/release/qcore --mcc 001 --mnc 01 --local-ip 127.0.0.1 --ran-interface-name lo --sim-cred-file load_test_sims.toml > qcore.log 2>&1
+taskset --cpu-list 7 sudo ./target/release/qcore --local-ip 127.0.0.1 --ran-interface-name lo --sim-cred-file load_test_sims.toml > qcore.log 2>&1
 
 # Run the load test against QCore
 RUST_LOG=warn ./target/release/load-test

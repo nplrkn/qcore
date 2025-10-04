@@ -32,7 +32,7 @@ pub struct Config {
     // AMF IDs (AMF region / AMF set / AMF pointer)
     pub amf_ids: AmfIds,
 
-    // Name of the F1U ethernet device
+    // Name of the ethernet device over which GTP packets from the RAN will arrive
     pub ran_interface_name: String,
 
     // Name of the N6 ethernet device

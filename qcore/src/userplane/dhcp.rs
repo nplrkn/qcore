@@ -54,7 +54,7 @@ impl DhcpClient {
     ) -> Result<Self> {
         info!(
             logger,
-            "Bind DHCP relay socket to {}:{}", local_ipv4, DHCP_SERVER_PORT
+            "My DHCP relay port  : {}:{}", local_ipv4, DHCP_SERVER_PORT
         );
         let socket = UdpSocket::bind(SocketAddrV4::new(local_ipv4, DHCP_SERVER_PORT)).await?;
         socket.set_broadcast(true)?;
