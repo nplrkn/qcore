@@ -3,10 +3,12 @@
 ## In progress
 -  UEs on LAN
    -  self-review / todos
-   -  check DHCPRELEASE in tcpdump 
-   -  readme
 -  Clustering
 -  Is this a better design model for test UEs?: https://docs.rs/rtnetlink/latest/rtnetlink/struct.RouteMessageBuilder.html
+
+## Persistence
+- Paging continuity
+- SQN
 
 ## Bugs / tech debt
 - "slog-async: logger dropped messages due to channel overflow" - for example, when hitting Ctrl-C at end of PacketRusher test - check out tracing-appender
@@ -17,14 +19,9 @@
 - push to 1000 UEs
 - Reduce memcpy?
 
-## Persistence
-- Paging continuity
-- SQN
-
 ## Usability
 - Reduce number of mandatory command line arguments (e.g. derive IP address from interface, derive MNC/MCC from sims.toml)
 - flip use-dhcp default?
-- Ugly startup log: print out RAN node ID properly (GNB global RAN node id:GlobalGnbId(GlobalGnbId { plmn_identity: PlmnIdentity([0, 241, 96]), gnb_id: GnbId(BitVec<u8, bitvec::order::Msb0> { addr: 0x7d66a40088c0, head: 000, bits: 22, capacity: 64 } [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1]) }))
 
 ## Function gaps
 - Implement and test NAS procedure interaction table

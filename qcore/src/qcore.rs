@@ -230,13 +230,13 @@ impl QCore {
         }
     }
     pub async fn test_dhcp(&self) -> Result<()> {
-        info!(self.logger, "------ DHCP SELF TEST");
+        debug!(self.logger, "------ DHCP SELF TEST");
         self.packet_processor
             .ue_ip_allocator
             .dhcp_self_test(&self.logger)
             .await?;
 
-        info!(self.logger, "------ DHCP SELF TEST OK");
+        info!(self.logger, "DHCP self test Ok");
 
         Ok(())
     }

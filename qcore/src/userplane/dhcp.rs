@@ -125,7 +125,7 @@ impl DhcpClient {
         let ack = self
             .get_address_procedure(client_identifier.clone(), logger)
             .await?;
-        info!(
+        debug!(
             logger,
             "------ DHCP ADDRESS ALLOCATION OK (got {})",
             ack.yiaddr()
@@ -134,7 +134,7 @@ impl DhcpClient {
         let ack = self
             .renew_lease_procedure(&ack, client_identifier.clone(), logger)
             .await?;
-        info!(logger, "------ DHCP RENEWAL OK");
+        debug!(logger, "------ DHCP RENEWAL OK");
 
         self.relinquish_lease_procedure(&ack, client_identifier, logger)
             .await
@@ -238,7 +238,7 @@ impl DhcpClient {
         logger: &Logger,
     ) -> Result<Message> {
         let server_ip = server_ip_from_ack(ack)?;
-        let mut request = renewal_request(&ack, client_identifier.clone(), &self.local_mac);
+        let mut request = renewal_request(ack, client_identifier.clone(), &self.local_mac);
 
         // We are not meant to set giaddr() on a renewal but, from experimentation, DHCP servers will cope with this.
         // The correct alternative - sending and receiving DHCP on the UE's IP address - is quite difficult.
@@ -261,7 +261,7 @@ impl DhcpClient {
         logger: &Logger,
     ) -> Result<()> {
         let server_ip = server_ip_from_ack(ack)?;
-        let mut release = release(&ack, client_identifier.clone(), &self.local_mac);
+        let mut release = release(ack, client_identifier.clone(), &self.local_mac);
 
         // Same comment as above about giaddr.
         release.set_giaddr(self.local_ipv4);

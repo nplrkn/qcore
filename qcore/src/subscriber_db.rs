@@ -1,6 +1,6 @@
 use super::{SimCreds, Sqn, Subscriber};
 use anyhow::{Result, bail};
-use slog::{Logger, error, info};
+use slog::{Logger, debug, error, info};
 use std::collections::HashMap;
 use std::fs;
 
@@ -22,18 +22,14 @@ impl SubscriberDb {
         // Sort it so that the info logging below is in a meaningful order.
         let mut table = table.into_iter().collect::<Vec<(String, SimCreds)>>();
         table.sort_by_key(|x| x.0.clone());
-        info!(
-            logger,
-            "Loading {} provisioned SIM creds from {filename}",
-            table.len()
-        );
+        info!(logger, "Loading {} SIM creds from {filename}", table.len());
 
         let mut new_table = HashMap::new();
         for (key, sim_creds) in table.into_iter() {
             let Some(imsi) = key.strip_prefix("imsi-") else {
                 bail!("Key {} in {filename} does not start with 'imsi-'", key,)
             };
-            info!(logger, "Loaded creds for imsi-{imsi}");
+            debug!(logger, "Loaded creds for imsi-{imsi}");
             new_table.insert(
                 imsi.to_string(),
                 Subscriber {

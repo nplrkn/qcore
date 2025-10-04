@@ -76,11 +76,8 @@ impl Netlink {
                         continue;
                     }
                     for attr in attributes.iter() {
-                        match attr {
-                            AddressAttribute::Address(IpAddr::V4(addr)) => {
-                                ipv4 = Some(addr.clone());
-                            }
-                            _ => {}
+                        if let AddressAttribute::Address(IpAddr::V4(addr)) = attr {
+                            ipv4 = Some(*addr);
                         }
                     }
                 }

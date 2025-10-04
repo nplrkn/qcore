@@ -61,6 +61,12 @@ impl<T> TestFrameworkBuilder<T> {
     }
 }
 
+impl<T> Default for TestFrameworkBuilder<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TestFrameworkBuilder<MockDu> {
     pub async fn build(self) -> Result<(MockDu, ProgramHandle, DataNetwork, UeBuilder, Logger)> {
         let du_ip = "127.0.0.2";
@@ -82,11 +88,11 @@ impl TestFrameworkBuilder<MockGnb> {
 }
 
 pub async fn init_f1ap() -> Result<(MockDu, ProgramHandle, DataNetwork, UeBuilder, Logger)> {
-    TestFrameworkBuilder::<MockDu>::new().build().await
+    TestFrameworkBuilder::<MockDu>::default().build().await
 }
 
 pub async fn init_ngap() -> Result<(MockGnb, ProgramHandle, DataNetwork, UeBuilder, Logger)> {
-    TestFrameworkBuilder::<MockGnb>::new().build().await
+    TestFrameworkBuilder::<MockGnb>::default().build().await
 }
 
 pub async fn wait_until_idle(qc: &QCore) -> Result<()> {

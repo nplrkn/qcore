@@ -82,10 +82,9 @@ impl UeIpAllocator {
     }
 
     pub async fn dhcp_self_test(&self, logger: &Logger) -> Result<()> {
-        match &self.mode {
-            UeIpAllocationMode::Dhcp(dhcp_client) => dhcp_client.self_test(logger).await?,
-            _ => {}
-        };
+        if let UeIpAllocationMode::Dhcp(dhcp_client) = &self.mode {
+            dhcp_client.self_test(logger).await?
+        }
         Ok(())
     }
 

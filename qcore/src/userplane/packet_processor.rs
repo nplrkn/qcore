@@ -9,7 +9,7 @@ use crate::data::{
 };
 use crate::userplane::get_if_index;
 use crate::userplane::ue_ip_allocator::UeIpAllocator;
-use anyhow::{Result, anyhow, bail, ensure};
+use anyhow::{Result, bail, ensure};
 use async_std::{net::IpAddr, sync::Mutex};
 use aya::maps::{Array, MapData, PerCpuArray};
 use aya::programs::{SchedClassifier, TcAttachType, Xdp, XdpFlags, tc};
