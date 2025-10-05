@@ -90,7 +90,7 @@ impl PacketProcessor {
         // XDP uplink program.
         let program: &mut Xdp = ebpf.program_mut(uplink_program).unwrap().try_into()?;
         program.load()?;
-        program.attach(ran_if_name, XdpFlags::default())?;
+        program.attach(ran_if_name, XdpFlags::SKB_MODE)?;
 
         // TC uplink redirect program.   The XDP uplink program passes IP packets through to this.
         let _ = tc::qdisc_add_clsact(ran_if_name);
