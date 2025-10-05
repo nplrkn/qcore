@@ -13,6 +13,7 @@
 - OAI test broken - simulated UE doesn't send Configuration Update Complete
 
 ## Performance
+- Do not put XDP programs in SKB mode.  (But this causes 15s interruption to NIC - avoid having QCore attach/detach and do separately?)
 - iperf framework
 - push to 1000 UEs
 - Reduce memcpy?

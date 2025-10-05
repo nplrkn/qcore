@@ -7,7 +7,7 @@ use rtnetlink::{
     packet_route::{
         AddressFamily,
         address::{AddressAttribute, AddressMessage},
-        link::{LinkAttribute, LinkFlags, LinkMessage, State},
+        link::{LinkAttribute, LinkMessage},
     },
     sys::SmolSocket,
 };
@@ -29,18 +29,20 @@ impl Netlink {
         })
     }
 
-    pub async fn interface_is_up(&self, if_index: u32) -> Result<bool> {
-        let link = self.get_link(if_index).await?;
+    // Kept around in case it proves useful in future.
+    //
+    // pub async fn interface_is_up(&self, if_index: u32) -> Result<bool> {
+    //     let link = self.get_link(if_index).await?;
 
-        for attr in link.attributes {
-            if let LinkAttribute::OperState(state) = attr {
-                return Ok(if let State::Up = state { true } else { false });
-            }
-        }
+    //     for attr in link.attributes {
+    //         if let LinkAttribute::OperState(state) = attr {
+    //             return Ok(if let State::Up = state { true } else { false });
+    //         }
+    //     }
 
-        // In the absence of an oper state attribute, use the link flag.
-        Ok((link.header.flags & LinkFlags::Up) == LinkFlags::Up)
-    }
+    //     // In the absence of an oper state attribute, use the link flag.
+    //     Ok((link.header.flags & LinkFlags::Up) == LinkFlags::Up)
+    // }
 
     pub async fn get_if_name_from_ipv4(&self, addr: &Ipv4Addr) -> Option<String> {
         let mut interfaces = self
