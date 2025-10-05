@@ -23,6 +23,10 @@ struct Args {
     #[arg(long, default_value_t = local_ip_address::local_ip().unwrap())]
     local_ip: IpAddr,
 
+    /// SIM credentials file to load.
+    #[arg(long, default_value = "./sims.toml")]
+    sim_cred_file: String,
+
     /// Mobile Country Code part of the PLMN ID (Public Land Mobile Network ID).  
     /// A string of three decimal digits.
     /// If this parameter is not supplied, then QCore will derive MCC from the lowest
@@ -42,16 +46,8 @@ struct Args {
     #[arg(long)]
     ran_interface_name: Option<String>,
 
-    /// Name of the Linux Ethernet device on which downlink packets to UEs will arrive.  
-    #[arg(long, default_value = "veth1")]
-    n6_interface_name: String,
-
-    /// Name of the Linux tun device to open for transmitting userplane packets.
-    #[arg(long, default_value = "qcoretun")]
-    tun_interface_name: String,
-
-    /// Whether to disable DHCP.  By default, DHCP is enabled over the --lan-interface-name.
-    /// When disabled, QCore will allocate UE addresses from the the --ue-subnet.
+    /// Whether to disable DHCP.  By default, DHCP is enabled over the <lan-interface-name>.
+    /// When disabled, QCore will allocate UE addresses from the the <ue-subnet>.
     #[arg(long, default_value_t = false)]
     no_dhcp: bool,
 
@@ -68,12 +64,8 @@ struct Args {
     #[arg(long, default_value_t = Ipv4Addr::new(10,255,0,0))]
     ue_subnet: Ipv4Addr,
 
-    /// SIM credentials file to load.
-    #[arg(long, default_value = "./sims.toml")]
-    sim_cred_file: String,
-
-    /// Slice SST to support.  (SD is always set to 0.)  This is signalled as the allowed SST on NAS Registration Accept
-    /// and Nssai on PDU session establishment accept.
+    /// Slice SST to support.  This is signalled as the allowed SST (with and without SD 0) on NAS Registration Accept
+    /// and as the Nssai on PDU session establishment accept.
     #[arg(long, default_value_t = 1)]
     sst: u8,
 
@@ -81,22 +73,31 @@ struct Args {
     #[arg(long, default_value_t = 7)]
     five_qi: u8,
 
-    /// PDCP sequence number length: 18-bit (false) or 12-bit (true).
-    /// Only meaningful in F1 mode.
-    #[arg(long, default_value_t = false)]
-    pdcp_12bit_sn: bool,
-
-    /// F1 mode - act as a combined 5G Core / gNB-CU and connect to a gNB-DU on the F1 reference point.
-    #[arg(long, default_value_t = false)]
-    f1_mode: bool,
-
     /// Network display name to send to UEs in NAS Configuration Update Command.
     #[arg(long, default_value = "QCore")]
     network_display_name: String,
 
-    /// Output userplane stats.
+    /// Output userplane stats as periodic INFO / WARN logs.
     #[arg(long, default_value_t = false)]
     userplane_stats: bool,
+
+    /// Name of the Linux Ethernet device on which downlink packets to UEs will arrive.  
+    #[arg(long, default_value = "veth1")]
+    n6_interface_name: String,
+
+    /// Name of the Linux tun device to open for transmitting userplane packets and receiving
+    /// downlink packets for buffering.
+    #[arg(long, default_value = "qcoretun")]
+    tun_interface_name: String,
+
+    /// F1 mode - act as a combined 5G Core / gNB-CU and communicate with a gNB-DU on the F1 reference point.
+    #[arg(long, default_value_t = false)]
+    f1_mode: bool,
+
+    /// PDCP sequence number length: 18-bit (false) or 12-bit (true).
+    /// Only meaningful in F1 mode.
+    #[arg(long, default_value_t = false)]
+    pdcp_12bit_sn: bool,
 }
 
 const DEFAULT_MCC_MNC: &str = "00101";
@@ -169,7 +170,7 @@ async fn main() -> Result<()> {
         if let Err(e) = (*qc).test_dhcp().await {
             warn!(
                 logger,
-                "DHCP self test failed.  Paas --no-dhcp to switch to QCore-managed UE IP addresses"
+                "DHCP self test failed.  Pass --no-dhcp to switch to self-managed UE IP addresses"
             );
             warn!(logger, "Error occurred {:#}", e);
             bail!("Self test failure");

@@ -93,7 +93,10 @@ impl QCore {
             &logger,
             "Serving network name: {}", config.serving_network_name
         );
-        info!(&logger, "Supported slice     : SST {}", config.sst);
+        info!(
+            &logger,
+            "Slices (SST[:SD])   : {}, {}:0", config.sst, config.sst
+        );
 
         let packet_processor = PacketProcessor::new(
             config.ip_allocation_method.clone(),

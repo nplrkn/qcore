@@ -31,7 +31,7 @@ impl UeIpAllocator {
             UeIpAllocationConfig::RoutedUeSubnet(subnet) => {
                 info!(
                     logger,
-                    "IP allocation model : QCore-managed on {}/24", subnet
+                    "IP allocation model : Self-managed on {}/24", subnet
                 );
                 UeIpAllocationMode::RoutedUeSubnet(subnet)
             }
