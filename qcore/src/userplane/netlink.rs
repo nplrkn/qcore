@@ -1,13 +1,13 @@
 use std::net::{IpAddr, Ipv4Addr};
 
-use anyhow::{Result, bail};
+use anyhow::{Result, anyhow, bail};
 use async_std::stream::StreamExt;
 use rtnetlink::{
     Handle, RouteMessageBuilder, new_connection_with_socket,
     packet_route::{
         AddressFamily,
         address::{AddressAttribute, AddressMessage},
-        link::{LinkAttribute, LinkMessage},
+        link::{LinkAttribute, LinkFlags, LinkMessage},
     },
     sys::SmolSocket,
 };
@@ -27,6 +27,11 @@ impl Netlink {
             netlink_handle: handle,
             ue_if_index,
         })
+    }
+
+    pub async fn interface_is_up(&self, if_index: u32) -> Result<bool> {
+        let link = self.get_link(if_index).await?;
+        Ok((link.header.flags & LinkFlags::Up) == LinkFlags::Up)
     }
 
     pub async fn get_if_name_from_ipv4(&self, addr: &Ipv4Addr) -> Option<String> {
@@ -84,8 +89,8 @@ impl Netlink {
         Ok(ipv4)
     }
 
-    pub async fn get_link_addr_info(&self, if_index: u32) -> Result<(Ipv4Addr, [u8; 6])> {
-        let Some(link_info) = self
+    async fn get_link(&self, if_index: u32) -> Result<LinkMessage> {
+        Ok(self
             .netlink_handle
             .link()
             .get()
@@ -93,12 +98,13 @@ impl Netlink {
             .execute()
             .next()
             .await
-        else {
-            bail!("Couldn't retrieve link info for if index {if_index}")
-        };
+            .ok_or(anyhow!("Not found"))??)
+    }
+
+    pub async fn get_link_addr_info(&self, if_index: u32) -> Result<(Ipv4Addr, [u8; 6])> {
         let mut mac = None;
-        match link_info {
-            Err(e) => bail!("Netlink error {e} getting link info for if index {if_index}"),
+        match self.get_link(if_index).await {
+            Err(e) => bail!("Error {e} getting link info for if index {if_index}"),
             Ok(LinkMessage { attributes, .. }) => {
                 for attr in attributes.iter() {
                     if let LinkAttribute::Address(addr) = attr {

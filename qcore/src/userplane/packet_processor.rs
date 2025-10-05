@@ -2,13 +2,13 @@
 use super::MAX_UES;
 //use super::aya_log::EbpfLogger;
 use super::stats::dump_stats;
-use crate::UserplaneSession;
 use crate::data::{
     EthernetSesssionParams, Ipv4SessionParams, Payload, PdcpSequenceNumberLength,
     UeIpAllocationConfig,
 };
 use crate::userplane::get_if_index;
 use crate::userplane::ue_ip_allocator::UeIpAllocator;
+use crate::{Netlink, UserplaneSession};
 use anyhow::{Result, bail, ensure};
 use async_std::{net::IpAddr, sync::Mutex};
 use aya::maps::{Array, MapData, PerCpuArray};
@@ -17,8 +17,9 @@ use aya::{Ebpf, EbpfLoader};
 use ebpf_common::*;
 use index_pool::IndexPool;
 use rand::RngCore;
-use slog::{Logger, info, warn};
+use slog::{Logger, debug, info, warn};
 use std::sync::Arc;
+use std::time::Instant;
 use xxap::GtpTeid;
 
 #[derive(Clone)]
@@ -41,13 +42,13 @@ type EthIndexLookupTable = Array<MapData, u16>;
 type InterfaceIndices = Vec<u32>;
 
 impl PacketProcessor {
-    pub fn install_ebpf(
+    pub async fn install_ebpf(
         ngap_mode: bool,
         local_ip: IpAddr,
         ran_if_name: &str,
         n6_if_name: &str,
         tun_if_name: &str,
-        _logger: &Logger,
+        logger: &Logger,
     ) -> Result<(Ebpf, InterfaceIndices)> {
         let gtpu_local_ipv4 = match local_ip {
             IpAddr::V4(addr) => addr.octets(),
@@ -141,6 +142,22 @@ impl PacketProcessor {
         for if_index in &ethernet_session_if_indices {
             xdp_downlink_eth_program.attach_to_if_index(*if_index, XdpFlags::default())?;
         }
+
+        // Installing an XDP program may cause the interface to go down.  Wait for it to come back up.
+        let netlink = Netlink::new(0)?;
+        let start = Instant::now();
+        let ran_if_index = get_if_index(ran_if_name)?;
+        loop {
+            if netlink.interface_is_up(ran_if_index).await? {
+                break;
+            }
+            async_std::task::sleep(std::time::Duration::from_millis(500)).await;
+        }
+        debug!(
+            logger,
+            "{ran_if_name} took ~{:.1}s to come back up after XDP install",
+            start.elapsed().as_millis() as f32 / 1000.0
+        );
 
         Ok((ebpf, ethernet_session_if_indices))
     }

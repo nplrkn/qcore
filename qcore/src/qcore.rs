@@ -87,7 +87,8 @@ impl QCore {
             &config.n6_interface_name,
             &config.tun_interface_name,
             &logger,
-        )?;
+        )
+        .await?;
         info!(
             &logger,
             "Serving network name: {}", config.serving_network_name
