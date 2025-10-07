@@ -6,6 +6,7 @@ use crate::ngap::{NGAP_BIND_PORT, NGAP_SCTP_PPID};
 use crate::procedures::{F1apHandler, NgapHandler, UeMessage, UeMessageHandler};
 use crate::protocols::nas::Tmsi;
 use crate::protocols::ngap::build::paging;
+use crate::userplane::EbpfStartupData;
 use crate::{Config, ProcedureBase, Sqn, SubscriberAuthParams, UeContext5GC, UserplaneSession};
 use anyhow::{Result, anyhow, bail};
 use async_std::task::JoinHandle;
@@ -15,7 +16,6 @@ use async_std::{
     task::block_on,
 };
 use async_trait::async_trait;
-use aya::Ebpf;
 use f1ap::GnbDuServedCellsItem;
 use ngap::{FiveGTmsi, Tac};
 use slog::{Logger, debug, info, o, warn};
@@ -55,7 +55,7 @@ enum CoreContextLocator {
 }
 
 pub struct ProgramHandle {
-    _ebpf: Ebpf,
+    _ebpf: EbpfStartupData,
     qc: Box<QCore>,
 }
 impl Deref for ProgramHandle {
@@ -79,16 +79,38 @@ impl QCore {
         ngap_mode: bool,
         userplane_stats: bool,
     ) -> Result<ProgramHandle> {
-        let local_ip = config.ip_addr;
-        let (mut ebpf, veths) = PacketProcessor::install_ebpf(
+        let ebpf = PacketProcessor::install_ebpf(
             ngap_mode,
-            local_ip,
+            config.ip_addr,
             &config.ran_interface_name,
             &config.n6_interface_name,
             &config.tun_interface_name,
             &logger,
         )
         .await?;
+
+        Self::start_common(config, ebpf, logger, sub_db, ngap_mode, userplane_stats).await
+    }
+
+    pub async fn start_second_instance_with_ebpf_reuse(
+        config: Config,
+        logger: Logger,
+        sub_db: SubscriberDb,
+        ngap_mode: bool,
+        userplane_stats: bool,
+    ) -> Result<ProgramHandle> {
+        let ebpf = PacketProcessor::reuse_ebpf()?;
+        Self::start_common(config, ebpf, logger, sub_db, ngap_mode, userplane_stats).await
+    }
+
+    async fn start_common(
+        config: Config,
+        mut ebpf: EbpfStartupData,
+        logger: Logger,
+        sub_db: SubscriberDb,
+        ngap_mode: bool,
+        userplane_stats: bool,
+    ) -> Result<ProgramHandle> {
         info!(
             &logger,
             "Serving network name: {}", config.serving_network_name
@@ -102,7 +124,6 @@ impl QCore {
             config.ip_allocation_method.clone(),
             &mut ebpf,
             userplane_stats,
-            veths,
             &logger,
         )
         .await?;
@@ -240,6 +261,10 @@ impl QCore {
         info!(self.logger, "DHCP self test      : Ok");
 
         Ok(())
+    }
+
+    pub fn config(&self) -> &Config {
+        &self.config
     }
 }
 

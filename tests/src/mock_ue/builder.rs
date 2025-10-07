@@ -8,7 +8,7 @@ use std::net::IpAddr;
 pub struct UeBuilder {
     ethernet: bool,
     qc_ip_addr: IpAddr,
-    sims: SubscriberDb,
+    pub sims: SubscriberDb,
     logger: Logger,
     next_sim_id: Mutex<usize>,
     pub dnn: Option<&'static [u8]>,

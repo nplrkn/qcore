@@ -9,7 +9,7 @@ mod ue_ip_allocator;
 //mod freebind_socket;
 
 pub use downlink_buffer::{DownlinkBufferController, PagingApi};
-pub use packet_processor::PacketProcessor;
+pub use packet_processor::{EbpfStartupData, PacketProcessor};
 
 use anyhow::{Result, bail};
 use libc::if_nametoindex;

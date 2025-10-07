@@ -9,18 +9,31 @@ use crate::data::{
 };
 use crate::userplane::get_if_index;
 use crate::userplane::ue_ip_allocator::UeIpAllocator;
-use anyhow::{Result, bail, ensure};
+use anyhow::{Context, Result, bail, ensure};
 use async_std::{net::IpAddr, sync::Mutex};
-use aya::maps::{Array, MapData, PerCpuArray};
+use aya::maps::{Array, Map, MapData, PerCpuArray};
 use aya::programs::{SchedClassifier, TcAttachType, Xdp, XdpFlags, tc};
 use aya::{Ebpf, EbpfLoader};
 use ebpf_common::*;
 use index_pool::IndexPool;
 use rand::RngCore;
-use slog::{Logger, info, warn};
+use slog::{Logger, debug, info, warn};
 use std::sync::Arc;
 use xxap::GtpTeid;
 
+pub struct EbpfMaps {
+    counters: Map,
+    ul_forwarding_table: Map,
+    dl_forwarding_table: Map,
+    eth_index_lookup_table: Map,
+}
+
+impl EbpfMaps {
+    const COUNTERS_FILENAME: &str = "/sys/fs/bpf/qcore_counters";
+    const UL_FORWARDING_TABLE_FILENAME: &str = "/sys/fs/bpf/qcore_ul_forwarding_table";
+    const DL_FORWARDING_TABLE_FILENAME: &str = "/sys/fs/bpf/qcore_dl_forwarding_table";
+    const DL_ETH_IF_INDEX_LOOKUP_FILENAME: &str = "/sys/fs/bpf/qcore_dl_eth_index_lookup";
+}
 #[derive(Clone)]
 pub struct PacketProcessor {
     index_pool: Arc<Mutex<IndexPool>>,
@@ -40,6 +53,11 @@ type DownlinkForwardingTable = Array<MapData, DlForwardingEntry>;
 type EthIndexLookupTable = Array<MapData, u16>;
 type InterfaceIndices = Vec<u32>;
 
+pub enum EbpfStartupData {
+    Normal(Ebpf, InterfaceIndices),
+    Reuse,
+}
+
 impl PacketProcessor {
     pub async fn install_ebpf(
         ngap_mode: bool,
@@ -47,8 +65,8 @@ impl PacketProcessor {
         ran_if_name: &str,
         n6_if_name: &str,
         tun_if_name: &str,
-        _logger: &Logger,
-    ) -> Result<(Ebpf, InterfaceIndices)> {
+        logger: &Logger,
+    ) -> Result<EbpfStartupData> {
         let gtpu_local_ipv4 = match local_ip {
             IpAddr::V4(addr) => addr.octets(),
             _ => bail!("Ipv6 not supported"),
@@ -86,12 +104,14 @@ impl PacketProcessor {
             ("xdp_uplink_f1u", "tc_downlink_f1u")
         };
 
-        // XDP uplink program.
+        // XDP uplink program
+        debug!(logger, "Attach XDP uplink program to {ran_if_name}");
         let program: &mut Xdp = ebpf.program_mut(uplink_program).unwrap().try_into()?;
         program.load()?;
         program.attach(ran_if_name, XdpFlags::SKB_MODE)?;
 
         // TC uplink redirect program.   The XDP uplink program passes IP packets through to this.
+        debug!(logger, "Attach TC uplink redirect program to {ran_if_name}");
         let _ = tc::qdisc_add_clsact(ran_if_name);
         let tc_uplink_program: &mut SchedClassifier =
             ebpf.program_mut("tc_uplink_redirect").unwrap().try_into()?;
@@ -99,6 +119,7 @@ impl PacketProcessor {
         tc_uplink_program.attach(ran_if_name, TcAttachType::Ingress)?;
 
         // TC downlink program
+        debug!(logger, "Attach TC downlink IP program to {n6_if_name}");
         let tc_ip_downlink_program: &mut SchedClassifier =
             ebpf.program_mut(ip_downlink_program).unwrap().try_into()?;
         tc_ip_downlink_program.load()?;
@@ -126,6 +147,10 @@ impl PacketProcessor {
             };
 
             // Attach the TC program.
+            debug!(
+                logger,
+                "Attach TC downlink eth program to {eth_interface_name}"
+            );
             let _ = tc::qdisc_add_clsact(&eth_interface_name);
             tc_downlink_eth_program.attach(&eth_interface_name, TcAttachType::Ingress)?;
 
@@ -139,6 +164,8 @@ impl PacketProcessor {
             .try_into()?;
         xdp_downlink_eth_program.load()?;
         for if_index in &ethernet_session_if_indices {
+            debug!(logger, "Attach XDP downlink eth program to {n6_if_name}");
+
             xdp_downlink_eth_program.attach_to_if_index(*if_index, XdpFlags::SKB_MODE)?;
         }
 
@@ -164,14 +191,76 @@ impl PacketProcessor {
         //     start.elapsed().as_millis() as f32 / 1000.0
         // );
 
-        Ok((ebpf, ethernet_session_if_indices))
+        Ok(EbpfStartupData::Normal(ebpf, ethernet_session_if_indices))
+    }
+
+    // Allows two QCores to be run on the same devices for test purposes.
+    pub fn reuse_ebpf() -> Result<EbpfStartupData> {
+        //let data = aya::include_bytes_aligned!(concat!(env!("OUT_DIR"), "/ebpf-userplane-program"));
+        //Ok(EbpfStartupData::Reuse(EbpfLoader::new().load(data)?))
+        Ok(EbpfStartupData::Reuse)
+    }
+
+    fn create_and_pin_ebpf_maps(ebpf: &mut Ebpf, logger: &Logger) -> Result<EbpfMaps> {
+        let counters = ebpf.take_map("COUNTERS").unwrap();
+        let ul_forwarding_table = ebpf.take_map("UL_FORWARDING_TABLE").unwrap();
+        let dl_forwarding_table = ebpf.take_map("DL_FORWARDING_TABLE").unwrap();
+        let eth_index_lookup_table = ebpf.take_map("DL_ETH_IF_INDEX_LOOKUP").unwrap();
+
+        let _ = std::fs::remove_file(EbpfMaps::COUNTERS_FILENAME);
+        let _ = std::fs::remove_file(EbpfMaps::UL_FORWARDING_TABLE_FILENAME);
+        let _ = std::fs::remove_file(EbpfMaps::DL_FORWARDING_TABLE_FILENAME);
+        let _ = std::fs::remove_file(EbpfMaps::DL_ETH_IF_INDEX_LOOKUP_FILENAME);
+
+        if counters.pin(EbpfMaps::COUNTERS_FILENAME).is_err()
+            || ul_forwarding_table
+                .pin(EbpfMaps::UL_FORWARDING_TABLE_FILENAME)
+                .is_err()
+            || dl_forwarding_table
+                .pin(EbpfMaps::DL_FORWARDING_TABLE_FILENAME)
+                .is_err()
+            || eth_index_lookup_table
+                .pin(EbpfMaps::DL_ETH_IF_INDEX_LOOKUP_FILENAME)
+                .is_err()
+        {
+            debug!(
+                logger,
+                "One or more eBPF maps failed to pin - continue anyway"
+            )
+        } else {
+            debug!(logger, "Successfully pinned all the eBPF maps");
+        };
+
+        Ok(EbpfMaps {
+            counters,
+            ul_forwarding_table,
+            dl_forwarding_table,
+            eth_index_lookup_table,
+        })
+    }
+
+    fn reuse_ebpf_maps() -> Result<EbpfMaps> {
+        let counters = MapData::from_pin(EbpfMaps::COUNTERS_FILENAME)?;
+        let counters = Map::PerCpuArray(counters);
+        let ul_forwarding_table = MapData::from_pin(EbpfMaps::UL_FORWARDING_TABLE_FILENAME)?;
+        let ul_forwarding_table = Map::Array(ul_forwarding_table);
+        let dl_forwarding_table = MapData::from_pin(EbpfMaps::DL_FORWARDING_TABLE_FILENAME)?;
+        let dl_forwarding_table = Map::Array(dl_forwarding_table);
+        let eth_index_lookup_table = MapData::from_pin(EbpfMaps::DL_ETH_IF_INDEX_LOOKUP_FILENAME)?;
+        let eth_index_lookup_table = Map::Array(eth_index_lookup_table);
+
+        Ok(EbpfMaps {
+            counters,
+            ul_forwarding_table,
+            dl_forwarding_table,
+            eth_index_lookup_table,
+        })
     }
 
     pub async fn new(
         ue_ip_allocation_config: UeIpAllocationConfig,
-        ebpf: &mut Ebpf,
+        ebpf: &mut EbpfStartupData,
         userplane_stats: bool,
-        if_indices: InterfaceIndices,
         logger: &Logger,
     ) -> Result<Self> {
         let mut index_pool = IndexPool::new();
@@ -180,11 +269,24 @@ impl PacketProcessor {
         let _ = index_pool.request_id(1);
         let index_pool = Arc::new(Mutex::new(index_pool));
 
-        let counters = PerCpuArray::try_from(ebpf.take_map("COUNTERS").unwrap())?;
-        let ul_forwarding_table = Array::try_from(ebpf.take_map("UL_FORWARDING_TABLE").unwrap())?;
-        let dl_forwarding_table = Array::try_from(ebpf.take_map("DL_FORWARDING_TABLE").unwrap())?;
-        let eth_index_lookup_table =
-            Array::try_from(ebpf.take_map("DL_ETH_IF_INDEX_LOOKUP").unwrap())?;
+        let ebpf_maps;
+        let if_indices;
+        match ebpf {
+            EbpfStartupData::Normal(ebpf, interface_indices) => {
+                ebpf_maps =
+                    Self::create_and_pin_ebpf_maps(ebpf, logger).context("Creating ebpf maps")?;
+                if_indices = std::mem::take(interface_indices);
+            }
+            EbpfStartupData::Reuse => {
+                ebpf_maps = Self::reuse_ebpf_maps().context("Reusing ebpf maps")?;
+                if_indices = vec![];
+            }
+        }
+
+        let counters = PerCpuArray::try_from(ebpf_maps.counters)?;
+        let ul_forwarding_table = Array::try_from(ebpf_maps.ul_forwarding_table)?;
+        let dl_forwarding_table = Array::try_from(ebpf_maps.dl_forwarding_table)?;
+        let eth_index_lookup_table = Array::try_from(ebpf_maps.eth_index_lookup_table)?;
 
         // Spawn the stats task
         if userplane_stats {

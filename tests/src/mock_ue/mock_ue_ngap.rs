@@ -140,3 +140,9 @@ impl<'a> MockUeNgap<'a> {
         self.send_nas_no_outer_stmsi(nas_bytes).await
     }
 }
+
+impl<'a> AsRef<GnbUeContext> for MockUeNgap<'a> {
+    fn as_ref(&self) -> &GnbUeContext {
+        &self.base.transport.gnb_ue_context
+    }
+}

@@ -1,7 +1,7 @@
 use super::{dhcp::DhcpClient, netlink::Netlink};
 use crate::data::UeIpAllocationConfig;
 use anyhow::Result;
-use slog::{Logger, info, warn};
+use slog::{Logger, warn};
 use std::{net::Ipv4Addr, sync::Arc};
 
 #[derive(Clone)]
@@ -29,19 +29,10 @@ impl UeIpAllocator {
 
         let mode = match config {
             UeIpAllocationConfig::RoutedUeSubnet(subnet) => {
-                info!(
-                    logger,
-                    "IP allocation model : Self-managed on {}/24", subnet
-                );
                 UeIpAllocationMode::RoutedUeSubnet(subnet)
             }
-            UeIpAllocationConfig::Dhcp(if_index, server) => {
-                info!(
-                    logger,
-                    "IP allocation model : DHCP on LAN over if index {}", if_index
-                );
-                let (ip, mac) = netlink.get_link_addr_info(if_index).await?;
-                let dhcp_client = DhcpClient::new(mac, ip, server, logger).await?;
+            UeIpAllocationConfig::Dhcp(config) => {
+                let dhcp_client = DhcpClient::new(&config, logger).await?;
                 UeIpAllocationMode::Dhcp(Arc::new(dhcp_client))
             }
         };

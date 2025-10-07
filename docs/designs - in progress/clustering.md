@@ -4,11 +4,8 @@
 
 -  SUPI registration on first node followed by TMSI reregistration on second node
 -  Activity on second node takes over PDU session IP from first node 
-   -  including lease.  which means we need the lease info such as timeout and DHCP server IP.
-      BUT we can only transfer the lease if we can use the same client ID.  in the current design,
-      the lease will come from a different MAC.
-      Ok, so lets try using client identifier = IMSI, just with my normal modem DHCP.
 -  Failure of first node causes UE to be pageable from second node
+   -  e.g. ping to UE IP address is 'uninterrupted'
 -  Database instance is fate-sharing with QCore.
 -  Use of probe / witness to avoid split brain
 -  Aging out + refresh of UE contexts in DB

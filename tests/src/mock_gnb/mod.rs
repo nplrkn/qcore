@@ -54,8 +54,7 @@ impl DerefMut for MockGnb {
 }
 
 impl MockGnb {
-    pub async fn new(local_ip: &str, logger: &Logger) -> Result<MockGnb> {
-        let logger = logger.new(o!("gnb" => 1));
+    pub async fn new(local_ip: &str, logger: Logger) -> Result<MockGnb> {
         let mock = Mock::new(logger.clone()).await;
         Ok(MockGnb {
             mock,

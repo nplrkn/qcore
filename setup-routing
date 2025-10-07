@@ -38,10 +38,17 @@ sudo sysctl -w net.ipv4.conf.$EXTERNAL_LINK.proxy_arp=1
 sudo iptables -t nat -A POSTROUTING -o $EXTERNAL_LINK -s $UE_SUBNET -j MASQUERADE
 sudo iptables -A FORWARD -i $EXTERNAL_LINK -j ACCEPT -d $UE_SUBNET
 
-#---------- qcore_test link - only needed for `cargo test --test dhcp-session`
+#---------- Extra links for testing ------------------
+# For testing with mock DHCP server, or multiple qcores on a single machine.
+# This section is not needed to run a single live instance of QCore.
 sudo ip link add veth2 type veth peer veth3
 sudo ip link set veth2 up
 sudo ip link set veth3 up
 sudo ip addr add 10.255.0.1/24 dev veth2
 sudo ip addr add 10.255.0.200/24 dev veth2
+sudo ip addr add 10.255.0.201/24 dev veth2
 sudo sysctl -w net.ipv4.conf.veth2.proxy_arp=1
+sudo ip tuntap add mode tun user $(whoami) name qcoretun2 
+sudo ip link set qcoretun2 up 
+sudo iptables -A FORWARD -i qcoretun2 -j ACCEPT           
+

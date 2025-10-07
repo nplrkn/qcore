@@ -16,6 +16,8 @@ use std::{
     time::Duration,
 };
 
+use crate::data::DhcpConfig;
+
 // The DhcpClient appears on the network as a DHCP relay, and need to be configured
 // with the local IP address and MAC address of the external interface.
 //
@@ -46,26 +48,23 @@ const DHCP_RESPONSE_TIMEOUT_MS: u64 = 4000;
 const DHCP_SERVER_PORT: u16 = 67;
 
 impl DhcpClient {
-    pub async fn new(
-        local_mac: [u8; 6],
-        local_ipv4: Ipv4Addr,
-        server: Option<Ipv4Addr>,
-        logger: &Logger,
-    ) -> Result<Self> {
+    pub async fn new(config: &DhcpConfig, logger: &Logger) -> Result<Self> {
         info!(
             logger,
-            "My DHCP relay port  : {}:{}", local_ipv4, DHCP_SERVER_PORT
+            "My DHCP relay port  : {}:{}", config.local_ip, DHCP_SERVER_PORT
         );
-        let socket = UdpSocket::bind(SocketAddrV4::new(local_ipv4, DHCP_SERVER_PORT)).await?;
+        let socket = UdpSocket::bind(SocketAddrV4::new(config.local_ip, DHCP_SERVER_PORT))
+            .await
+            .context("binding DHCP relay port")?;
         socket.set_broadcast(true)?;
         let pending_requests = Arc::new(Mutex::new(HashMap::new()));
         let client = DhcpClient {
             socket,
-            local_mac,
-            local_ipv4,
+            local_mac: config.local_mac.clone(),
+            local_ipv4: config.local_ip,
             pending_requests,
             leases: Arc::new(Mutex::new(HashMap::new())),
-            server: server.unwrap_or(Ipv4Addr::BROADCAST),
+            server: config.dhcp_server_ip.unwrap_or(Ipv4Addr::BROADCAST),
         };
 
         let client_clone = client.clone();

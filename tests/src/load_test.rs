@@ -1,7 +1,7 @@
 use crate::{MockGnb, UeBuilder};
 use anyhow::Result;
 use qcore::{SimCreds, Sqn, Subscriber, SubscriberDb};
-use slog::Logger;
+use slog::{Logger, o};
 use std::{collections::HashMap, net::IpAddr};
 
 pub fn generate_load_test_sims(count: usize) -> SubscriberDb {
@@ -24,7 +24,7 @@ pub fn generate_load_test_sims(count: usize) -> SubscriberDb {
 
 pub async fn load_test(amf_ip: IpAddr, sims: SubscriberDb, logger: Logger) -> Result<()> {
     let gnb_ip = "127.0.0.2";
-    let mut gnb = MockGnb::new(gnb_ip, &logger).await?;
+    let mut gnb = MockGnb::new(gnb_ip, logger.new(o!("gnb" => 1))).await?;
     gnb.perform_ng_setup(&amf_ip).await?;
 
     let ue_count = sims.0.len();

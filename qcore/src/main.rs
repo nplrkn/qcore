@@ -6,12 +6,12 @@ use async_std::channel::Sender;
 use async_std::prelude::*;
 use clap::Parser;
 use qcore::{
-    AmfIds, Config, NetworkDisplayName, PdcpSequenceNumberLength, PlmnIdentity, QCore,
+    AmfIds, Config, DhcpConfig, NetworkDisplayName, PdcpSequenceNumberLength, PlmnIdentity, QCore,
     SubscriberDb, UeIpAllocationConfig,
 };
 use signal_hook::consts::signal::*;
 use signal_hook_async_std::Signals;
-use slog::{Drain, Logger, info, o, warn};
+use slog::{Drain, Logger, error, info, o, warn};
 use std::net::{IpAddr, Ipv4Addr};
 
 #[derive(Parser, Debug)]
@@ -125,20 +125,36 @@ async fn main() -> Result<()> {
         pick_ran_interface(&local_ip, args.ran_interface_name, &logger).await?;
 
     let use_dhcp = !args.no_dhcp;
+
     let ip_allocation_method = if use_dhcp {
         let lan_if_index = if let Some(lan_interface_name) = args.lan_interface_name {
             qcore::get_if_index(&lan_interface_name)?
         } else {
             2
         };
+        let netlink = qcore::Netlink::new(0)?;
+        let (local_ip, local_mac) = netlink.get_link_addr_info(lan_if_index).await?;
+        info!(
+            logger,
+            "IP allocation model : DHCP on LAN over if index {}", lan_if_index
+        );
 
         // The 'None' here means that QCore will broadcast its DHCP requests.
-        UeIpAllocationConfig::Dhcp(lan_if_index, None)
+        UeIpAllocationConfig::Dhcp(DhcpConfig {
+            local_mac,
+            local_ip,
+            dhcp_server_ip: None,
+        })
     } else {
         check_ue_subnet(&args.ue_subnet)?;
+        info!(
+            logger,
+            "IP allocation model : Self-managed on {}/24", args.ue_subnet
+        );
+
         UeIpAllocationConfig::RoutedUeSubnet(args.ue_subnet)
     };
-    let qc = QCore::start(
+    let qc = match QCore::start(
         Config {
             ip_addr: IpAddr::V4(local_ip),
             plmn: PlmnIdentity(plmn),
@@ -164,7 +180,11 @@ async fn main() -> Result<()> {
         !args.f1_mode,
         args.userplane_stats,
     )
-    .await?;
+    .await
+    {
+        Ok(x) => x,
+        Err(e) => bail!("{e:#}"),
+    };
 
     if use_dhcp {
         if let Err(e) = (*qc).test_dhcp().await {

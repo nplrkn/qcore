@@ -60,9 +60,16 @@ pub enum UeIpAllocationConfig {
     // Allocate addresses from a /24 IPv4 prefix.
     RoutedUeSubnet(Ipv4Addr),
 
-    // Obtain addresses using DHCP over the given interface name from the given server IP address.
+    // Obtain addresses using DHCP
+    Dhcp(DhcpConfig),
+}
+
+#[derive(Debug, Clone)]
+pub struct DhcpConfig {
+    pub local_mac: [u8; 6],
+    pub local_ip: Ipv4Addr,
     // If the address is not supplied, broadcast will be used.
-    Dhcp(u32, Option<Ipv4Addr>),
+    pub dhcp_server_ip: Option<Ipv4Addr>,
 }
 
 /// NetworkDisplayName - UCS2 16-bit format, in network byte order
