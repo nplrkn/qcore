@@ -18,21 +18,17 @@ async fn deregistration_during_nas_request() -> anyhow::Result<()> {
         ue.send_nas_register_request().await?;
         ue.handle_nas_authentication().await?;
         ue.handle_nas_security_mode().await?;
-        gnb.handle_initial_context_setup(ue.gnb_ue_context())
-            .await?;
-        gnb.send_ue_radio_capability_info(ue.gnb_ue_context())
-            .await?;
+        gnb.handle_initial_context_setup(&mut ue).await?;
+        gnb.send_ue_radio_capability_info(&mut ue).await?;
         ue.handle_nas_registration_accept().await?;
         ue.handle_nas_configuration_update().await?;
         ue.send_nas_pdu_session_establishment_request().await?;
-        gnb.handle_pdu_session_resource_setup(ue.gnb_ue_context())
-            .await?;
+        gnb.handle_pdu_session_resource_setup(&mut ue).await?;
         ue.receive_nas_session_accept().await?;
 
         ue.send_nas_pdu_session_release_request().await?;
 
-        gnb.handle_pdu_session_resource_release(ue.gnb_ue_context())
-            .await?;
+        gnb.handle_pdu_session_resource_release(&mut ue).await?;
 
         // Instead of replying, send a deregistration request.
         ue.send_nas_deregistration_request().await?;
@@ -47,12 +43,11 @@ async fn deregistration_during_nas_request() -> anyhow::Result<()> {
 
         // Either way, QCore immediately accepts the deregistration and terminates the UE context.
         ue.receive_nas_deregistration_accept().await?;
-        gnb.handle_ue_context_release(ue.gnb_ue_context()).await?;
+        gnb.handle_ue_context_release(&ue).await?;
         wait_until_idle(&qc).await?;
 
         // Reuse the same UE for the next iteration.
-        gnb.reset_ue_context(ue.gnb_ue_context(), qc.ip_addr())
-            .await?;
+        gnb.reset_ue_context(&mut ue, qc.ip_addr()).await?;
     }
 
     Ok(())

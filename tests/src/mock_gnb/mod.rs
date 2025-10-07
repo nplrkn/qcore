@@ -9,7 +9,7 @@ use anyhow::{Result, bail};
 use asn1_per::{Msb0, NonEmpty, SerDes, bitvec};
 use async_net::IpAddr;
 use ngap::*;
-use slog::{Logger, info, o};
+use slog::{Logger, info};
 use std::ops::{Deref, DerefMut};
 use xxap::*;
 mod build_ngap;
@@ -31,6 +31,12 @@ pub struct UeContext {
     pub binding: Binding,
     pub session: Option<Session>,
     nas: Option<Vec<u8>>,
+}
+
+impl AsRef<UeContext> for UeContext {
+    fn as_ref(&self) -> &UeContext {
+        self
+    }
 }
 
 pub struct Session {
@@ -84,11 +90,12 @@ impl MockGnb {
         })
     }
 
-    pub async fn reset_ue_context(
+    pub async fn reset_ue_context<T: AsMut<UeContext>>(
         &self,
-        ue: &mut UeContext,
+        ue: &mut T,
         worker_ip: &IpAddr,
     ) -> Result<UeContext> {
+        let ue = ue.as_mut();
         let mut other = self.new_ue_context(ue.ue_id, worker_ip).await?;
         std::mem::swap(ue, &mut other);
         Ok(other)
@@ -115,7 +122,11 @@ impl MockGnb {
         Ok(())
     }
 
-    pub async fn handle_pdu_session_resource_setup(&self, ue: &mut UeContext) -> Result<()> {
+    pub async fn handle_pdu_session_resource_setup<T: AsMut<UeContext>>(
+        &self,
+        ue: &mut T,
+    ) -> Result<()> {
+        let ue = ue.as_mut();
         let pdu = self.receive_pdu().await?;
         let NgapPdu::InitiatingMessage(InitiatingMessage::PduSessionResourceSetupRequest(
             PduSessionResourceSetupRequest {
@@ -182,7 +193,11 @@ impl MockGnb {
         Ok(())
     }
 
-    pub async fn handle_pdu_session_resource_release(&self, ue: &mut UeContext) -> Result<()> {
+    pub async fn handle_pdu_session_resource_release<T: AsMut<UeContext>>(
+        &self,
+        ue: &mut T,
+    ) -> Result<()> {
+        let ue = ue.as_mut();
         let pdu = self.receive_pdu().await?;
         let NgapPdu::InitiatingMessage(InitiatingMessage::PduSessionResourceReleaseCommand(
             PduSessionResourceReleaseCommand {
@@ -302,15 +317,20 @@ impl MockGnb {
         Ok(nas_pdu.0)
     }
 
-    pub async fn handle_initial_context_setup_with_session(
+    pub async fn handle_initial_context_setup_with_session<T: AsMut<UeContext>>(
         &self,
-        ue: &mut UeContext,
+        ue: &mut T,
     ) -> Result<()> {
-        self.handle_initial_context_setup_common(ue, true).await
+        self.handle_initial_context_setup_common(ue.as_mut(), true)
+            .await
     }
 
-    pub async fn handle_initial_context_setup(&self, ue: &mut UeContext) -> Result<()> {
-        self.handle_initial_context_setup_common(ue, false).await
+    pub async fn handle_initial_context_setup<T: AsMut<UeContext>>(
+        &self,
+        ue: &mut T,
+    ) -> Result<()> {
+        self.handle_initial_context_setup_common(ue.as_mut(), false)
+            .await
     }
 
     async fn handle_initial_context_setup_common(
@@ -340,7 +360,11 @@ impl MockGnb {
         Ok(())
     }
 
-    pub async fn send_ue_radio_capability_info(&self, ue: &mut UeContext) -> Result<()> {
+    pub async fn send_ue_radio_capability_info<T: AsMut<UeContext>>(
+        &self,
+        ue: &mut T,
+    ) -> Result<()> {
+        let ue = ue.as_mut();
         let pdu = build_ngap::ue_radio_capability_info_indication(
             ue.amf_ue_ngap_id.unwrap(),
             RanUeNgapId(ue.ue_id),
@@ -399,7 +423,8 @@ impl MockGnb {
         Ok(nas_pdu)
     }
 
-    pub async fn send_ue_context_release_request(&self, ue: &UeContext) -> Result<()> {
+    pub async fn send_ue_context_release_request<T: AsRef<UeContext>>(&self, ue: &T) -> Result<()> {
+        let ue = ue.as_ref();
         let pdu = build_ngap::ue_context_release_request(
             ue.amf_ue_ngap_id.unwrap(),
             RanUeNgapId(ue.ue_id),
@@ -409,7 +434,8 @@ impl MockGnb {
         Ok(())
     }
 
-    pub async fn handle_ue_context_release(&self, ue: &UeContext) -> Result<()> {
+    pub async fn handle_ue_context_release<T: AsRef<UeContext>>(&self, ue: &T) -> Result<()> {
+        let ue = ue.as_ref();
         let pdu = self.receive_pdu().await?;
         let NgapPdu::InitiatingMessage(InitiatingMessage::UeContextReleaseCommand(
             UeContextReleaseCommand { .. },
@@ -448,9 +474,9 @@ impl MockGnb {
         Ok(())
     }
 
-    pub async fn recv_n3_data_packet(&self, ue: &UeContext) -> Result<Vec<u8>> {
+    pub async fn recv_n3_data_packet<T: AsRef<UeContext>>(&self, ue: &T) -> Result<Vec<u8>> {
         self.userplane
-            .recv_gtp(&ue.session.as_ref().unwrap().local_teid)
+            .recv_gtp(&ue.as_ref().session.as_ref().unwrap().local_teid)
             .await
     }
 }

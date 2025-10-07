@@ -113,23 +113,16 @@ impl<'a> MockUeNgap<'a> {
         self.send_nas_register_request().await?;
         self.handle_nas_authentication().await?;
         self.handle_nas_security_mode().await?;
-        gnb.handle_initial_context_setup(self.gnb_ue_context())
-            .await?;
-        gnb.send_ue_radio_capability_info(self.gnb_ue_context())
-            .await?;
+        gnb.handle_initial_context_setup(self).await?;
+        gnb.send_ue_radio_capability_info(self).await?;
         self.handle_nas_registration_accept().await?;
         self.handle_nas_configuration_update().await
     }
 
     pub async fn establish_session(&mut self, gnb: &'a MockGnb) -> Result<()> {
         self.send_nas_pdu_session_establishment_request().await?;
-        gnb.handle_pdu_session_resource_setup(self.gnb_ue_context())
-            .await?;
+        gnb.handle_pdu_session_resource_setup(self).await?;
         self.receive_nas_session_accept().await
-    }
-
-    pub fn gnb_ue_context(&mut self) -> &mut GnbUeContext {
-        &mut self.base.transport.gnb_ue_context
     }
 
     pub async fn send_nas_register_request(&mut self) -> Result<()> {
@@ -144,5 +137,11 @@ impl<'a> MockUeNgap<'a> {
 impl<'a> AsRef<GnbUeContext> for MockUeNgap<'a> {
     fn as_ref(&self) -> &GnbUeContext {
         &self.base.transport.gnb_ue_context
+    }
+}
+
+impl<'a> AsMut<GnbUeContext> for MockUeNgap<'a> {
+    fn as_mut(&mut self) -> &mut GnbUeContext {
+        &mut self.base.transport.gnb_ue_context
     }
 }

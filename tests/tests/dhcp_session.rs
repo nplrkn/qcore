@@ -25,8 +25,7 @@ async fn dhcp_session() -> anyhow::Result<()> {
     dhcp_server
         .hand_out_address(ue_addr, dhcp_lease_time_secs)
         .await?;
-    gnb.handle_pdu_session_resource_setup(ue.gnb_ue_context())
-        .await?;
+    gnb.handle_pdu_session_resource_setup(&mut ue).await?;
     ue.receive_nas_session_accept().await?;
     wait_until_idle(&qc).await?;
 

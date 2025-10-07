@@ -10,10 +10,8 @@ async fn parallel_config_update_session_establishment() -> anyhow::Result<()> {
     ue.send_nas_register_request().await?;
     ue.handle_nas_authentication().await?;
     ue.handle_nas_security_mode().await?;
-    gnb.handle_initial_context_setup(ue.gnb_ue_context())
-        .await?;
-    gnb.send_ue_radio_capability_info(ue.gnb_ue_context())
-        .await?;
+    gnb.handle_initial_context_setup(&mut ue).await?;
+    gnb.send_ue_radio_capability_info(&mut ue).await?;
     ue.handle_nas_registration_accept().await?;
 
     // Receive but don't respond yet to the ConfigurationUpdateCommand.
@@ -21,8 +19,7 @@ async fn parallel_config_update_session_establishment() -> anyhow::Result<()> {
 
     // Carry out a session establishment.
     ue.send_nas_pdu_session_establishment_request().await?;
-    gnb.handle_pdu_session_resource_setup(ue.gnb_ue_context())
-        .await?;
+    gnb.handle_pdu_session_resource_setup(&mut ue).await?;
     ue.receive_nas_session_accept().await?;
 
     // Finally, send ConfigurationUpdateComplete.

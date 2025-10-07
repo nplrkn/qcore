@@ -17,7 +17,7 @@ async fn ngap_session_reactivation() -> anyhow::Result<()> {
     // UE sends a service request with GUTI to reactivate its previous session.
     let mut ue = MockUeNgap::new_from_base(mock_ue, 1, &gnb, qc.ip_addr(), &logger).await?;
     ue.send_nas_register_request().await?;
-    gnb.handle_initial_context_setup_with_session(ue.gnb_ue_context())
+    gnb.handle_initial_context_setup_with_session(&mut ue)
         .await?;
     ue.handle_nas_registration_accept().await?;
     ue.handle_nas_configuration_update().await?;

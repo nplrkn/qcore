@@ -21,9 +21,8 @@ async fn two_qcores() -> anyhow::Result<()> {
     let mut ue1 = builder.ngap_ue(&gnb1).with_session().await?;
 
     // UE goes idle.
-    gnb1.send_ue_context_release_request(ue1.gnb_ue_context())
-        .await?;
-    gnb1.handle_ue_context_release(ue1.gnb_ue_context()).await?;
+    gnb1.send_ue_context_release_request(&ue1).await?;
+    gnb1.handle_ue_context_release(&ue1).await?;
 
     let data = ue1.base.disconnect();
 

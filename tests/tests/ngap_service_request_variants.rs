@@ -14,8 +14,7 @@ async fn ngap_service_request_variants() -> anyhow::Result<()> {
     let mut ue = MockUeNgap::new_from_base(mock_ue, 1, &gnb, qc.ip_addr(), &logger).await?;
     ue.send_nas_service_request_ext(true).await?;
 
-    gnb.handle_initial_context_setup(ue.gnb_ue_context())
-        .await?;
+    gnb.handle_initial_context_setup(&mut ue).await?;
     ue.receive_nas_service_accept().await?;
     wait_until_idle(&qc).await
 }
