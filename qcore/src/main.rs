@@ -174,6 +174,7 @@ async fn main() -> Result<()> {
             five_qi: args.five_qi,
             network_display_name: NetworkDisplayName::new(&args.network_display_name)?,
             ip_allocation_method,
+            cluster_config: None,
         },
         logger.clone(),
         sub_db,

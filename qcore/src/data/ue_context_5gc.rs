@@ -1,8 +1,9 @@
 use super::{Ksi, UeSecurityCapabilities};
 use crate::{PduSession, nas::Tmsi};
+use bincode::{Decode, Encode};
 use nas::NasContext;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Decode, Encode)]
 pub struct UeContext5GC {
     pub imsi: String,
     pub tmsi: Option<Tmsi>,

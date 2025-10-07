@@ -1,6 +1,7 @@
 pub mod build;
 pub mod parse;
 
+use bincode::{Decode, Encode};
 use std::fmt::Display;
 use xxap::PlmnIdentity;
 
@@ -32,7 +33,7 @@ pub const REGISTRATION_TYPE_INITIAL: u8 = 1;
 #[derive(Debug)]
 pub struct Imsi(pub String);
 
-#[derive(Debug, Eq, Hash, PartialEq, Clone)]
+#[derive(Debug, Eq, Hash, PartialEq, Clone, Decode, Encode)]
 pub struct Tmsi(pub [u8; 4]);
 impl Display for Tmsi {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

@@ -1,3 +1,4 @@
+mod cluster;
 mod data;
 mod procedures;
 mod protocols;
@@ -13,8 +14,8 @@ pub use crate::nas::AmfIds;
 pub use ::xxap::PlmnIdentity;
 use anyhow::{Result, ensure};
 pub use data::{
-    Config, DhcpConfig, NetworkDisplayName, PdcpSequenceNumberLength, SimCreds, Sqn, Subscriber,
-    SubscriberAuthParams, UeIpAllocationConfig,
+    ClusterConfig, Config, DhcpConfig, NetworkDisplayName, PdcpSequenceNumberLength, SimCreds, Sqn,
+    Subscriber, SubscriberAuthParams, UeIpAllocationConfig,
 };
 pub use qcore::{ProgramHandle, QCore};
 pub use subscriber_db::SubscriberDb;

@@ -1,5 +1,6 @@
 use anyhow::{Result, anyhow};
 use asn1_per::*;
+use bincode::{Decode, Encode};
 use ngap::{AmfPointer, AmfRegionId, AmfSetId};
 use std::{
     fmt::Display,
@@ -53,6 +54,9 @@ pub struct Config {
 
     // IP allocation mode.
     pub ip_allocation_method: UeIpAllocationConfig,
+
+    // Cluster config
+    pub cluster_config: Option<ClusterConfig>,
 }
 
 #[derive(Debug, Clone)]
@@ -70,6 +74,13 @@ pub struct DhcpConfig {
     pub local_ip: Ipv4Addr,
     // If the address is not supplied, broadcast will be used.
     pub dhcp_server_ip: Option<Ipv4Addr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ClusterConfig {
+    pub local_ip: IpAddr,
+    pub cluster_tcp_port: u16,
+    pub peer_ip: Option<IpAddr>,
 }
 
 /// NetworkDisplayName - UCS2 16-bit format, in network byte order
@@ -90,7 +101,7 @@ impl NetworkDisplayName {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Decode, Encode)]
 pub enum PdcpSequenceNumberLength {
     TwelveBits,
     EighteenBits,

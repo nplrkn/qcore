@@ -96,7 +96,9 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
                 .dl_qos_flow_per_tnl_information
                 .up_transport_layer_information;
 
-        session.userplane.remote_tunnel_info = Some(gtp_tunnel);
+        session.userplane.remote_ip = Some(gtp_tunnel.transport_layer_address.try_into()?);
+        session.userplane.remote_teid = Some(gtp_tunnel.gtp_teid.0);
+
         self.api
             .commit_userplane_session(&session.userplane, &self.logger)
             .await

@@ -1,11 +1,12 @@
 use anyhow::{Result, anyhow, bail, ensure};
+use bincode::{Decode, Encode};
 use oxirush_nas::{
     Nas5gsMessage, Nas5gsSecurityHeaderType, decode_nas_5gs_message, encode_nas_5gs_message,
     messages::Nas5gsSecurityHeader,
 };
 use security::nia2::calculate_nia2_mac;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Decode, Encode)]
 pub struct NasContext {
     security_activated: bool,
     ik: [u8; 16],

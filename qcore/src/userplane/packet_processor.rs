@@ -5,7 +5,7 @@ use super::stats::dump_stats;
 use crate::UserplaneSession;
 use crate::data::{
     EthernetSesssionParams, Ipv4SessionParams, Payload, PdcpSequenceNumberLength,
-    UeIpAllocationConfig,
+    UeIpAllocationConfig, format_teid,
 };
 use crate::userplane::get_if_index;
 use crate::userplane::ue_ip_allocator::UeIpAllocator;
@@ -19,7 +19,6 @@ use index_pool::IndexPool;
 use rand::RngCore;
 use slog::{Logger, debug, info, warn};
 use std::sync::Arc;
-use xxap::GtpTeid;
 
 pub struct EbpfMaps {
     counters: Map,
@@ -347,12 +346,13 @@ impl PacketProcessor {
         };
 
         Ok(UserplaneSession {
-            uplink_gtp_teid: GtpTeid(teid),
+            uplink_gtp_teid: teid,
             payload,
             qfi: 1,
             five_qi,
             pdcp_sn_length,
-            remote_tunnel_info: None,
+            remote_ip: None,
+            remote_teid: None,
         })
     }
 
@@ -361,17 +361,20 @@ impl PacketProcessor {
         session: &UserplaneSession,
         logger: &Logger,
     ) -> Result<()> {
-        let Some(remote_tunnel_info) = session.remote_tunnel_info.clone() else {
+        let Some(remote_ip) = session.remote_ip else {
+            bail!("Missing tunnel info");
+        };
+        let Some(remote_teid) = session.remote_teid else {
             bail!("Missing tunnel info");
         };
 
         info!(
             logger,
-            "Activate userplane session {}, local teid {:08}, remote {}-{:08}, 5QI={}",
+            "Activate userplane session {}, local teid {}, remote {}-{}, 5QI={}",
             session.payload,
-            session.uplink_gtp_teid,
-            remote_tunnel_info.transport_layer_address,
-            remote_tunnel_info.gtp_teid,
+            format_teid(&session.uplink_gtp_teid),
+            remote_ip,
+            format_teid(&remote_teid),
             session.five_qi,
         );
 
@@ -388,10 +391,10 @@ impl PacketProcessor {
         // Program the uplink pipeline.
 
         // We use the least significant byte of the TEID as the uplink forwarding table index.
-        let uplink_forwarding_idx = session.uplink_gtp_teid.0[3];
+        let uplink_forwarding_idx = session.uplink_gtp_teid[3];
 
         let v = UlForwardingEntry {
-            teid_top_bytes: session.uplink_gtp_teid.0[0..3].try_into().unwrap(),
+            teid_top_bytes: session.uplink_gtp_teid[0..3].try_into().unwrap(),
             pdcp_header_length,
             egress_if_index: eth_if_idx,
         };
@@ -409,11 +412,10 @@ impl PacketProcessor {
                 uplink_forwarding_idx
             };
 
-        let gtp_remote_ip: IpAddr = remote_tunnel_info.transport_layer_address.try_into()?;
-        let IpAddr::V4(gtp_remote_ipv4) = gtp_remote_ip else {
+        let IpAddr::V4(remote_gtp_addr) = remote_ip else {
             bail!("IPv6 not implemented for GTP");
         };
-        let remote_gtp_addr = u32::from_be_bytes(gtp_remote_ipv4.octets());
+        let remote_gtp_addr = u32::from_be_bytes(remote_gtp_addr.octets());
         // TODO: broaden this to check for more invalid addresses.
         ensure!(
             remote_gtp_addr != 0xffffffff,
@@ -423,7 +425,7 @@ impl PacketProcessor {
         let v = DlForwardingEntry {
             next_pdcp_seq_num: 0,
             next_nr_seq_num: 0,
-            teid: u32::from_be_bytes(remote_tunnel_info.gtp_teid.0),
+            teid: u32::from_be_bytes(remote_teid),
             remote_gtp_addr,
             pdcp_header_length,
         };
@@ -450,7 +452,7 @@ impl PacketProcessor {
     // reactivated by calling commit_userplane_session().
     // Currently, the local TEID of the session is retained across de/reactivation.
     pub async fn deactivate_userplane_session(&self, session: &UserplaneSession, logger: &Logger) {
-        let idx = session.uplink_gtp_teid.0[3] as u32;
+        let idx = session.uplink_gtp_teid[3] as u32;
 
         let mut array = self.downlink_forwarding_table.lock().await;
         if let Err(e) = array.set(idx, DlForwardingEntry::deactivated(), 0) {
@@ -464,7 +466,7 @@ impl PacketProcessor {
 
     pub async fn delete_userplane_session(&self, session: &UserplaneSession, logger: &Logger) {
         info!(logger, "Delete userplane session {}", session.payload);
-        let idx = session.uplink_gtp_teid.0[3] as u32;
+        let idx = session.uplink_gtp_teid[3] as u32;
         self.clear_forwarding_entries(idx, logger).await;
 
         // Note there is no 'linger' function right now, so there might be timing windows

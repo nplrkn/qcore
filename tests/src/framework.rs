@@ -3,8 +3,8 @@ use crate::{MockGnb, UeBuilder, mock_ue::Transport};
 use anyhow::{Result, bail};
 use pnet_base::MacAddr;
 use qcore::{
-    AmfIds, Config, DhcpConfig, NetworkDisplayName, PdcpSequenceNumberLength, ProgramHandle, QCore,
-    SubscriberAuthParams, SubscriberDb, UeIpAllocationConfig,
+    AmfIds, ClusterConfig, Config, DhcpConfig, NetworkDisplayName, PdcpSequenceNumberLength,
+    ProgramHandle, QCore, SubscriberAuthParams, SubscriberDb, UeIpAllocationConfig,
 };
 use slog::{Drain, Logger, o};
 use std::{
@@ -147,13 +147,22 @@ pub fn init_logging() -> Logger {
 
 fn qcore_test_config(instance: u8, dhcp_server: Option<Ipv4Addr>) -> Result<Config> {
     let qc_ip = Ipv4Addr::new(127, 0, instance, 1);
-    let qc_dhcp_ip = Ipv4Addr::new(10, 255, 0, 200 + instance);
     let qc_dhcp_mac = [2, 2, 2, 2, 2, 2];
+
+    // This is the IP both for the DHCP relay and the clustering.  If VLAN support is added
+    // then there will need to be an address per VLAN, with the DHCP relay on the data VLANs
+    // and the clustering address on the management VLAN.
+    let qc_lan_ip = Ipv4Addr::new(10, 255, 0, 200 + instance);
+    let cluster_peer_ip = if instance == 0 {
+        None
+    } else {
+        Some(IpAddr::V4(Ipv4Addr::new(10, 255, 0, 200)))
+    };
 
     let ip_allocation_method = if let Some(dhcp_server_ip) = dhcp_server {
         UeIpAllocationConfig::Dhcp(DhcpConfig {
             local_mac: qc_dhcp_mac,
-            local_ip: qc_dhcp_ip,
+            local_ip: qc_lan_ip,
             dhcp_server_ip: Some(dhcp_server_ip),
         })
     } else {
@@ -180,6 +189,11 @@ fn qcore_test_config(instance: u8, dhcp_server: Option<Ipv4Addr>) -> Result<Conf
         five_qi: 7,
         network_display_name: NetworkDisplayName::new("QCoreTest")?,
         ip_allocation_method,
+        cluster_config: Some(ClusterConfig {
+            local_ip: IpAddr::V4(qc_lan_ip),
+            cluster_tcp_port: 22127,
+            peer_ip: cluster_peer_ip,
+        }),
     })
 }
 

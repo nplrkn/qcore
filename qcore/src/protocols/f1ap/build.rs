@@ -7,7 +7,7 @@ use rrc::{
     CellReselectionInfoCommon, CellReselectionPriority, CellReselectionServingFreqInfo,
     IntraFreqCellReselectionInfo, QHyst, QRxLevMin,
 };
-use xxap::{GtpTunnel, NrCgi, PduSessionId, TransportLayerAddress};
+use xxap::{GtpTeid, GtpTunnel, NrCgi, PduSessionId, TransportLayerAddress};
 
 pub fn f1_setup_response(
     transaction_id: TransactionId,
@@ -147,7 +147,7 @@ pub fn drb_to_be_setup_item(
 ) -> DrbsToBeSetupItem {
     let gtp_tunnel = GtpTunnel {
         transport_layer_address,
-        gtp_teid: session.userplane.uplink_gtp_teid,
+        gtp_teid: GtpTeid(session.userplane.uplink_gtp_teid),
     };
 
     let five_qi = session.userplane.five_qi;
@@ -195,7 +195,7 @@ pub fn drb_to_be_setup_item(
                 pdcp_terminating_node_dl_tnl_addr_info: None,
                 pdu_set_qos_parameters: None,
             },
-            snssai: session.snssai.into(),
+            snssai: session.snssai().into(),
             notification_control: None,
             flows_mapped_to_drb_list: FlowsMappedToDrbList(nonempty![FlowsMappedToDrbItem {
                 qos_flow_identifier: QosFlowIdentifier(qfi),

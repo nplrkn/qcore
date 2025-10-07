@@ -7,3 +7,4 @@ edition = "2024"
 oxirush-nas = { git = "https://github.com/nplrkn/oxirush-nas", rev = "1ea425f" }
 security = { path = "../security" }
 anyhow = "1.0.97"
+bincode = "2.0.1"

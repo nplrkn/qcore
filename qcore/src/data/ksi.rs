@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, bincode::Decode, bincode::Encode)]
 pub struct Ksi(pub u8);
 impl Default for Ksi {
     fn default() -> Self {

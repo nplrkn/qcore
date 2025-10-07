@@ -1,5 +1,6 @@
 use super::subscriber_db::SubscriberDb;
 use super::userplane::{DownlinkBufferController, PacketProcessor, PagingApi};
+use crate::cluster::{ClusterMember, ReplicationHandler};
 use crate::data::{Ipv4SessionParams, Payload, UePagingInfo};
 use crate::f1ap::{F1AP_BIND_PORT, F1AP_SCTP_PPID};
 use crate::ngap::{NGAP_BIND_PORT, NGAP_SCTP_PPID};
@@ -47,6 +48,7 @@ pub struct QCore {
     ngap_mode: bool,
     shutting_down: Arc<Mutex<bool>>,
     downlink_buffer_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
+    cluster_member: Option<ClusterMember>,
 }
 
 enum CoreContextLocator {
@@ -142,6 +144,12 @@ impl QCore {
         ngap_mode: bool,
     ) -> Result<Self> {
         let tun_interface_name = config.tun_interface_name.clone();
+        let cluster_member = if let Some(cluster_config) = &config.cluster_config {
+            Some(ClusterMember::new(cluster_config, &logger).await?)
+        } else {
+            None
+        };
+
         Ok(Self {
             config,
             stack: Stack::new(SctpTransportProvider::new()),
@@ -156,6 +164,7 @@ impl QCore {
             ngap_mode,
             shutting_down: Arc::new(Mutex::new(false)),
             downlink_buffer_handle: Arc::new(Mutex::new(None)),
+            cluster_member,
         })
     }
 
@@ -167,6 +176,11 @@ impl QCore {
         };
         let listen_address = format!("{}:{}", self.config.ip_addr, port);
         info!(&self.logger, "My {}    : {}", name, listen_address);
+
+        let self_ref = Arc::new(self.clone());
+        if let Some(cluster_member) = &self.cluster_member {
+            cluster_member.handle(self_ref, &self.logger).await?;
+        }
 
         let handle = if self.ngap_mode {
             self.stack
@@ -520,6 +534,15 @@ impl ProcedureBase for QCore {
                 logger,
                 "Ethernet session downlink buffering not yet implemented"
             );
+        }
+    }
+}
+
+impl ReplicationHandler for Arc<QCore> {
+    async fn store_replicated_ue_context(&self, c: UeContext5GC) {
+        if let Some(tmsi) = &c.tmsi {
+            self.put_core_context(tmsi.0.clone(), 0, c, 10, &self.logger)
+                .await;
         }
     }
 }

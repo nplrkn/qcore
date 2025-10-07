@@ -6,7 +6,7 @@ use crate::{
 use anyhow::Result;
 use asn1_per::*;
 use ngap::*;
-use xxap::{GtpTunnel, PduSessionId, PlmnIdentity, Snssai, TransportLayerAddress};
+use xxap::{GtpTeid, GtpTunnel, PduSessionId, PlmnIdentity, Snssai, TransportLayerAddress};
 
 pub fn ng_setup_response(
     guami: &Guami,
@@ -84,7 +84,7 @@ pub fn initial_context_setup_request(
         session_setup_items.push(PduSessionResourceSetupItemCxtReq {
             pdu_session_id: PduSessionId(session.id),
             nas_pdu: None,
-            snssai: session.snssai.into(),
+            snssai: session.snssai().into(),
             pdu_session_resource_setup_request_transfer,
         })
     }
@@ -189,7 +189,7 @@ fn pdu_session_resource_setup_request_transfer(
         }),
         ul_ngu_up_tnl_information: UpTransportLayerInformation::GtpTunnel(GtpTunnel {
             transport_layer_address: transport_layer_address.clone(),
-            gtp_teid: pdu_session.userplane.uplink_gtp_teid,
+            gtp_teid: GtpTeid(pdu_session.userplane.uplink_gtp_teid),
         }),
         additional_ul_ngu_up_tnl_information: None,
         data_forwarding_not_possible: None,
@@ -251,7 +251,7 @@ pub fn pdu_session_resource_setup_request(
             PduSessionResourceSetupItemSuReq {
                 pdu_session_id: PduSessionId(pdu_session.id),
                 pdu_session_nas_pdu: Some(NasPdu(nas)),
-                snssai: pdu_session.snssai.into(),
+                snssai: pdu_session.snssai().into(),
                 pdu_session_resource_setup_request_transfer
             }
         ]),
