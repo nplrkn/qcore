@@ -98,9 +98,9 @@ impl TestFrameworkBuilder<MockGnb> {
         // -  Uses hardcoded IPs.
         // -  Always sets NGAP mode.
         let gnb_ip = "127.0.1.2";
-        let gnb = MockGnb::new(gnb_ip, logger.new(o!("gnb" => 2))).await?;
+        let mut gnb = MockGnb::new(gnb_ip, logger.new(o!("gnb" => 2))).await?;
         let config = qcore_test_config(1, Some(dn.dhcp_server().ip))?;
-        let ngap_mode = false;
+        let ngap_mode = true;
 
         let qc = QCore::start_second_instance_with_ebpf_reuse(
             config,
@@ -110,6 +110,7 @@ impl TestFrameworkBuilder<MockGnb> {
             true,
         )
         .await?;
+        gnb.perform_ng_setup(qc.ip_addr()).await?;
 
         Ok((gnb, qc))
     }

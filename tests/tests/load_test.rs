@@ -10,5 +10,5 @@ async fn load_test() -> anyhow::Result<()> {
     let sims = generate_load_test_sims(UE_COUNT);
     let logger = init_logging();
     let qc = start_qcore(sims.clone(), true, &logger).await?;
-    qcore_tests::load_test::load_test((*qc).config().ip_addr, sims, logger).await
+    qcore_tests::load_test::load_test(*qc.ip_addr(), sims, logger).await
 }

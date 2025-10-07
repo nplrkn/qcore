@@ -11,7 +11,7 @@ use qcore::{
 };
 use signal_hook::consts::signal::*;
 use signal_hook_async_std::Signals;
-use slog::{Drain, Logger, error, info, o, warn};
+use slog::{Drain, Logger, info, o, warn};
 use std::net::{IpAddr, Ipv4Addr};
 
 #[derive(Parser, Debug)]

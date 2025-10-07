@@ -262,10 +262,6 @@ impl QCore {
 
         Ok(())
     }
-
-    pub fn config(&self) -> &Config {
-        &self.config
-    }
 }
 
 #[async_trait]
