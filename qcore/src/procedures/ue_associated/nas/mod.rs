@@ -222,9 +222,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
                     self.logger,
                     "UE not aware of session {} so delete it", session.id
                 );
-                self.api
-                    .delete_userplane_session(&session.userplane)
-                    .await;
+                self.api.delete_userplane_session(&session.userplane).await;
             } else {
                 debug!(self.logger, "UE confirms existing session {}", session.id);
                 self.ue.pdu_sessions.push(session);
@@ -251,6 +249,10 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
             .map(|_| sessions_to_reactivate);
 
         Ok((active_sessions, reactivation_result))
+    }
+
+    async fn replicate(&self) {
+        self.api.replicate_ue_context(self.ue).await
     }
 }
 

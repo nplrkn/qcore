@@ -124,6 +124,7 @@ impl<'a, B: RanUeBase> NasBase for &mut NgapUeProcedure<'a, B> {
             );
             async fn register_new_tmsi(&self, [self.ue.local_ran_ue_id], [&self.logger]) -> [u8;4];
             async fn delete_tmsi(&self, tmsi: [u8; 4]);
+            async fn replicate_ue_context(&self, cxt: &UeContext5GC, [&self.logger]);
     }}
 
     fn disconnect_ue(&mut self) {

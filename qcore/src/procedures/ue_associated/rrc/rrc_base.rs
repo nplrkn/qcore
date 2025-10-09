@@ -35,6 +35,7 @@ pub trait RrcBase {
     async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
     async fn register_new_tmsi(&self) -> [u8; 4];
     async fn delete_tmsi(&self, tmsi: [u8; 4]);
+    async fn replicate_ue_context(&self, cxt: &UeContext5GC);
 
     async fn ran_ue_context_setup(&mut self, session: &mut PduSession) -> Result<Vec<u8>>; // Returns cell group config
     async fn ran_ue_context_modification(

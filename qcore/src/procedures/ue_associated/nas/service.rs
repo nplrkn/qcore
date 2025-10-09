@@ -79,10 +79,11 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
             //   If a new 5G-GUTI was included in the CONFIGURATION UPDATE COMMAND message, the AMF shall
             //   consider the new 5G-GUTI as valid and the old 5G-GUTI as invalid.
             let guti = self.allocate_guti().await;
-            self.perform_configuration_update(Some(guti)).await
-        } else {
-            Ok(())
+            self.perform_configuration_update(Some(guti)).await?;
         }
+
+        self.replicate().await;
+        Ok(())
     }
 
     async fn reject(&mut self, cause: u8) -> Result<()> {

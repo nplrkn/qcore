@@ -13,6 +13,8 @@ pub trait NasBase {
     async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
     async fn delete_tmsi(&self, tmsi: [u8; 4]);
 
+    async fn replicate_ue_context(&self, cxt: &UeContext5GC);
+
     async fn allocate_userplane_session(
         &self,
         ipv4: bool,

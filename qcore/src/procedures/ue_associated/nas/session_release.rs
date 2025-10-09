@@ -35,6 +35,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         self.api
             .delete_userplane_session(&released_session.userplane)
             .await;
+        self.replicate().await;
 
         let _pdu_session_release_complete = self
             .receive_nas_sm(
@@ -46,8 +47,6 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
             )
             .await?;
         self.log_message(">> Nas PduSessionReleaseComplete");
-
-        // TODO check session identity
 
         Ok(())
     }

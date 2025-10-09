@@ -277,7 +277,8 @@ impl PacketProcessor {
                 if_indices = std::mem::take(interface_indices);
             }
             EbpfStartupData::Reuse => {
-                ebpf_maps = Self::reuse_ebpf_maps().context("Reusing ebpf maps")?;
+                ebpf_maps = Self::reuse_ebpf_maps()
+                    .context("Reusing ebpf maps - did you run `mount -t bpf bpffs /sys/fs/bpf`")?;
                 if_indices = vec![];
             }
         }

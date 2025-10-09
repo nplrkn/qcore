@@ -60,6 +60,8 @@ pub trait RanUeBase {
     async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
     async fn delete_tmsi(&self, tmsi: [u8; 4]);
 
+    async fn replicate_ue_context(&self, cxt: &UeContext5GC, logger: &Logger);
+
     fn disconnect_ue(&mut self, cause: ReleaseCause);
 }
 

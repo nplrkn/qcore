@@ -51,7 +51,6 @@ pub struct ClusterHandler<H: ReplicationHandler> {
 
 const MAX_LENGTH: usize = 1024;
 
-//impl<H: Handler> ClusterMember<H> {
 impl ClusterMember {
     pub async fn new(config: &ClusterConfig, _logger: &Logger) -> Result<Self> {
         let member = ClusterMember {
@@ -60,7 +59,6 @@ impl ClusterMember {
             local_ip: config.local_ip,
             peer_ip: config.peer_ip,
             receiver: Arc::new(Mutex::new(None)),
-            //handler,
         };
 
         Ok(member)
@@ -81,6 +79,38 @@ impl ClusterMember {
         // Accept incoming connections.
         handler.start_accepter(logger.clone()).await
     }
+
+    // Warning: this can take a long time to return if the connection is congested or broken.
+    pub async fn replicate_ue_context(&self, cxt: &UeContext5GC, logger: &Logger) -> Result<()> {
+        // We clone the TcpStream to avoid holding the mutex during the transmission.
+        let sender = self.sender.lock().await.clone();
+
+        let Some(mut sender) = sender else {
+            // No receiver attached right now.
+            return Ok(());
+        };
+
+        let bytes = bincode::encode_to_vec(cxt, bincode::config::standard())?;
+        let length = bytes.len() as u16;
+
+        if sender.write(&length.to_be_bytes()).await.is_ok() && sender.write(&bytes).await.is_ok() {
+            debug!(
+                logger,
+                "Successfully wrote UE context to replication stream"
+            )
+        } else {
+            // TODO - sender is down, but it is a false assumption that self.sender is down.  It might have changed
+            // since we took the clone of it above, so we might be killing a perfectly good connection.
+            // That said, the other side should retry, so we should recover if we hit this timing window.
+            *self.sender.lock().await = None;
+            info!(
+                logger,
+                "Replication send channel down - now waiting for new connection"
+            );
+        }
+
+        Ok(())
+    }
 }
 
 impl<H: ReplicationHandler> ClusterHandler<H> {
@@ -90,7 +120,6 @@ impl<H: ReplicationHandler> ClusterHandler<H> {
         if receiver.is_none() {
             let join_handle = async_std::task::spawn(async move {
                 if let Err(e) = self_clone.connect_and_receive_task(peer, &logger).await {
-                    // TODO log warning
                     warn!(logger, "Receive task exited with error {:#}", e);
                 }
             });
@@ -121,13 +150,12 @@ impl<H: ReplicationHandler> ClusterHandler<H> {
             let mut sender = self.base.sender.lock().await;
             if sender.is_none() {
                 *sender = Some(connection);
-                println!("GOT SENDER!!!");
-                // TODO - notify replicate_all
-                // this will cause the user to make a succession of calls to UeContext.
+                debug!(logger, "Accepted replication connection from {peer}");
+                self.handler.new_receiver();
             } else {
                 warn!(
                     logger,
-                    "New cluster connection from {} dropped - already connected", peer
+                    "New cluster connection from {peer} dropped - already connected"
                 )
             }
             self.start_receiver(peer.ip(), logger.clone()).await;
@@ -137,7 +165,7 @@ impl<H: ReplicationHandler> ClusterHandler<H> {
     async fn connect_and_receive_task(&self, peer_ip: IpAddr, logger: &Logger) -> Result<()> {
         let peer_sockaddr = SocketAddr::new(peer_ip, self.base.cluster_tcp_port);
 
-        // Make sure our outgoing connections emanate from the same local address that we are
+        // TODO: Make sure our outgoing connections emanate from the same local address that we are
         // listening on.
         //
         // Do this in a spawn_blocking thread??
@@ -167,11 +195,7 @@ impl<H: ReplicationHandler> ClusterHandler<H> {
         debug!(logger, "Send hello placeholder");
     }
 
-    async fn receive_ue_contexts(
-        &self,
-        connection: &mut TcpStream,
-        _logger: &Logger,
-    ) -> Result<()> {
+    async fn receive_ue_contexts(&self, connection: &mut TcpStream, logger: &Logger) -> Result<()> {
         let mut length_buf = [0u8; 2];
         loop {
             // Receive the length.
@@ -188,6 +212,10 @@ impl<H: ReplicationHandler> ClusterHandler<H> {
             // TODO use decode_from_std_read()?  See https://docs.rs/bincode/2.0.1/bincode/
             let (ue_context, _len): (UeContext5GC, usize) =
                 bincode::decode_from_slice(&buf[..], bincode::config::standard())?;
+            debug!(
+                logger,
+                "Received replicated UE context for TMSI {:?}", ue_context.tmsi
+            );
             self.handler.store_replicated_ue_context(ue_context).await;
         }
     }
@@ -198,5 +226,6 @@ pub trait ReplicationHandler: Clone + Send + Sync + 'static {
         &self,
         c: UeContext5GC,
     ) -> impl std::future::Future<Output = ()> + std::marker::Send;
-    //fn replicate_all(&self);
+
+    fn new_receiver(&self);
 }

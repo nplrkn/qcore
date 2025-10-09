@@ -35,6 +35,7 @@ pub trait ProcedureBase: Send + Sync + Clone + 'static {
         _ttl_secs: u32,
         logger: &Logger,
     );
+    async fn replicate_ue_context(&self, cxt: &UeContext5GC, logger: &Logger);
 
     async fn spawn_ue_message_handler(&self) -> u32;
     async fn dispatch_ue_message(&self, ue_id: u32, message: UeMessage) -> Result<()>;

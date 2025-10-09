@@ -148,6 +148,7 @@ impl<'a, B: RrcBase> NasBase for &mut RrcProcedure<'a, B> {
         async fn delete_tmsi(&self, tmsi: [u8; 4]);
         fn ue_tac(&self) -> &[u8; 3];
         fn disconnect_ue(&mut self);
+        async fn replicate_ue_context(&self, cxt: &UeContext5GC);
     }}
 
     async fn ran_session_setup(

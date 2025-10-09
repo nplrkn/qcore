@@ -72,6 +72,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         let accept = self.ue.nas.encode_dl(accept)?;
         self.api.ran_session_setup(&mut session, accept).await?;
         self.ue.pdu_sessions.push(session);
+        self.replicate().await;
 
         Ok(())
     }

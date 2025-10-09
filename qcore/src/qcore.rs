@@ -383,6 +383,18 @@ impl ProcedureBase for QCore {
             .await
     }
 
+    async fn replicate_ue_context(&self, cxt: &UeContext5GC, logger: &Logger) {
+        // TODO - this should spawn a task to avoid slowing down the UE procedure in the case
+        // of a slow replication connection.
+        // TODO - if replicate_ue_context is called twice for the same UE context (TMSI?  IMSI?)
+        // and the first version has not yet been transmitted, we should skip it and just send
+        // the latest version.
+        // TODO - should we send a 'delete TMSI'?
+        if let Some(cluster_member) = &self.cluster_member {
+            let _ = cluster_member.replicate_ue_context(cxt, logger).await;
+        }
+    }
+
     async fn register_new_tmsi(&self, ue_id: u32, logger: &Logger) -> [u8; 4] {
         let mut tmsi;
         loop {
@@ -544,5 +556,10 @@ impl ReplicationHandler for Arc<QCore> {
             self.put_core_context(tmsi.0.clone(), 0, c, 10, &self.logger)
                 .await;
         }
+    }
+
+    fn new_receiver(&self) {
+        // TODO - catchup replication
+        debug!(self.logger, "Catchup replication not yet implelmented")
     }
 }

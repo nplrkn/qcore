@@ -113,6 +113,7 @@ impl<'a, B: RanUeBase> RrcBase for &mut F1apUeProcedure<'a, B> {
         async fn take_core_context(&self, tmsi: &[u8]) -> Option<UeContext5GC>;
         fn unexpected_pdu<T:Into<UeMessage>>(&mut self, pdu:T, expected: &str) -> Result<()>;
         fn served_cells(&self) -> &ServedCellsMap;
+        async fn replicate_ue_context(&self, cxt: &UeContext5GC, [&self.logger]);
     }}
 
     fn disconnect_ue(&mut self) {
