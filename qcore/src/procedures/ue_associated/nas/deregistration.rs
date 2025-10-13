@@ -14,6 +14,11 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
         self.log_message("<< Nas DeregistrationAcceptFromUe");
         self.send_nas(response).await?;
 
+        // Delete userplane sessions.
+        while let Some(session) = self.ue.pdu_sessions.pop() {
+            self.api.delete_userplane_session(&session.userplane).await;
+        }
+
         // Clear the TMSI - meaning that the 5GC context will not be persisted.
         match self.ue.tmsi.take() {
             Some(tmsi) => self.api.delete_tmsi(tmsi.0).await,

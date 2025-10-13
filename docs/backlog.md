@@ -1,13 +1,6 @@
 # Backlog
 
 ## In progress
--  Interop testing bugs
-   -  If a phone disconnects and reconnects (toggle mobile radio power), we get errors 
-      -  "Lease already existed for" and "Carry on after netlink error..."
-         -  It is setting up a new session and DHCP is giving it the same address.
-      -  We did not clean up the session on UE Deregistration
-   -  UE is still using its TMSI after deregistration to reregister
-
 -  Clustering
    -  Get two_qcores test working, review new warnings + todos
    -  Test connection with catchup, disconnection and reconnection, session deletion, deregistration
@@ -31,6 +24,7 @@
 ## Function gaps
 - Implement and test NAS procedure interaction table
 - Registration timeout and refresh (+ update parallelization table)
+- UE using TMSI after deregistration to reregister
 - DHCP gaps
   -  retries
   -  PDU session should be terminated by network on lease expiry, or lease renewal reject, or change of address on lease renewal (TS29.561)
@@ -39,7 +33,6 @@
 - Ethernet paging
 - Sessions / IP addresses should not persist forever.  Timeout; flush on TMSI register/service request without session reactivation; flush on IMSI registration? 
 - Large SCTP messages - e.g. unfiltered UE Capability Information
-- UE static IP
 - Time out during procedures - e.g. Authentication procedure uses T3560
 - UE AMBR
 - NAS uplink integrity validation
@@ -68,8 +61,7 @@
   - Update / Remove a DU's served cells on Du configuration update, F1 Remove, disconnection
 
 ## Error handling
-- Session setup with existing PDU session ID should not leave up old session.  Seen with OnePlus phone which repeated 
-  its session setup request (with no intervening delete) after not liking the response.
+- Session setup with existing PDU session ID should not leave up old session.  Seen with OnePlus phone which repeated its session setup request (with no intervening delete) after not liking the response.
 
 ## Code cleanliness + refactoring
 -  Is this a better design model for test UEs?: https://docs.rs/rtnetlink/latest/rtnetlink/struct.RouteMessageBuilder.html
