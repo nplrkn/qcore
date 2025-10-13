@@ -94,6 +94,12 @@ impl DhcpClient {
             .get_address_procedure(client_identifier.clone(), logger)
             .await?;
         let address = ack.yiaddr();
+        debug!(
+            logger,
+            "Got lease for {} from server {}",
+            address,
+            server_ip_from_ack(&ack)?
+        );
 
         let lease_cancel_handle = self.keep_lease(ack, client_identifier, logger).await;
         let existing_lease = self

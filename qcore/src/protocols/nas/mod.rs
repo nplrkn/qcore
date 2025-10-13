@@ -6,7 +6,6 @@ use std::fmt::Display;
 use xxap::PlmnIdentity;
 
 // TS24.501, Table 9.11.3.2.1
-
 #[allow(dead_code)]
 pub const FGMM_CAUSE_ILLEGAL_UE: u8 = 0b00000011;
 #[allow(dead_code)]
@@ -29,6 +28,12 @@ pub const FGSM_CAUSE_REGULAR_DEACTIVATION: u8 = 0b00100100;
 // TS24.501, 9.11.3.7.1
 pub const REGISTRATION_TYPE_MASK: u8 = 0b111;
 pub const REGISTRATION_TYPE_INITIAL: u8 = 1;
+
+// TS24.501, 9.11.4.11
+pub const PDU_SESSION_TYPE_IPV4: u8 = 0b001;
+pub const PDU_SESSION_TYPE_IPV6: u8 = 0b010;
+pub const PDU_SESSION_TYPE_IPV4V6: u8 = 0b011;
+pub const PDU_SESSION_TYPE_ETHERNET: u8 = 0b101;
 
 #[derive(Debug)]
 pub struct Imsi(pub String);

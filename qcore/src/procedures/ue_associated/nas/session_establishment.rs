@@ -1,5 +1,9 @@
 use crate::{
-    protocols::nas::{FGSM_CAUSE_INSUFFICIENT_RESOURCES, FGSM_CAUSE_UNKNOWN_PDU_SESSION_TYPE},
+    protocols::nas::{
+        FGSM_CAUSE_INSUFFICIENT_RESOURCES, FGSM_CAUSE_UNKNOWN_PDU_SESSION_TYPE,
+        PDU_SESSION_TYPE_ETHERNET, PDU_SESSION_TYPE_IPV4, PDU_SESSION_TYPE_IPV4V6,
+        PDU_SESSION_TYPE_IPV6,
+    },
     ue_dhcp_identifier,
 };
 
@@ -23,14 +27,22 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
 
         let ipv4 = if let Some(NasPduSessionType { value, .. }) = r.pdu_session_type {
             match value {
-                0b001 => true,  // IPv4
-                0b101 => false, // Ethernet
-                0b111 => {
+                PDU_SESSION_TYPE_IPV4 => true,      // IPv4
+                PDU_SESSION_TYPE_ETHERNET => false, // Ethernet
+                PDU_SESSION_TYPE_IPV4V6 => {
                     debug!(self.logger, "UE requested IPv4v6 - accept IPv4 only");
                     true
                 }
                 _ => {
-                    warn!(self.logger, "Unsupported PduSessionType {value:03b}");
+                    if value == PDU_SESSION_TYPE_IPV6 {
+                        // Dedicated log for IPv6 to prompt user to reconfigure
+                        warn!(
+                            self.logger,
+                            "UE requested IPv6 PDU session - reconfigure it to use IPv4"
+                        )
+                    } else {
+                        warn!(self.logger, "Unsupported PduSessionType {value:03b}");
+                    }
                     self.session_reject(session_id, pti, FGSM_CAUSE_UNKNOWN_PDU_SESSION_TYPE)
                         .await?;
                     return Ok(());

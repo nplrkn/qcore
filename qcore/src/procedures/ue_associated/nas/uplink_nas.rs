@@ -32,16 +32,17 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
 
         let nas = self.nas_decode(&nas_bytes)?;
 
-        // If the NAS message is security protected, and security is not yet activated on the UE, this means that
-        // the S-TMSI retrieval arm above didn't happen, which means that the UE didn't supply S-TMSI to the gNB,
-        // which means the UE is not registered in the tracking area.  See 38.331, 5.3.3.3:
+        // If the NAS message is security protected but no TMSI was supplied, then in the normal case,
+        // the UE is not registered in the tracking area.  See 38.331, 5.3.3.3:
         //   NOTE 1: Upper layers provide the 5G-S-TMSI if the UE is registered in the TA of the current cell.
         //
         // Therefore this is typically a GUTI initial registration.  We need to get hold of the security context now,
         // because this is the last point at which we have the raw message bytes to perform integrity checking.
         // We peek inside the message to get out the GUTI, retrieve the security context, and then admit the message.
         if let (nas, Some(security_header)) = &nas {
-            if !self.ue.nas.security_activated() {
+            // The test of stmsi.is_none() is to avoid pointlessly peeking inside the message if we already failed
+            // the TMSI lookup on the TMSI in the outer message in the arm above.
+            if stmsi.is_none() && !self.ue.nas.security_activated() {
                 match peek_mobile_identity(nas) {
                     Ok(MobileIdentity::Guti(Guti(_plmn, amf_ids, tmsi))) => {
                         match self
@@ -60,7 +61,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
                             Ok(true) => {
                                 // TODO: should we stop processing at this point?
                                 // For a register, we can carry on and do an identity request - is that the right step
-                                // in other cases too?
+                                // in other cases (e.g. service request) too?
                                 debug!(self.logger, "Unknown TMSI in initial NAS message")
                             }
                             Err(e) => warn!(self.logger, "Error retrieving UE {e}"),

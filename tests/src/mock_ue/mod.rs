@@ -358,6 +358,12 @@ impl<T: Transport> MockUe<T> {
         self.send_nas_service_request_ext(false).await
     }
 
+    pub async fn receive_nas_service_reject(&mut self) -> Result<()> {
+        ensure_nas!(ServiceReject, self.receive_nas().await?);
+        info!(&self.logger, "Nas ServiceReject <<");
+        Ok(())
+    }
+
     pub async fn send_nas_service_request_ext(&mut self, omit_inner_container: bool) -> Result<()> {
         // Potential fields needed in the InitialUeMessage:
         // - UEContextRequest

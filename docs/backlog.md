@@ -2,16 +2,11 @@
 
 ## In progress
 -  Interop testing bugs
-   -  Log DHCP server IP
-   -  6 debug logs with "unknown TMSI" when we look in both the outer and inner message
    -  If a phone disconnects and reconnects (toggle mobile radio power), we get errors 
       -  "Lease already existed for" and "Carry on after netlink error..."
          -  It is setting up a new session and DHCP is giving it the same address.
       -  We did not clean up the session on UE Deregistration
    -  UE is still using its TMSI after deregistration to reregister
-   -  "WARN Identity peek not implemented for message type on Service Request"
-   -  "WARN Unsupported PduSessionType 011" log - actuallly this is IpV4V6
-      -  meanwhile IPv6 case should say "UE asked for IPv6 - please change it to IPv4"
 
 -  Clustering
    -  Get two_qcores test working, review new warnings + todos
