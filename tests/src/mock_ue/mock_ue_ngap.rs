@@ -3,12 +3,12 @@ use async_trait::async_trait;
 use qcore::SubscriberAuthParams;
 use slog::Logger;
 use std::{
-    net::IpAddr,
+    net::{IpAddr, Ipv4Addr},
     ops::{Deref, DerefMut},
 };
 
 use crate::{
-    GnbUeContext, MockGnb, MockUe,
+    DataNetwork, GnbUeContext, MockGnb, MockUe,
     mock_ue::{MockUe5GCData, Transport},
     packet::Packet,
 };
@@ -121,6 +121,22 @@ impl<'a> MockUeNgap<'a> {
 
     pub async fn establish_session(&mut self, gnb: &'a MockGnb) -> Result<()> {
         self.send_nas_pdu_session_establishment_request().await?;
+        gnb.handle_pdu_session_resource_setup(self).await?;
+        self.receive_nas_session_accept().await
+    }
+
+    pub async fn establish_dhcp_session(
+        &mut self,
+        gnb: &'a MockGnb,
+        dn: &DataNetwork,
+    ) -> Result<()> {
+        self.send_nas_pdu_session_establishment_request().await?;
+        let dhcp_lease_time_secs = 1;
+        let ue_addr = Ipv4Addr::new(10, 255, 0, 4 + self.ue_id as u8);
+        dn.dhcp_server()
+            .hand_out_address(ue_addr, dhcp_lease_time_secs)
+            .await?;
+
         gnb.handle_pdu_session_resource_setup(self).await?;
         self.receive_nas_session_accept().await
     }

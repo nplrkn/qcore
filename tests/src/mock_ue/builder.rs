@@ -1,4 +1,4 @@
-use crate::{MockDu, MockGnb, MockUeF1ap, MockUeNgap, framework::nth_imsi};
+use crate::{DataNetwork, MockDu, MockGnb, MockUeF1ap, MockUeNgap, framework::nth_imsi};
 use anyhow::Result;
 use async_std::sync::Mutex;
 use qcore::SubscriberDb;
@@ -55,16 +55,23 @@ impl UeBuilder {
         F1apUeBuilder { du, builder: self }
     }
 
+    async fn next_sim_id(&self) -> usize {
+        let mut sim_id = self.next_sim_id.lock().await;
+        let id = *sim_id;
+        *sim_id += 1;
+        id
+    }
+
     async fn new_ngap_ue<'a>(&self, gnb: &'a MockGnb) -> Result<MockUeNgap<'a>> {
+        let id = self.next_sim_id().await;
         let mut ue = MockUeNgap::new(
-            nth_imsi(*self.next_sim_id.lock().await, &self.sims),
-            1,
+            nth_imsi(id, &self.sims),
+            (id + 1) as u32,
             gnb,
             &self.qc_ip_addr,
             &self.logger,
         )
         .await?;
-        *self.next_sim_id.lock().await += 1;
         if self.ethernet {
             ue.use_ethernet();
         }
@@ -75,15 +82,15 @@ impl UeBuilder {
     }
 
     async fn new_f1ap_ue<'a>(&self, du: &'a MockDu) -> Result<MockUeF1ap<'a>> {
+        let id = self.next_sim_id().await;
         let mut ue = MockUeF1ap::new(
-            nth_imsi(*self.next_sim_id.lock().await, &self.sims),
-            1,
+            nth_imsi(id, &self.sims),
+            (id + 1) as u32,
             du,
             &self.qc_ip_addr,
             &self.logger,
         )
         .await?;
-        *self.next_sim_id.lock().await += 1;
         if self.ethernet {
             ue.use_ethernet();
         }
@@ -114,6 +121,13 @@ impl<'a> NgapUeBuilder<'a> {
         let mut ue = self.builder.new_ngap_ue(self.gnb).await?;
         ue.register(self.gnb).await?;
         ue.establish_session(self.gnb).await?;
+        Ok(ue)
+    }
+
+    pub async fn with_dhcp_session(self, dn: &DataNetwork) -> Result<MockUeNgap<'a>> {
+        let mut ue = self.builder.new_ngap_ue(self.gnb).await?;
+        ue.register(self.gnb).await?;
+        ue.establish_dhcp_session(self.gnb, dn).await?;
         Ok(ue)
     }
 }

@@ -52,6 +52,7 @@ pub trait Transport {
 }
 
 pub struct MockUe<T: Transport> {
+    pub ue_id: u32,
     pub data: MockUe5GCData,
     transport: T,
     logger: Logger,
@@ -68,6 +69,7 @@ impl<T: Transport> MockUe<T> {
         logger: &Logger,
     ) -> Self {
         MockUe {
+            ue_id,
             data: MockUe5GCData::new(imsi, sub_auth_params),
             transport,
             logger: logger.new(o!("ue" => ue_id)),
@@ -78,6 +80,7 @@ impl<T: Transport> MockUe<T> {
 
     pub fn new_from_base(data: MockUe5GCData, ue_id: u32, transport: T, logger: &Logger) -> Self {
         MockUe {
+            ue_id,
             data,
             transport,
             logger: logger.new(o!("ue" => ue_id)),
