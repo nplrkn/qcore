@@ -95,7 +95,7 @@ impl<P: Procedure> RequestProvider<P> for Stack {
 
         // Create a channel to receive the response.
         let (sender, receiver) = async_channel::bounded::<Vec<u8>>(1);
-        let match_fn = |m: &Message| ((m[0] != 0) && (m[1] == P::CODE));
+        let match_fn = |m: &Message| (m[0] != 0) && (m[1] == P::CODE);
         self.pending_requests
             .lock()
             .await

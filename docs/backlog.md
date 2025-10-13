@@ -13,10 +13,9 @@
    -  "WARN Identity peek not implemented for message type on Service Request"
    -  "WARN Unsupported PduSessionType 011" log - actuallly this is IpV4V6
       -  meanwhile IPv6 case should say "UE asked for IPv6 - please change it to IPv4"
--  rustup
 
 -  Clustering
-   -  Fix broken test, review new warnings + todos
+   -  Get two_qcores test working, review new warnings + todos
    -  Test connection with catchup, disconnection and reconnection, session deletion, deregistration
 
 ## Persistence

@@ -75,7 +75,7 @@ pub fn reconfiguration(
     session_to_delete: Option<&PduSession>,
     master_cell_group: Option<Vec<u8>>,
 ) -> Box<DlDcchMessage> {
-    let dedicated_nas_message_list = nas_messages.map(|x| (x.map(DedicatedNasMessage)));
+    let dedicated_nas_message_list = nas_messages.map(|x| x.map(DedicatedNasMessage));
 
     let (srb_to_add_mod_list, drb_to_add_mod_list) = if let Some(session_to_add) = session_to_add {
         let (pdcp_sn_size_ul, pdcp_sn_size_dl) = match session_to_add.userplane.pdcp_sn_length {
