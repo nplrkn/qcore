@@ -116,9 +116,21 @@ impl MockGnb {
     async fn receive_ng_setup_response(&self) -> Result<()> {
         let pdu = self.receive_pdu().await?;
         let NgapPdu::SuccessfulOutcome(SuccessfulOutcome::NgSetupResponse(_)) = *pdu else {
-            bail!("Unexpected Ngap message {:?}", pdu)
+            bail!("Expecting NgSetupResponse, got {:?}", pdu)
         };
         info!(self.logger, "NgSetupResponse <<");
+        Ok(())
+    }
+
+    pub async fn perform_ng_reset(&self) -> Result<()> {
+        let pdu = build_ngap::ng_reset();
+        info!(self.logger, "Ngap NgReset >>");
+        self.send(&pdu, None).await;
+        let pdu = self.receive_pdu().await?;
+        let NgapPdu::SuccessfulOutcome(SuccessfulOutcome::NgResetAcknowledge(_)) = *pdu else {
+            bail!("Expecting NgResetAcknowledge, got {:?}", pdu)
+        };
+        info!(self.logger, "Ngap NgResetAcknowledge <<");
         Ok(())
     }
 

@@ -40,6 +40,15 @@ pub fn ng_setup_request() -> Box<NgapPdu> {
     ))
 }
 
+pub fn ng_reset() -> Box<NgapPdu> {
+    Box::new(NgapPdu::InitiatingMessage(InitiatingMessage::NgReset(
+        NgReset {
+            cause: Cause::RadioNetwork(CauseRadioNetwork::UserInactivity),
+            reset_type: ResetType::NgInterface(ResetAll::ResetAll),
+        },
+    )))
+}
+
 pub fn uplink_nas_transport(
     amf_ue_ngap_id: AmfUeNgapId,
     ran_ue_ngap_id: RanUeNgapId,

@@ -21,6 +21,7 @@ impl<T> Deref for NgapAmf<T> {
 
 impl<T> Application for NgapAmf<T> where
     T: RequestProvider<NgSetupProcedure>
+        + RequestProvider<NgResetProcedure>
         + RequestProvider<RanConfigurationUpdateProcedure>
         + IndicationHandler<InitialUeMessageProcedure>
         + IndicationHandler<UplinkNasTransportProcedure>
@@ -46,6 +47,7 @@ where
     T: Send
         + Sync
         + RequestProvider<NgSetupProcedure>
+        + RequestProvider<NgResetProcedure>
         + RequestProvider<RanConfigurationUpdateProcedure>
         + IndicationHandler<InitialUeMessageProcedure>
         + IndicationHandler<UplinkNasTransportProcedure>
@@ -77,6 +79,9 @@ where
             NgapPdu::InitiatingMessage(InitiatingMessage::UeContextReleaseRequest(req)) => {
                 UeContextReleaseRequestProcedure::call_provider(&self.0, req, logger).await;
                 None
+            }
+            NgapPdu::InitiatingMessage(InitiatingMessage::NgReset(req)) => {
+                NgResetProcedure::call_provider(&self.0, req, logger).await
             }
             m => {
                 error!(logger, "Unhandled Ngap message {:?}", m);

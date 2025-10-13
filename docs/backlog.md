@@ -2,7 +2,6 @@
 
 ## In progress
 -  Interop testing bugs
-   -  Received an ngReset (when we Ctrl-C the gNB) - unhandled
    -  Log DHCP server IP
    -  6 debug logs with "unknown TMSI" when we look in both the outer and inner message
    -  If a phone disconnects and reconnects (toggle mobile radio power), we get errors 

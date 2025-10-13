@@ -10,7 +10,7 @@ impl<'a, A: ProcedureBase> Procedure<'a, A> {
         &self,
         r: NgSetupRequest,
     ) -> Result<ResponseAction<NgSetupResponse>, RequestError<NgSetupFailure>> {
-        self.log_message(">> NgSetupRequest");
+        self.log_message(">> Ngap NgSetupRequest");
         let gnb_name = if let Some(ref x) = r.ran_node_name {
             x.0.clone()
         } else {
@@ -26,7 +26,7 @@ impl<'a, A: ProcedureBase> Procedure<'a, A> {
             &self.api.config().plmn,
             self.api.config().sst,
         )?;
-        self.log_message("<< NgSetupResponse");
+        self.log_message("<< Ngap NgSetupResponse");
         Ok((response, None))
     }
 }

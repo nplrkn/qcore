@@ -6,8 +6,8 @@ async fn ngap_service_request_variants() -> anyhow::Result<()> {
     let ue = builder.ngap_ue(&gnb).registered().await?;
 
     let mock_ue = ue.into();
+    gnb.perform_ng_reset().await?;
     gnb.disconnect().await;
-    async_std::task::sleep(std::time::Duration::from_millis(500)).await;
     gnb.perform_ng_setup(qc.ip_addr()).await?;
 
     // UE sends a service request without an inner container.

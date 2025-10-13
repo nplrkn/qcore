@@ -2,10 +2,10 @@ use super::prelude::*;
 use crate::procedures::{UeMessage, interface_management::Procedure};
 use async_trait::async_trait;
 use ngap::{
-    InitialUeMessage, InitiatingMessage, NgSetupFailure, NgSetupRequest, NgSetupResponse, NgapAmf,
-    NgapPdu, RanConfigurationUpdate, RanConfigurationUpdateAcknowledge,
-    RanConfigurationUpdateFailure, RanConfigurationUpdateProcedure,
-    UeRadioCapabilityInfoIndication, UplinkNasTransport,
+    InitialUeMessage, InitiatingMessage, NgReset, NgResetAcknowledge, NgSetupFailure,
+    NgSetupRequest, NgSetupResponse, NgapAmf, NgapPdu, RanConfigurationUpdate,
+    RanConfigurationUpdateAcknowledge, RanConfigurationUpdateFailure,
+    RanConfigurationUpdateProcedure, UeRadioCapabilityInfoIndication, UplinkNasTransport,
 };
 use xxap::{
     EventHandler, IndicationHandler, RequestError, RequestProvider, ResponseAction, TnlaEvent,
@@ -31,6 +31,17 @@ impl<A: ProcedureBase> RequestProvider<ngap::NgSetupProcedure> for NgapHandler<A
         logger: &Logger,
     ) -> Result<ResponseAction<NgSetupResponse>, RequestError<NgSetupFailure>> {
         Procedure::new(&self.0, logger).ng_setup(r).await
+    }
+}
+
+#[async_trait]
+impl<A: ProcedureBase> RequestProvider<ngap::NgResetProcedure> for NgapHandler<A> {
+    async fn request(
+        &self,
+        r: NgReset,
+        logger: &Logger,
+    ) -> Result<ResponseAction<NgResetAcknowledge>, RequestError<()>> {
+        Procedure::new(&self.0, logger).ng_reset(r).await
     }
 }
 

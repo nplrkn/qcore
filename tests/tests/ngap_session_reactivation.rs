@@ -8,10 +8,8 @@ async fn ngap_session_reactivation() -> anyhow::Result<()> {
     let mock_ue = ue.into();
 
     // Disconnect the TNLA, then re-establish the NG interface.
+    gnb.perform_ng_reset().await?;
     gnb.disconnect().await;
-
-    // TODO - remove this - probably by replacing the above with an NgReset procedure
-    async_std::task::sleep(std::time::Duration::from_millis(500)).await;
     gnb.perform_ng_setup(qc.ip_addr()).await?;
 
     // UE sends a service request with GUTI to reactivate its previous session.
