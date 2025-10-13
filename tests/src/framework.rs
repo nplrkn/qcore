@@ -15,7 +15,7 @@ use xxap::PlmnIdentity;
 
 pub struct TestFrameworkBuilder<T> {
     logger: Logger,
-    use_dhcp: Option<&'static str>,
+    use_dhcp: bool,
     local_ip: Option<Ipv4Addr>,
     x: PhantomData<T>,
 }
@@ -24,14 +24,14 @@ impl<T> TestFrameworkBuilder<T> {
     pub fn new() -> Self {
         Self {
             logger: init_logging(),
-            use_dhcp: None,
+            use_dhcp: false,
             local_ip: None,
             x: PhantomData,
         }
     }
 
-    pub fn use_dhcp(mut self, if_name: &'static str) -> Self {
-        self.use_dhcp = Some(if_name);
+    pub fn use_dhcp(mut self) -> Self {
+        self.use_dhcp = true;
         self
     }
 
@@ -47,7 +47,13 @@ impl<T> TestFrameworkBuilder<T> {
         exit_on_panic();
         let dn = DataNetwork::new(&self.logger).await?;
         let (subs, _) = SubscriberDb::new_from_sim_file("test_sims.toml", &self.logger)?;
-        let config = qcore_test_config(0, None)?;
+        let dhcp_server = if self.use_dhcp {
+            Some(dn.dhcp_server().ip)
+        } else {
+            None
+        };
+
+        let config = qcore_test_config(0, dhcp_server)?;
 
         let qc = QCore::start(
             config,

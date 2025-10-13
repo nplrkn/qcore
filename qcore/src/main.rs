@@ -134,10 +134,6 @@ async fn main() -> Result<()> {
         };
         let netlink = qcore::Netlink::new(0)?;
         let (local_ip, local_mac) = netlink.get_link_addr_info(lan_if_index).await?;
-        info!(
-            logger,
-            "IP allocation model : DHCP on LAN over if index {}", lan_if_index
-        );
 
         // The 'None' here means that QCore will broadcast its DHCP requests.
         UeIpAllocationConfig::Dhcp(DhcpConfig {
@@ -147,11 +143,6 @@ async fn main() -> Result<()> {
         })
     } else {
         check_ue_subnet(&args.ue_subnet)?;
-        info!(
-            logger,
-            "IP allocation model : Self-managed on {}/24", args.ue_subnet
-        );
-
         UeIpAllocationConfig::RoutedUeSubnet(args.ue_subnet)
     };
     let qc = match QCore::start(

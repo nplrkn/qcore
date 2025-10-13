@@ -50,5 +50,9 @@ sudo ip addr add 10.255.0.201/24 dev veth2
 sudo sysctl -w net.ipv4.conf.veth2.proxy_arp=1
 sudo ip tuntap add mode tun user $(whoami) name qcoretun2 
 sudo ip link set qcoretun2 up 
-sudo iptables -A FORWARD -i qcoretun2 -j ACCEPT           
+sudo iptables -A FORWARD -i qcoretun2 -j ACCEPT
+
+# Set up Ethernet links - required for integration tests to pass
+./setup-ethernet
+
 

@@ -52,7 +52,6 @@ rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
 # Configure QCore routing + ethernet setup 
 sudo apt install iptables
 sudo ./setup-routing
-sudo ./setup-ethernet
 ```
 
 #### Packet capture

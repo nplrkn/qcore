@@ -5,11 +5,6 @@
    -  Received an ngReset (when we Ctrl-C the gNB) - unhandled
    -  Log DHCP server IP
    -  6 debug logs with "unknown TMSI" when we look in both the outer and inner message
-   -  Phones disconnected after security mode command 
-   -  Oppo phone #011 disconnected after AutehtnicationRequest perhaps because of SQN issue
-      -  "Resynchronized SQN to UE [00, 00, 00, 01, 72,80]
-      -   SQN for challenge: Sqn[[00, 00, 00, 01, 72, a0]]"
-
    -  If a phone disconnects and reconnects (toggle mobile radio power), we get errors 
       -  "Lease already existed for" and "Carry on after netlink error..."
          -  It is setting up a new session and DHCP is giving it the same address.
@@ -21,11 +16,8 @@
 -  rustup
 
 -  Clustering
-   -  fix broken test, new warnings, todos
-   -  Need more design clarity on where we should replicate  
-   -  Test connection with catchup, disconnection and reconnection
-   -  Test cases of session deletion, deregistration
--  Is this a better design model for test UEs?: https://docs.rs/rtnetlink/latest/rtnetlink/struct.RouteMessageBuilder.html
+   -  Fix broken test, review new warnings + todos
+   -  Test connection with catchup, disconnection and reconnection, session deletion, deregistration
 
 ## Persistence
 - Paging continuity
@@ -87,6 +79,7 @@
   its session setup request (with no intervening delete) after not liking the response.
 
 ## Code cleanliness + refactoring
+-  Is this a better design model for test UEs?: https://docs.rs/rtnetlink/latest/rtnetlink/struct.RouteMessageBuilder.html
 - switch to tokio or smol
 - commonize downlink xdp and tc, or reimplement downlink tc logic in a new xdp program
 - review Arc / clone usage

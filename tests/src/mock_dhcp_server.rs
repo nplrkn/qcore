@@ -1,4 +1,4 @@
-use anyhow::{Result, ensure};
+use anyhow::{Context, Result, ensure};
 use async_net::UdpSocket;
 use dhcproto::{
     Decodable, Decoder, Encodable, Encoder,
@@ -21,19 +21,30 @@ const DHCP_CLIENT_PORT: u16 = 68;
 
 impl MockDhcpServer {
     pub async fn new(ip: Ipv4Addr, logger: Logger) -> Result<Self> {
-        let socket = UdpSocket::bind(SocketAddrV4::new(ip, DHCP_SERVER_PORT)).await?;
+        let socket = UdpSocket::bind(SocketAddrV4::new(ip, DHCP_SERVER_PORT))
+            .await
+            .context("Binding mock DHCP server - have you run `setup-routing`?")?;
         Ok(Self { socket, ip, logger })
     }
 
     pub async fn hand_out_address(&self, addr: Ipv4Addr, lease_time_secs: u32) -> Result<()> {
-        let discover = self.receive_discover().await?;
+        let discover = self
+            .receive_discover()
+            .await
+            .context("Waiting for DHCPDISCOVER")?;
         self.send_offer(addr, &discover).await?;
-        let request = self.receive_request().await?;
+        let request = self
+            .receive_request()
+            .await
+            .context("Waiting for DHCPREQUEST")?;
         self.send_ack(&request, lease_time_secs).await
     }
 
     pub async fn handle_renewal(&self, _addr: Ipv4Addr) -> Result<()> {
-        let request = self.receive_request().await?;
+        let request = self
+            .receive_request()
+            .await
+            .context("Waiting for DHCPREQUEST")?;
         self.send_ack(&request, 30).await
     }
 
