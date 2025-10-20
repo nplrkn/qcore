@@ -62,7 +62,7 @@ sudo tcpdump -w qcore.pcap -i any sctp or port 2152 or host 10.255.0.2
 #### Run attach test
 In a separate terminal from the packet capture, in the `qcore` directory.
 ```sh
-RUST_LOG=info cargo test --test ngap-attach -- --nocapture
+RUST_LOG=info cargo test --test ngap_attach -- --nocapture
 ```
 
 Once the test has finished, hit Ctrl-C to exit tcpdump, then open `qcore.pcap` in Wireshark.  In Wireshark, select Edit--Preferences--Protocols--NAS-5GS--"Try to detect and decode 5G-EA0 ciphered messages".
