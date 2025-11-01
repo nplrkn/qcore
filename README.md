@@ -10,7 +10,7 @@ Using a tiny 32MB executable, it can handle 30,000 control plane messages per se
 
 It has been tested and works well with several Android phones (Samsung, OnePlus and Oppo) but remains at an early stage of maturity.  
 
-I would welcome collaborators to help improve and mature it.  Please contact me via a GitHub issue or on LinkedIn if you are interested.
+Please contact me via a GitHub issue or on LinkedIn if you are interested in using this project.
 
 ## Architecture overview
 
@@ -62,7 +62,7 @@ sudo tcpdump -w qcore.pcap -i any sctp or port 2152 or host 10.255.0.2
 #### Run attach test
 In a separate terminal from the packet capture, in the `qcore` directory.
 ```sh
-RUST_LOG=info cargo test --test ngap-attach -- --nocapture
+RUST_LOG=info cargo test --test ngap_attach -- --nocapture
 ```
 
 Once the test has finished, hit Ctrl-C to exit tcpdump, then open `qcore.pcap` in Wireshark.  In Wireshark, select Edit--Preferences--Protocols--NAS-5GS--"Try to detect and decode 5G-EA0 ciphered messages".
@@ -160,5 +160,5 @@ The eBPF program code is licensed under the GPL.
 
 ## Contributions
 
-Contributions to this project are welcome.  You'll need to sign a Contributor License Agreement.
+Please contact me on LinkedIn if you are interested in contributing.
 
