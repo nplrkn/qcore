@@ -7,7 +7,7 @@ The uplink programs are responsible for intercepting a GTP encapsulated packet f
 An XDP program is installed on whatever link connects the RAN to QCore.  It looks for GTP/UDP packets and decapsulate them.  This program is called `xdp_uplink_n3` or `xdp_uplink_f1u` depending on whether QCore is in F1 mode.
 
 ### Uplink Ethernet
-In the case of Ethernet, the packet is injected into the Linux bridge via a redirect to the appropciate veth device egress.
+In the case of Ethernet, the packet is injected into the Linux bridge via a redirect to the appropriate veth device egress.
 
 ```
                 XDP program does decap and redirect  
