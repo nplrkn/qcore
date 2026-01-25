@@ -26,14 +26,13 @@ open5gs-udmd (8%), and open5gs-smfd (8%).  The main memory usage was in mongod (
 -  The test message sequence is a 27-message sequence of: registration, configuration update, session establishment, context release, service request, session release, deregistration.  
    -  A message means an NGAP message in either direction.  In many cases it contains a transported NAS message. 
 
--  The load test tool acts as a single gNB and loops repeatedly through 200 UEs running through the test message sequence for each UE serially.  To get a quick sense of it, 
+-  The load test tool acts as a single gNB and loops repeatedly through 200 UEs running through the test message sequence for each UE serially.
 
 -  The results above were measured on a single hyperthread of a 12th Gen Intel(R) Core(TM) i7-1260P.  The method used for confining the cores to a single hyperthread is given below.
 
 -  The measurements quoted above are averaged over several runs.
 
--  The CPU measurements and memory use are approximate and taken from `top` (%CPU and RES).  In the case of Open5GS, mongod usage was
-   included in the quoted number but systemd-journal and rsyslogd were not.
+-  The CPU measurements and memory use are approximate and taken from `top` (%CPU and RES).  In the case of Open5GS, mongod usage was included in the quoted number but systemd-journal and rsyslogd were not.
 
 ## Instructions
 

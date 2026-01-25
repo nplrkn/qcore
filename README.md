@@ -2,6 +2,8 @@
  <img src="docs/images/monolith.jpg" alt="drawing" width="200"/><br>QCore
 </h1> 
 
+*** This project is on pause.  Please contact me on LinkedIn if you'd like to discuss. ***
+
 QCore is a free, ultra-compact private 5G Core, written in Rust, designed to minimise compute and power cost.  
 
 It is simple to use, and significantly outperforms other single-node 5G cores thanks to its unusual monolithic architecture which reduces internal processing overheads.  
@@ -93,7 +95,7 @@ If your LAN interface is not called `eth0`, you must specify the relevant device
 ./setup-routing enp113s0
 ```
 
-In addition to the comments in [`setup-routing`](./setup-routing), QCore interface use is documented in more depth in the [eBPF program design](./docs/designs%20-%20existing/ebpf%20programs.md).
+In addition to the comments in [`setup-routing`](./setup-routing), QCore interface use is documented in more depth in the [eBPF program design](./docs/designs/ebpf programs.md).
 
 
 ### Command-line configuration
