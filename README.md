@@ -95,7 +95,7 @@ If your LAN interface is not called `eth0`, you must specify the relevant device
 ./setup-routing enp113s0
 ```
 
-In addition to the comments in [`setup-routing`](./setup-routing), QCore interface use is documented in more depth in the [eBPF program design](./docs/designs/ebpf programs.md).
+In addition to the comments in [`setup-routing`](./setup-routing), QCore interface use is documented in more depth in the [eBPF program design](<./docs/designs/ebpf programs.md>).
 
 
 ### Command-line configuration
