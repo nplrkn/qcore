@@ -168,7 +168,7 @@ impl<'a, B: RrcBase> NasBase for &mut RrcProcedure<'a, B> {
         kgnb: &[u8; 32],
         nas: Vec<u8>,
         session_list: &mut Vec<PduSession>,
-        _ue_security_capabilities: &[u8; 2],
+        _ue_security_capabilities: &([u8; 4], usize),
     ) -> Result<bool> {
         self.security_mode(kgnb).await?;
         if self.api.ue_rat_capabilities().is_none() {

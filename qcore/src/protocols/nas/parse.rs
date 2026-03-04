@@ -100,7 +100,12 @@ pub fn uplink_data_status(uplink_data_status: &Option<NasUplinkDataStatus>) -> u
 pub fn nas_ue_security_capability(
     ue_security_capabilities: &NasUeSecurityCapability,
 ) -> UeSecurityCapabilities {
-    ue_security_capabilities.value[0..2].try_into().unwrap()
+    let mut buf = [0u8; 4];
+    let len = ue_security_capabilities.value.len().min(4);
+
+    buf[..len].copy_from_slice(&ue_security_capabilities.value[..len]);
+
+    (buf, len)
 }
 
 pub fn identity_response(identity_response: &NasIdentityResponse) -> Result<Imsi> {

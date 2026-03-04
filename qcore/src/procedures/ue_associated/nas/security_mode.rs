@@ -5,8 +5,9 @@ use oxirush_nas::{NasMessageContainer, NasUeSecurityCapability};
 impl<'a, B: NasBase> NasProcedure<'a, B> {
     // Returns the NAS message container from the SecurityModeComplete
     pub async fn security_mode(&mut self) -> Result<NasMessageContainer> {
+        let (caps, len) = self.ue.security_capabilities;
         let security_capabilities =
-            NasUeSecurityCapability::new(self.ue.security_capabilities.to_vec());
+            NasUeSecurityCapability::new(caps[..len].to_vec());
         let r = crate::nas::build::security_mode_command(security_capabilities, self.ue.ksi.0);
         self.log_message("<< NasSecurityModeCommand");
         let Ok(security_mode_complete) = self

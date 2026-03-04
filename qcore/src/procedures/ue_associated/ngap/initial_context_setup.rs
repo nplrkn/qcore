@@ -9,7 +9,7 @@ impl<'a, B: RanUeBase> NgapUeProcedure<'a, B> {
         kgnb: &[u8; 32],
         nas_pdu: Vec<u8>,
         session_list: &mut Vec<PduSession>,
-        ue_security_capabilities: &[u8; 2],
+        ue_security_capabilities: &([u8; 4], usize),
     ) -> Result<bool> {
         let initial_context_setup_request = crate::ngap::build::initial_context_setup_request(
             self.api.config(),

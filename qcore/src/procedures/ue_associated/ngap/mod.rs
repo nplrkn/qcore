@@ -152,7 +152,7 @@ impl<'a, B: RanUeBase> NasBase for &mut NgapUeProcedure<'a, B> {
         kgnb: &[u8; 32],
         nas: Vec<u8>,
         session_list: &mut Vec<PduSession>,
-        ue_security_capabilities: &[u8; 2],
+        ue_security_capabilities: &([u8; 4], usize),
     ) -> Result<bool> {
         self.initial_context_setup(kgnb, nas, session_list, ue_security_capabilities)
             .await

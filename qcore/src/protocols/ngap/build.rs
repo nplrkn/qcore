@@ -48,7 +48,7 @@ pub fn initial_context_setup_request(
     nas_pdu: Option<Vec<u8>>,
     ue: &UeContextRan,
     session_list: &Vec<PduSession>,
-    ue_security_capabilities: &[u8; 2],
+    ue_security_capabilities: &([u8; 4], usize),
 ) -> Result<Box<InitialContextSetupRequest>> {
     let guami = config.guami();
     let transport_layer_address = config.ip_addr.into();
@@ -67,10 +67,11 @@ pub fn initial_context_setup_request(
     // These are 16 bit bitstrings.  Our UeSecurityCapabilities type follows the NAS format from 24.501, Figure 9.11.3.54.1.
     // This needs to be converted into the format from 38.413, 9.3.1.86.
     // We blank the EUTRA fields, since we do not support 4G.
+    let (enc_algorithms, int_algorithms) = (ue_security_capabilities.0[0], ue_security_capabilities.0[1]);
     let nr_encryption_algorithms =
-        NrEncryptionAlgorithms(BitVec::from_slice(&[ue_security_capabilities[0] << 1, 0]));
+        NrEncryptionAlgorithms(BitVec::from_slice(&[enc_algorithms << 1, 0]));
     let nr_integrity_protection_algorithms =
-        NrIntegrityProtectionAlgorithms(BitVec::from_slice(&[ue_security_capabilities[1] << 1, 0]));
+        NrIntegrityProtectionAlgorithms(BitVec::from_slice(&[int_algorithms << 1, 0]));
     let eutr_aencryption_algorithms = EutrAencryptionAlgorithms(BitVec::from_slice(&[0u8; 2]));
     let eutr_aintegrity_protection_algorithms =
         EutrAintegrityProtectionAlgorithms(BitVec::from_slice(&[0u8; 2]));

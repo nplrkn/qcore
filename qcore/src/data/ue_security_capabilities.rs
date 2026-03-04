@@ -1,2 +1,2 @@
 // 5G encryption and integrity capabilities in NAS format.
-pub type UeSecurityCapabilities = [u8; 2];
+pub type UeSecurityCapabilities = ([u8; 4], usize);

@@ -30,7 +30,7 @@ pub trait NasBase {
         kgnb: &[u8; 32],
         nas: Vec<u8>,
         ue_session_list: &mut Vec<PduSession>,
-        ue_security_capabilities: &[u8; 2],
+        ue_security_capabilities: &([u8; 4], usize),
     ) -> Result<bool>;
 
     async fn ran_session_release(
