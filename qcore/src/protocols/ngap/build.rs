@@ -48,7 +48,7 @@ pub fn initial_context_setup_request(
     nas_pdu: Option<Vec<u8>>,
     ue: &UeContextRan,
     session_list: &Vec<PduSession>,
-    ue_security_capabilities: &[u8; 2],
+    ue_security_capabilities: &[u8],
 ) -> Result<Box<InitialContextSetupRequest>> {
     let guami = config.guami();
     let transport_layer_address = config.ip_addr.into();

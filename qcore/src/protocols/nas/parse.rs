@@ -100,7 +100,7 @@ pub fn uplink_data_status(uplink_data_status: &Option<NasUplinkDataStatus>) -> u
 pub fn nas_ue_security_capability(
     ue_security_capabilities: &NasUeSecurityCapability,
 ) -> UeSecurityCapabilities {
-    ue_security_capabilities.value[0..2].try_into().unwrap()
+    ue_security_capabilities.value.clone()
 }
 
 pub fn identity_response(identity_response: &NasIdentityResponse) -> Result<Imsi> {
