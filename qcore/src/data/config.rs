@@ -55,6 +55,11 @@ pub struct Config {
     // IP allocation mode.
     pub ip_allocation_method: UeIpAllocationConfig,
 
+    // P-CSCF address handed to the UE in the PCO of an 'ims' PDU session.
+    // None means IMS is not offered: an 'ims' DNN is then refused with a 5GMM
+    // Status, as it was before IMS support existed.
+    pub pcscf_ipv4: Option<Ipv4Addr>,
+
     // Cluster config
     pub cluster_config: Option<ClusterConfig>,
 }

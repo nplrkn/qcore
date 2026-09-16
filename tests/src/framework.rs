@@ -17,6 +17,7 @@ pub struct TestFrameworkBuilder<T> {
     logger: Logger,
     use_dhcp: bool,
     local_ip: Option<Ipv4Addr>,
+    pcscf_ipv4: Option<Ipv4Addr>,
     x: PhantomData<T>,
 }
 
@@ -26,6 +27,7 @@ impl<T> TestFrameworkBuilder<T> {
             logger: init_logging(),
             use_dhcp: false,
             local_ip: None,
+            pcscf_ipv4: None,
             x: PhantomData,
         }
     }
@@ -37,6 +39,12 @@ impl<T> TestFrameworkBuilder<T> {
 
     pub fn local_ip(mut self, ip: Ipv4Addr) -> Self {
         self.local_ip = Some(ip);
+        self
+    }
+
+    // Offer IMS: qcore then accepts the 'ims' DNN and returns this P-CSCF in the PCO.
+    pub fn pcscf_ipv4(mut self, ip: Ipv4Addr) -> Self {
+        self.pcscf_ipv4 = Some(ip);
         self
     }
 
@@ -53,7 +61,8 @@ impl<T> TestFrameworkBuilder<T> {
             None
         };
 
-        let config = qcore_test_config(0, dhcp_server)?;
+        let mut config = qcore_test_config(0, dhcp_server)?;
+        config.pcscf_ipv4 = self.pcscf_ipv4;
 
         let qc = QCore::start(
             config,
@@ -195,6 +204,7 @@ fn qcore_test_config(instance: u8, dhcp_server: Option<Ipv4Addr>) -> Result<Conf
         five_qi: 7,
         network_display_name: NetworkDisplayName::new("QCoreTest")?,
         ip_allocation_method,
+        pcscf_ipv4: None,
         cluster_config: Some(ClusterConfig {
             local_ip: IpAddr::V4(qc_lan_ip),
             cluster_tcp_port: 22127,

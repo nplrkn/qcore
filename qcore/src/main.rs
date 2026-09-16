@@ -73,6 +73,13 @@ struct Args {
     #[arg(long, default_value_t = 7)]
     five_qi: u8,
 
+    /// P-CSCF IPv4 address to offer for the 'ims' DNN.  When this is set, qcore accepts a PDU
+    /// session on the 'ims' DNN and returns this address in the PCO (24.008 container 000C)
+    /// along with the IM CN subsystem signalling flag.  When it is unset, an 'ims' DNN is
+    /// refused with a 5GMM Status, which is what a UE that falls back to 'internet' expects.
+    #[arg(long)]
+    pcscf_ip: Option<Ipv4Addr>,
+
     /// Network display name to send to UEs in NAS Configuration Update Command.
     #[arg(long, default_value = "QCore")]
     network_display_name: String,
@@ -165,6 +172,7 @@ async fn main() -> Result<()> {
             five_qi: args.five_qi,
             network_display_name: NetworkDisplayName::new(&args.network_display_name)?,
             ip_allocation_method,
+            pcscf_ipv4: args.pcscf_ip,
             cluster_config: None,
         },
         logger.clone(),

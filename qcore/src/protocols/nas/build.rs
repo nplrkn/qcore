@@ -4,6 +4,7 @@ use crate::{
     data::{Ipv4SessionParams, Payload},
 };
 use anyhow::Result;
+use std::net::Ipv4Addr;
 use oxirush_nas::{
     Nas5gmmMessage, Nas5gmmMessageType, Nas5gsMessage, Nas5gsmMessage, Nas5gsmMessageType, NasAbba,
     NasAdditionalFGSecurityInformation, NasAuthenticationParameterAutn,
@@ -251,11 +252,18 @@ pub fn pdu_session_establishment_accept(
     pdu_session: &PduSession,
     pti: u8,
     sst: u8,
+    pcscf_ipv4: Option<Ipv4Addr>,
 ) -> Result<Box<Nas5gsMessage>> {
     let five_qi = pdu_session.userplane.five_qi;
     let qfi = pdu_session.userplane.qfi;
     let dns_primary = &[0x08, 0x08, 0x08, 0x08];
     let dns_secondary = &[0x08, 0x08, 0x04, 0x04];
+
+    // Only an 'ims' session gets the P-CSCF: on any other DNN the UE would bind its IMS stack
+    // to a bearer that is not the one the core routes SIP over.
+    let pcscf = pcscf_ipv4
+        .filter(|_| pdu_session.dnn == b"ims")
+        .map(|a| a.octets());
 
     let pdu_address;
     let selected_session_type;
@@ -264,8 +272,12 @@ pub fn pdu_session_establishment_accept(
         Payload::Ipv4(Ipv4SessionParams { ue_ip_addr }) => {
             pdu_address = Some(nas_pdu_address(&ue_ip_addr.octets()));
             selected_session_type = 0b001;
-            extended_protocol_configuration_options =
-                Some(extended_pco(dns_primary, dns_secondary, true));
+            extended_protocol_configuration_options = Some(extended_pco(
+                dns_primary,
+                dns_secondary,
+                true,
+                pcscf.as_ref(),
+            ));
         }
         Payload::Ethernet { .. } => {
             selected_session_type = 0b101;
@@ -381,6 +393,7 @@ fn extended_pco(
     dns_primary: &[u8; 4],
     dns_secondary: &[u8; 4],
     include_ppp_ip_configuration_ack: bool,
+    pcscf: Option<&[u8; 4]>,
 ) -> NasExtendedProtocolConfigurationOptions {
     let mut epco = vec![];
     if include_ppp_ip_configuration_ack {
@@ -419,6 +432,23 @@ fn extended_pco(
         0x02, // Length
         0x05, 0x78, // 1400
     ]);
+
+    // 24.008 10.5.6.3: the containers an IMS PDU session is useless without.  000C carries the
+    // P-CSCF the UE sends its SIP REGISTER to; 0002 is the IM CN subsystem signalling flag,
+    // zero length in the network-to-UE direction, which tells the UE this session is the one
+    // its IMS stack should bind to.
+    if let Some(pcscf) = pcscf {
+        epco.extend_from_slice(&[
+            0x00, 0x0c, // P-CSCF IPv4 address
+            0x04, // Length
+        ]);
+        epco.extend_from_slice(pcscf);
+        epco.extend_from_slice(&[
+            0x00, 0x02, // IM CN subsystem signalling flag
+            0x00, // Length
+        ]);
+    }
+
     NasExtendedProtocolConfigurationOptions::new(epco)
 }
 

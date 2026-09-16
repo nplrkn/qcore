@@ -155,12 +155,15 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
 
     // Return true if the DNN is ok, otherwise send a NAS 5GMM Status and return false
     // A typical scenario is where the UE requests the 'ims' DNN and then falls back to the 'internet' DNN.
-    // Right now we give the UE what it asks for, so long as it is not 'ims'.
+    // We give the UE what it asks for, including 'ims' - but only when a P-CSCF address is
+    // configured, since an IMS session whose PCO carries no P-CSCF is of no use to the UE: it
+    // has nowhere to send its SIP REGISTER.  Without one we refuse as before, which is what a
+    // UE that falls back to 'internet' is waiting for.
     async fn check_dnn(&mut self, dnn: &[u8]) -> Result<bool> {
-        if dnn == b"ims" {
+        if dnn == b"ims" && self.api.config().pcscf_ipv4.is_none() {
             warn!(
                 self.logger,
-                "UE asked for 'ims' DNN - sending 5GMM Status and ignoring session establishment request"
+                "UE asked for 'ims' DNN but no --pcscf-ip is configured - sending 5GMM Status and ignoring session establishment request"
             );
             let status = crate::nas::build::fgmm_status(
                 FGMM_CAUSE_DNN_NOT_SUPPORTED_OR_NOT_SUBSCRIBED_IN_THE_SLICE,

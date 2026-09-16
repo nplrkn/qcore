@@ -78,6 +78,7 @@ impl<'a, B: NasBase> NasProcedure<'a, B> {
             &session,
             hdr.procedure_transaction_identity,
             self.api.config().sst,
+            self.api.config().pcscf_ipv4,
         )?;
 
         self.log_message("<< Nas PduSessionEstablishmentAccept");

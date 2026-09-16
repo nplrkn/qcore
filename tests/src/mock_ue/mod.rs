@@ -54,6 +54,9 @@ pub trait Transport {
 pub struct MockUe<T: Transport> {
     pub ue_id: u32,
     pub data: MockUe5GCData,
+    // The PCO of the last PduSessionEstablishmentAccept, so a test can check what the core
+    // offered - the P-CSCF of an IMS session lives in here and nowhere else.
+    pub last_accept_pco: Option<Vec<u8>>,
     transport: T,
     logger: Logger,
     use_wrong_imsi: bool,
@@ -71,6 +74,7 @@ impl<T: Transport> MockUe<T> {
         MockUe {
             ue_id,
             data: MockUe5GCData::new(imsi, sub_auth_params),
+            last_accept_pco: None,
             transport,
             logger: logger.new(o!("ue" => ue_id)),
             use_wrong_imsi: false,
@@ -82,6 +86,7 @@ impl<T: Transport> MockUe<T> {
         MockUe {
             ue_id,
             data,
+            last_accept_pco: None,
             transport,
             logger: logger.new(o!("ue" => ue_id)),
             use_wrong_imsi: false,
@@ -431,11 +436,14 @@ impl<T: Transport> MockUe<T> {
                     ..
                 },
             pdu_address,
+            extended_protocol_configuration_options,
             ..
         }) = message
         else {
             bail!("Expected NasPduSessionEstablishmentAccept, got {message:?}");
         };
+
+        self.last_accept_pco = extended_protocol_configuration_options.map(|epco| epco.value);
 
         if self.use_ethernet {
             assert_eq!(selected_session_type, 0b101);
